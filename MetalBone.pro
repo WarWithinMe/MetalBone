@@ -29,7 +29,8 @@ HEADERS += test/test_slot.cpp
 HEADERS += test/test_resource.cpp
 HEADERS += test/test_displaylist.cpp
 
-SOURCES += main.cpp
+SOURCES += \
+    testMain.cpp
 SOURCES += MWidget.cpp
 SOURCES += MBGlobal.cpp
 SOURCES += MStyleSheet.cpp

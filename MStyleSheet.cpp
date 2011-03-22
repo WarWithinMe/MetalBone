@@ -233,6 +233,9 @@ namespace MetalBone
 
 		bool RenderRuleCacheKey::operator<(const RenderRuleCacheKey& rhs) const
 		{
+			if(this == &rhs)
+				return false;
+
 			int size1 = styleRules.size();
 			int size2 = rhs.styleRules.size();
 			if(size1 > size2)
@@ -355,18 +358,20 @@ namespace MetalBone
 		{ L"dot-dash",	Value_DotDash },
 		{ L"dot-dot-dash",	Value_DotDotDash },
 		{ L"dotted",	Value_Dotted },
-		{ L"double",		Value_Double },
 		{ L"ellipsis",	Value_Ellipsis },
 		{ L"italic",	Value_Italic },
 		{ L"left",		Value_Left },
 		{ L"line-through",	Value_LineThrough },
 		{ L"margin",		Value_Margin },
 		{ L"none",		Value_None },
+		{ L"no-repeat",	Value_NoRepeat }, // Remark
 		{ L"normal",	Value_Normal },
 		{ L"oblique",	Value_Oblique },
 		{ L"overline",	Value_Overline },
 		{ L"padding",	Value_Padding },
 		{ L"repeat",	Value_Repeat },
+		{ L"repeat-x",	Value_RepeatX }, // Remark
+		{ L"repeat-y",	Value_RepeatY }, // Remark
 		{ L"right",		Value_Right },
 		{ L"solid",		Value_Solid },
 		{ L"stretch",	Value_Stretch },
@@ -790,7 +795,7 @@ namespace MetalBone
 		p.clear();
 	}
 
-	// Background:		{ Brush Repeat Clip Image Origin Alignment }*;
+	// Background:		{ Brush Repeat Clip Image Alignment }*;
 	// Border:			none | (LineStyle Brush Lengths)
 	// Border-radius:	Lengths
 	// Border-image:		none | Url Number{4} (stretch | repeat){0,2} // should be used as background & don't have to specify border width
@@ -953,8 +958,7 @@ namespace MetalBone
 		delete appStyleSheet;
 		WidgetSSCache::iterator it = widgetSSCache.begin();
 		WidgetSSCache::iterator itEnd = widgetSSCache.end();
-		while(it != itEnd)
-		{
+		while(it != itEnd) {
 			delete it->second;
 			++it;
 		}
@@ -967,28 +971,20 @@ namespace MetalBone
 		MCSSParser parser(css);
 		parser.parse(appStyleSheet);
 
-		windowRenderRuleCache.clear();
+		renderRuleCollection.clear();
 		widgetStyleRuleCache.clear();
 		widgetRenderRuleCache.clear();
 	}
 
-	void MStyleSheetStyle::clearRenderRuleCacheRecursively(MWidget* w)
-	{
-		widgetStyleRuleCache.erase(w);
-		widgetRenderRuleCache.erase(w);
-		const std::list<MWidget*>& children = w->children();
-		std::list<MWidget*>::const_iterator it = children.begin();
-		std::list<MWidget*>::const_iterator itEnd = children.end();
-		while(it != itEnd)
-		{
-			clearRenderRuleCacheRecursively(*it);
-			++it;
-		}
-	}
-
 	void MStyleSheetStyle::setWidgetSS(MWidget* w, const std::wstring& css)
 	{
-		removeWidgetSS(w);
+		// Remove StyleSheet Cache for MWidget w.
+		WidgetSSCache::const_iterator iter = widgetSSCache.find(w);
+		if(iter != widgetSSCache.end())
+		{
+			delete iter->second;
+			widgetSSCache.erase(iter);
+		}
 
 		if(!css.empty())
 		{
@@ -998,8 +994,25 @@ namespace MetalBone
 			widgetSSCache.insert(WidgetSSCache::value_type(w,ss));
 		}
 
-		// 清空这个widget的所有子widget的缓存
+		// Remove every child widgets' cache, so that they can recalc the StyleRules
+		// next time the StyleRules are needed.
 		clearRenderRuleCacheRecursively(w);
+	}
+
+	void MStyleSheetStyle::clearRenderRuleCacheRecursively(MWidget* w)
+	{
+		widgetStyleRuleCache.erase(w);
+		widgetRenderRuleCache.erase(w);
+		polish(w);
+
+		const std::list<MWidget*>& children = w->children();
+		std::list<MWidget*>::const_iterator it = children.begin();
+		std::list<MWidget*>::const_iterator itEnd = children.end();
+		while(it != itEnd)
+		{
+			clearRenderRuleCacheRecursively(*it);
+			++it;
+		}
 	}
 
 	void getWidgetClassName(const MWidget* w,std::wstring& name)
@@ -1153,11 +1166,13 @@ namespace MetalBone
 			srs.push_back(wrIt->second);
 			++wrIt;
 		}
+
+		// TODO: Apply widget properties
 	}
 
-	RenderRule MStyleSheetStyle::getStyleObject(MWidget* w, unsigned int pseudo)
+	RenderRule MStyleSheetStyle::getRenderRule(MWidget* w, unsigned int pseudo)
 	{
-		// 0.Find RenderRule for MWidget w from widget renderrule cache.
+		// == 1.Find RenderRule for MWidget w from Widget-RenderRule cache.
 		WidgetRenderRuleMap::iterator widgetCacheIter = widgetRenderRuleCache.find(w);
 		PseudoRenderRuleMap* prrMap = 0;
 		if(widgetCacheIter != widgetRenderRuleCache.end())
@@ -1169,23 +1184,18 @@ namespace MetalBone
 		}
 
 		/* No RenderRule yet. Build it. */
-		// 1.Find StyleRules for MWidget w from widget stylerule cache.
+		// == 2.Find StyleRules for MWidget w from Widget-StyleRule cache.
 		WidgetStyleRuleMap::iterator wsrIter = widgetStyleRuleCache.find(w);
 		MatchedStyleRuleVector* matchedsrv;
 		if(wsrIter != widgetStyleRuleCache.end())
 			matchedsrv = &(wsrIter->second);
-		else
-		{
+		else {
 			matchedsrv = &(widgetStyleRuleCache.insert(
-							   WidgetStyleRuleMap::value_type(
-								   w, MatchedStyleRuleVector())).first->second);
+							   WidgetStyleRuleMap::value_type(w, MatchedStyleRuleVector())).first->second);
 			getMachedStyleRules(w,*matchedsrv);
 		}
 
-		// 2.Ensure we have a cache for the window containing MWidget w.
-		RenderRuleMap& rrMap = windowRenderRuleCache[w->windowHandle()];
-
-		// 3.If we don't have a PseudoRenderRuleMap, build one.
+		// == 3.If we don't have a PseudoRenderRuleMap, build one.
 		if(prrMap == 0)
 		{
 			RenderRuleCacheKey cacheKey;
@@ -1197,12 +1207,17 @@ namespace MetalBone
 			widgetRenderRuleCache.insert(WidgetRenderRuleMap::value_type(w,prrMap));
 		}
 
-		// 4.Build the RenderRule
-		RenderRule& renderRule = prrMap->element[pseudo];
-		M_ASSERT(!renderRule.isValid()); // At this point, render rule must be invalid, or sth. went wrong.
+		// == 4.Build the RenderRule
+		RenderRule& renderRule = prrMap->element[pseudo]; // Insert a RenderRule even if it's empty.
+		// If there's no StyleRules for MWidget w, then we return a invalid RenderRule.
+		if(matchedsrv->size() == 0)
+			return renderRule;
+
 		MatchedStyleRuleVector::const_reverse_iterator msrIter = matchedsrv->rbegin();
 		MatchedStyleRuleVector::const_reverse_iterator msrIterEnd = matchedsrv->rend();
-		std::tr1::unordered_multimap<PseudoClassType,Declaration*> declarations;
+		typedef std::tr1::unordered_multimap<PropertyType,Declaration*> DeclMap;
+		DeclMap declarations;
+		std::set<PropertyType> tempProps;
 		while(msrIter != msrIterEnd)
 		{
 			const Selector* sel = msrIter->matchedSelector;
@@ -1213,15 +1228,29 @@ namespace MetalBone
 				const StyleRule* sr = msrIter->styleRule;
 				std::vector<Declaration*>::const_iterator declIter = sr->declarations.begin();
 				std::vector<Declaration*>::const_iterator declIterEnd = sr->declarations.end();
+				tempProps.clear();
 
-				while(declIter != declIterEnd)
-				{
-					// Merge declaration
+				// Remove duplicate properties
+				while(declIter != declIterEnd) {
+					tempProps.insert((*declIter)->property);
+					++declIter;
+				}
+				int tempPropsSize = tempProps.size();
+				for(int i = 0; i < tempPropsSize; ++i)
+					declarations.erase(tempPropsSize[i]);
+
+				// Merge declaration
+				declIter = sr->declarations.begin();
+				while(declIter != declIterEnd) {
+					Declaration* d = *declIter;
+					declarations.insert(DeclMap::value_type(d->property,d));
 					++declIter;
 				}
 			}
 			++msrIter;
 		}
+
+		renderRule.init();
 
 		// TODO: create renderobject
 		return renderRule;
@@ -1418,9 +1447,6 @@ void printStyleSheet(StyleSheet* sheet)
 	outputStyleRules(sheet->universal);
 	OutputDebugStringA("|| ################# StyleRules Universal ################# ||\n|\n");
 
-
-
-
 	OutputDebugStringA("|| ^^^^^^^^^^^^^^^^ StyleRules ClassId Map ^^^^^^^^^^^^^^^^ ||\n");
 	StyleSheet::StyleRuleIdMap::const_iterator iter = sheet->srIdMap.begin();
 	StyleSheet::StyleRuleIdMap::const_iterator iterEnd = sheet->srIdMap.end();
@@ -1433,9 +1459,6 @@ void printStyleSheet(StyleSheet* sheet)
 		++iter;
 	}
 	OutputDebugStringA("|| ################ StyleRules ClassId Map ################ ||\n|\n");
-
-
-
 
 	OutputDebugStringA("|| ^^^^^^^^^^^^^^^^ StyleRules Element Map ^^^^^^^^^^^^^^^^ ");
 	StyleSheet::StyleRuleElementMap::const_iterator iter2 = sheet->srElementMap.begin();
@@ -1458,9 +1481,6 @@ void MStyleSheetStyle::dumpStyleSheet()
 	printStyleSheet(appStyleSheet);
 	OutputDebugStringA("|****************** Application StyleSheet ******************|\n\n\n");
 
-
-
-
 	WidgetSSCache::const_iterator wssIt = widgetSSCache.begin();
 	WidgetSSCache::const_iterator wssItEnd = widgetSSCache.end();
 	OutputDebugStringA("\n|******************** Widgets StyleSheet ********************|\n");
@@ -1469,14 +1489,10 @@ void MStyleSheetStyle::dumpStyleSheet()
 		std::stringstream s;
 		s << "+++++ Widget: " << wssIt->first->objectName().c_str() << '\n';
 		OutputDebugStringA(s.str().c_str());
-
 		printStyleSheet(wssIt->second);
 		++wssIt;
 	}
 	OutputDebugStringA("|******************** Widgets StyleSheet ********************|\n\n\n");
-
-
-
 
 	OutputDebugStringA("\n|****************** Widget StyleRule Cache ******************|\n");
 	WidgetStyleRuleMap::const_iterator srIt = widgetStyleRuleCache.begin();
@@ -1502,10 +1518,6 @@ void MStyleSheetStyle::dumpStyleSheet()
 		++srIt;
 	}
 	OutputDebugStringA("\n|****************** Widget StyleRule Cache ******************|\n\n\n");
-
-
-
-
 
 	OutputDebugStringA("\n|****************** Widget RenderRule Cache *****************|\n");
 	WidgetRenderRuleMap::iterator  soIter = widgetRenderRuleCache.begin();

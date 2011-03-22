@@ -48,8 +48,8 @@ namespace MetalBone
 		// 而outline和box-shadow等效果应该使用MWidgetFilter来实现
 		enum PropertyType {
 			PT_Background,				PT_BackgroundAttachment,		PT_BackgroundClip,
-			PT_BackgroundColor,			PT_BackgroundImage,				PT_BackgroundOrigin,
-			PT_BackgroundPosition,		PT_BackgroundRepeat,
+			PT_BackgroundColor,			PT_BackgroundImage,				PT_BackgroundPosition,
+			PT_BackgroundRepeat,
 
 			PT_BorderImage,
 			PT_Border,					PT_BorderTop,					PT_BorderRight,
@@ -71,23 +71,28 @@ namespace MetalBone
 
 			PT_Height,					PT_Width,						PT_MaximumHeight,
 			PT_MaximumWidth,			PT_MinimumHeight,				PT_MinimumWidth,
+
 			PT_Margin,					PT_MarginBottom,				PT_MarginLeft,
-			PT_MarginRight,				PT_MarginTop,					PT_Padding,
-			PT_PaddingBottom,			PT_PaddingLeft,					PT_PaddingRight,
-			PT_PaddingTop,
+			PT_MarginRight,				PT_MarginTop,
+			PT_Padding,					PT_PaddingBottom,				PT_PaddingLeft,
+			PT_PaddingRight,				PT_PaddingTop,
 
 			knownPropertyCount
 		};
 
 		enum ValueType {
-			Value_Unknown,		Value_Bold,			Value_Border,		Value_Bottom,
-			Value_Center,		Value_Clip,			Value_Content,		Value_Dashed,
-			Value_DotDash,		Value_DotDotDash,	Value_Dotted,		Value_Double,
-			Value_Ellipsis,		Value_Italic,		Value_Left,			Value_LineThrough,
-			Value_Margin,		Value_None,			Value_Normal,		Value_Oblique,
-			Value_Overline,		Value_Padding,		Value_Repeat,		Value_Right,
-			Value_Stretch,		Value_Solid,			Value_Transparent,	Value_Top,
-			Value_Underline,		Value_Wave,			Value_Wrap,
+			Value_Unknown,		Value_None,		Value_Transparent,
+
+			Value_Bold,
+			Value_Normal,		Value_Italic,		Value_Oblique,
+			Value_Clip,			Value_Ellipsis,		Value_Wrap,
+			Value_Underline,		Value_Overline,		Value_LineThrough,
+			Value_Dashed, Value_DotDash, Value_DotDotDash, Value_Dotted, Value_Solid, Value_Wave,
+
+			Value_Padding,		Value_Border,		Value_Content,		Value_Margin,
+			Value_Top,			Value_Right,			Value_Left,			Value_Bottom,		Value_Center,
+			Value_NoRepeat,		Value_RepeatX,		Value_RepeatY,		Value_Repeat,		Value_Stretch,
+
 			KnownValueCount
 		};
 
@@ -112,7 +117,7 @@ namespace MetalBone
 
 		struct RenderRuleData
 		{
-			RenderRuleData():refCount(0){}
+			RenderRuleData():refCount(1){}
 			int refCount;
 		};
 		struct RenderRuleCacheKey
@@ -123,10 +128,12 @@ namespace MetalBone
 		};
 		class RenderRule
 		{
+			// RenderRule is not thread-safe and it haven't to be.
+			// Because all Styling/Drawing stuff should remain on the same thread(Main thread)
 			public:
 				RenderRule():data(0){}
-				RenderRule(RenderRuleData* d):data(d) { ++data->refCount; }
-				RenderRule(RenderRule* d):data(d->data) { ++data->refCount; }
+				RenderRule(RenderRuleData* d):data(d)	{ ++data->refCount; }
+				RenderRule(RenderRule* d):data(d->data)	{ ++data->refCount; }
 				~RenderRule() {
 					if(data) {
 						--data->refCount;
@@ -136,8 +143,8 @@ namespace MetalBone
 				}
 
 				bool isValid() const { return data != 0; }
-				RenderRule& operator=(RenderRule& other)
-				{
+				void init() { data = new RenderRuleData(); }
+				RenderRule& operator=(RenderRule& other) {
 					if(&other == this)
 						return other;
 					if(data) {
@@ -151,102 +158,87 @@ namespace MetalBone
 					return *this;
 				}
 
+				// TODO: Implement draw();
+				void draw(MWidget* w);
 			private:
 				RenderRuleData* data;
 		};
 	} // namespace CSS
 
 	class MWidget;
-
-	// Keep track of every individual StyleSheet ( parsed from individual css string )
-	// Provide lookup of RenderRules for MWidget.
 	class MStyleSheetStyle
 	{
 		public:
 			MStyleSheetStyle():appStyleSheet(new CSS::StyleSheet()){}
 			~MStyleSheetStyle();
 
-			void setAppSS		(const std::wstring&);
-			void setWidgetSS	(MWidget*, const std::wstring&);
+			// Setting an empty css string will remove the existed StyleSheet
+			void setAppSS				(const std::wstring&);
+			void setWidgetSS			(MWidget*, const std::wstring&);
 
-			// Get a RenderRule for MWidget with pseudo.
-			// Then use it to draw.
-			CSS::RenderRule getStyleObject(MWidget*, unsigned int pseudo);
-
-			// Rediscover any possible StyleRules for MWidget
-//			void polish			(MWidget* w);
+			// Remark:
+			// polish() basically calls getMachedStyleRules() to generate StyleRules
+			// for the widget. And within getMachedStyleRules(), we set Widget Properties
+			// (width, height, minWidth, hover, etc.) according to the StyleRules.
+			// Every time a StyleSheet is set or removed, we can automatically
+			// reset these properties within getMachedStyleRules().
+			void polish(MWidget* w){} // TODO: implement polish()
+			inline void draw(MWidget* w, unsigned int pseudo);
 
 			// Remove every stylesheet resource cached for MWidget w;
-			inline void removeCache		(MWidget* w);
-			inline void removeWidgetSS	(MWidget* w);
+			inline void removeCache		(MWidget*);
+
+
+// TODO: void recreateResources();
+
+
+
 
 		private:
-			typedef std::tr1::unordered_map<MWidget*, CSS::StyleSheet* > WidgetSSCache;
+			typedef std::tr1::unordered_map<MWidget*, CSS::StyleSheet*> WidgetSSCache;
 			WidgetSSCache		widgetSSCache; // Widget specific StyleSheets
 			CSS::StyleSheet*		appStyleSheet; // Application specific StyleSheets
 
-			// Pesudo - RenderRule Map
-			// StyleRules - RenderRules Map
-			// HWND - StyleRules Map
+			// Cache for RenderRules. Each RenderRule consists of several D2D resources.
+			// Assume these resources always are sharable (i.e. either created
+			// by hardware RenderTarget or software RenderTarget).
+			//
+			// **We also keep track of which render target has created the resources,
+			// **so we can deal with D2DERR_RECREATE_TARGET error.
+			// **(Not now, because I don't know if it's necessary to recreate sharable resources)
 			struct PseudoRenderRuleMap {
 				typedef std::tr1::unordered_map<unsigned int, MetalBone::CSS::RenderRule> Element;
 				Element element;
 			};
-			struct RenderRuleMap {
-				typedef std::map<MetalBone::CSS::RenderRuleCacheKey, PseudoRenderRuleMap> Element;
-				Element element;
-			};
-			typedef std::tr1::unordered_map<HWND, RenderRuleMap>				WindowRenderRuleMap;
-			WindowRenderRuleMap windowRenderRuleCache;
-
-			// Cache for D2D Resource. If the resource is sharable, we don't have to recreate them.
-			// They fall into two category:
-			// 1.Belong to hardware render target.
-			// 2.Belong to software render target.
-			//
-			// We also keep track of which render target has created the resources,
-			// so we can deal with D2DERR_RECREATE_TARGET error.
-			// **(Not now, because I don't know if it's necessary to recreate the resources)
-			//typedef std::tr1::unordered_map<ID2D1RenderTarget*, ID2D1Resource*> D2D1ResourceMap;
-
-
+			typedef std::map<CSS::RenderRuleCacheKey, PseudoRenderRuleMap> RenderRuleMap;
+			RenderRuleMap renderRuleCollection;
 
 			// Cache for widgets. Provide fast look up for their associated RenderRules.
-			typedef std::vector<CSS::MatchedStyleRule> MatchedStyleRuleVector; // Ordered by specifity from high to low
-			typedef std::tr1::unordered_map<MWidget*, MatchedStyleRuleVector> WidgetStyleRuleMap;
-			typedef std::tr1::unordered_map<MWidget*, PseudoRenderRuleMap*> WidgetRenderRuleMap;
+			// MatchedStyleRuleVector is ordered by specifity from high to low
+			typedef std::vector<CSS::MatchedStyleRule> MatchedStyleRuleVector;
+			typedef std::tr1::unordered_map<MWidget*, MatchedStyleRuleVector>	WidgetStyleRuleMap;
+			typedef std::tr1::unordered_map<MWidget*, PseudoRenderRuleMap*>		WidgetRenderRuleMap;
 			WidgetStyleRuleMap widgetStyleRuleCache;
 			WidgetRenderRuleMap widgetRenderRuleCache;
 
-			// Find every StyleRules for MWidget
+			CSS::RenderRule getRenderRule(MWidget*, unsigned int pseudo);
 			void getMachedStyleRules(MWidget*, MatchedStyleRuleVector&);
 			void clearRenderRuleCacheRecursively(MWidget*);
 
 #ifdef MB_DEBUG
-		public:
-			void dumpStyleSheet();
+		public: void dumpStyleSheet();
 #endif
 	};
 
 
 
 
-
+	inline void MStyleSheetStyle::draw(MWidget* w,unsigned int p) { getRenderRule(w,p).draw(w); }
 	inline void MStyleSheetStyle::removeCache(MWidget* w)
 	{
+		// We just have to remove from these two cache, without touching renderRuleCollection
 		widgetStyleRuleCache.erase(w);
 		widgetRenderRuleCache.erase(w);
 	}
-
-	inline void MStyleSheetStyle::removeWidgetSS(MWidget* w)
-	{
-		WidgetSSCache::const_iterator iter = widgetSSCache.find(w);
-		if(iter != widgetSSCache.end())
-		{
-			delete iter->second;
-			widgetSSCache.erase(iter);
-		}
-	}
-
 } // namespace MetalBone
 #endif // MSTYLESHEET_H
