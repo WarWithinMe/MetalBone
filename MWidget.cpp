@@ -5,6 +5,7 @@
 #include <list>
 #include <set>
 #include <tchar.h>
+#include <WinError.h>
 
 namespace MetalBone
 {
@@ -23,11 +24,12 @@ namespace MetalBone
 		MWidget* findWidgetByHandle(HWND handle) const;
 		void removeTopLevelWindows(MWidget*);
 
-		HINSTANCE appHandle;
-		bool quitOnLastWindowClosed;
-		static MApplication::WinProc customWndProc;
-		MStyleSheetStyle ssstyle;
+		bool				quitOnLastWindowClosed;
+		HINSTANCE			appHandle;
+		MStyleSheetStyle		ssstyle;
+		ID2D1Factory*		d2d1Factory;
 
+		static MApplication::WinProc customWndProc;
 		static MApplicationData* instance;
 	};
 
@@ -37,6 +39,8 @@ namespace MetalBone
 		: quitOnLastWindowClosed(true)
 	{
 		instance = this;
+		HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d1Factory);
+		M_ASSERT_X(SUCCEEDED(hr), "Cannot create D2D1Factory. This is a fatal problem.", "MApplicationData()");
 	}
 
 	MWidget* MApplicationData::findWidgetByHandle(HWND handle) const
@@ -151,6 +155,11 @@ namespace MetalBone
 		mImpl->customWndProc = proc;
 	}
 
+	ID2D1Factory* MApplication::getD2D1Factory()
+	{
+		return mImpl->d2d1Factory;
+	}
+
 	int MApplication::exec()
 	{
 		MSG msg;
@@ -201,6 +210,8 @@ namespace MetalBone
 
 		// 包含这个widget的Window Handle
 		HWND winHandle;
+
+		ID2D1RenderTarget* renderTarget;
 
 		std::wstring windowTitle;
 		std::wstring objectName;
@@ -331,6 +342,11 @@ namespace MetalBone
 		return data->parent;
 	}
 
+	ID2D1RenderTarget* MWidget::getRenderTarget()
+	{
+		return windowWidget()->data->renderTarget;
+	}
+
 	MWidget* MWidget::windowWidget() const
 	{
 		MWidget* widget = const_cast<MWidget*>(this);
@@ -454,6 +470,12 @@ namespace MetalBone
 
 				data->widgetState &= WidgetExtraData::MWS_HIDDEN;
 				data->widgetState &= (~WidgetExtraData::MWS_POLISHED);
+
+				D2D1_RENDER_TARGET_PROPERTIES p = D2D1::RenderTargetProperties();
+				p.usage = D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE;
+				mApp->getD2D1Factory()->CreateHwndRenderTarget(p,
+					D2D1::HwndRenderTargetProperties(winHandle, D2D1_SIZE_U(width,height)),
+					&m_pRenderTarget);
 			}
 			data->parent = parent;
 			return;

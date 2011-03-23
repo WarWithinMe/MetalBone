@@ -1,5 +1,3 @@
-#ifndef TEST_CSS_H
-#define TEST_CSS_H
 #include "MStyleSheet.h"
 #include "MWidget.h"
 #include "MApplication.h"
@@ -91,5 +89,3 @@ L"   background:#112233;                  }";
 	sss.getStyleObject(&browser2,CSS::PC_Default);
 	sss.dumpStyleSheet();
 }
-
-#endif // TEST_CSS_H

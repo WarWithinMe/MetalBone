@@ -3,6 +3,7 @@
 #include "MBGlobal.h"
 #include <string>
 #include <windows.h>
+#include <d2d1.h>
 
 #define mApp MetalBone::MApplication::instance()
 
@@ -10,6 +11,7 @@ namespace MetalBone
 {
 	class MWidget;
 	struct MApplicationData;
+
 	class MApplication
 	{
 		public:
@@ -48,31 +50,37 @@ namespace MetalBone
 			// 不支持
 			// .ClassA.ClassB // Widget里面没有这个概念
 			// .ClassA#AAA#BBB // Widget只有一个Id
-			// 单位只支持px
+			// 数值没有单位（单位默认是px）
 			// 不支持颜色名
 			void setStyleSheet(const std::wstring& css);
+
+			ID2D1Factory* getD2D1Factory();
+
+
 #ifdef METALBONE_USE_SIGSLOT
-			// 当MApplication退出Message Loop的时候发送aboutToQuit信号
-			Signal0 aboutToQuit;
+			Signal0 aboutToQuit;		// 当MApplication退出Message Loop的时候发送aboutToQuit信号
 #else
-		protected:
-			virtual void aboutToQuit(){}
+		protected: virtual void aboutToQuit(){}
 #endif
 
 		protected:
-			// 注册窗口类前调用这个函数获取要注册的窗口类
+			// MApplication注册窗口类前调用这个函数获取要注册的窗口类
 			virtual void setupRegisterClass(WNDCLASS&);
 
 
 		private:
 			static MApplication* s_instance;
 			MApplicationData* mImpl;
-
 			friend class MWidget;
 	};
 
-	inline MApplication* MApplication::instance() { return s_instance; }
-	inline void MApplication::exit(int ret) { PostQuitMessage(ret); }
+
+
+
+
+
+	inline MApplication* MApplication::instance()	{ return s_instance; }
+	inline void MApplication::exit(int ret)			{ PostQuitMessage(ret); }
 }
 
 #endif // GUI_MAPPLICATION_H

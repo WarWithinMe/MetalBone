@@ -2,6 +2,7 @@
 #define GUI_MWIDGET_H
 #include "MBGlobal.h"
 #include <string>
+#include <d2d1.h>
 namespace MetalBone
 {
 	enum WindowFlags
@@ -9,14 +10,14 @@ namespace MetalBone
 		WF_Widget			= 0,
 		WF_Window			= 0x1, // 标题栏，最大化，最小化，关闭按钮
 		WF_Dialog			= 0x2 | WF_Window, // 标题栏，关闭按钮
-		WF_Popup			= 0x4 | WF_Window, // 没有系统边框，如果和WF_BORDER一起使用，则创建一个只有边框，没有标题栏的窗体
+		WF_Popup				= 0x4 | WF_Window, // 没有系统边框，如果和WF_BORDER一起使用，则创建一个只有边框，没有标题栏的窗体
 		WF_Tool				= 0x8 | WF_Window,
 
 		WF_MaximizeButton	= 0x100, // 会同时创建关闭按钮。
 		WF_MinimizeButton	= 0x200, // 会同时创建关闭按钮。
 		WF_HelpButton		= 0x400, // 会同时创建关闭按钮。
-		WF_CloseButton	= 0x800,
-		WF_TitleBar		= 0x1000, // 只包含WF_CAPTION会创建一个只有标题栏，没有关闭按钮的窗体
+		WF_CloseButton		= 0x800,
+		WF_TitleBar			= 0x1000, // 只包含WF_CAPTION会创建一个只有标题栏，没有关闭按钮的窗体
 		WF_Border			= 0x2000,
 		WF_ThinBorder		= 0x4000,
 
@@ -28,10 +29,10 @@ namespace MetalBone
 
 	enum WidgetAttributes
 	{
-		WA_DeleteOnClose = 0x1,
-		WA_NoStyleSheet = 0x2,
-		WA_TranspantBackground = 0x4,
-		WA_Hover = 0x8 // Change apperent when hover
+		WA_DeleteOnClose			= 0x1,
+		WA_NoStyleSheet			= 0x2,
+		WA_TranspantBackground	= 0x4,
+		WA_Hover					= 0x8 // Change apperent when hover
 	};
 
 	enum WindowStates
@@ -64,6 +65,8 @@ namespace MetalBone
 
 			void setObjectName(const std::wstring&);
 			const std::wstring& objectName() const;
+
+			ID2D1RenderTarget* getRenderTarget();
 
 			// 如果MWidget类型为WF_Window，一定返回true。
 			// 如果MWidget类型为WF_Widget，如果有parent()返回不为0，则isWindow()一定返回false;
