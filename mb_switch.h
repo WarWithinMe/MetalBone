@@ -18,6 +18,7 @@
 //#define SIGSLOT_MT_GLOBAL
 
 #define MB_DEBUG
+#define MB_DEBUG_D2D
 
 //  π”√MSVC±‡“Î
 #ifndef MSVC

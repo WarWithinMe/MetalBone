@@ -6,6 +6,7 @@
 #include <set>
 #include <tchar.h>
 #include <WinError.h>
+#include <ObjBase.h>
 
 namespace MetalBone
 {
@@ -28,6 +29,7 @@ namespace MetalBone
 		HINSTANCE			appHandle;
 		MStyleSheetStyle		ssstyle;
 		ID2D1Factory*		d2d1Factory;
+		IWICImagingFactory*	wicFactory;
 
 		static MApplication::WinProc customWndProc;
 		static MApplicationData* instance;
@@ -39,8 +41,6 @@ namespace MetalBone
 		: quitOnLastWindowClosed(true)
 	{
 		instance = this;
-		HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d1Factory);
-		M_ASSERT_X(SUCCEEDED(hr), "Cannot create D2D1Factory. This is a fatal problem.", "MApplicationData()");
 	}
 
 	MWidget* MApplicationData::findWidgetByHandle(HWND handle) const
@@ -111,6 +111,21 @@ namespace MetalBone
 		WNDCLASS wc;
 		setupRegisterClass(wc);
 		RegisterClassW(&wc);
+
+		CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+#ifdef MB_DEBUG_D2D
+		D2D1_FACTORY_OPTIONS opts;
+		opts.debugLevel = D2D1_DEBUG_LEVEL_WARNING;
+		HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, opts, &(mImpl->d2d1Factory));
+		M_ASSERT_X(SUCCEEDED(hr), "Cannot create D2D1Factory. This is a fatal problem.", "MApplicationData()");
+#else
+		HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &(mImpl->d2d1Factory));
+		M_ASSERT_X(SUCCEEDED(hr), "Cannot create D2D1Factory. This is a fatal problem.", "MApplicationData()");
+#endif
+		
+		hr = CoCreateInstance(CLSID_WICImagingFactory,NULL,
+							  CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&(mImpl->wicFactory)));
+		M_ASSERT_X(SUCCEEDED(hr), "Cannot create WIC Component. This is a fatal problem.", "MApplicationData()");
 	}
 
 	MApplication::~MApplication()
@@ -118,6 +133,7 @@ namespace MetalBone
 		 s_instance = 0;
 		 delete mImpl;
 		 MApplicationData::instance = 0;
+		 CoUninitialize();
 	}
 
 	const std::set<MWidget*>& MApplication::topLevelWindows() const
@@ -155,9 +171,19 @@ namespace MetalBone
 		mImpl->customWndProc = proc;
 	}
 
+	MStyleSheetStyle* MApplication::getStyleSheet()
+	{
+		return &(mImpl->ssstyle);
+	}
+
 	ID2D1Factory* MApplication::getD2D1Factory()
 	{
 		return mImpl->d2d1Factory;
+	}
+
+	IWICImagingFactory* MApplication::getWICImagingFactory()
+	{
+		return mImpl->wicFactory;
 	}
 
 	int MApplication::exec()
@@ -211,7 +237,7 @@ namespace MetalBone
 		// 包含这个widget的Window Handle
 		HWND winHandle;
 
-		ID2D1RenderTarget* renderTarget;
+		ID2D1HwndRenderTarget* renderTarget;
 
 		std::wstring windowTitle;
 		std::wstring objectName;
@@ -309,6 +335,9 @@ namespace MetalBone
 		}else
 			setParent(0);
 
+		MApplicationData::instance->ssstyle.setWidgetSS(this,std::wstring());
+		MApplicationData::instance->ssstyle.removeCache(this);
+
 		std::list<MWidget*>::iterator iter = data->children.begin();
 		std::list<MWidget*>::iterator iterEnd = data->children.end();
 		while(iter != iterEnd)
@@ -317,9 +346,6 @@ namespace MetalBone
 			++iter;
 		}
 		delete data;
-
-		MApplicationData::instance->ssstyle.removeWidgetSS(this);
-		MApplicationData::instance->ssstyle.removeCache(this);
 	}
 
 	void MWidget::setObjectName(const std::wstring& name)
@@ -470,12 +496,6 @@ namespace MetalBone
 
 				data->widgetState &= WidgetExtraData::MWS_HIDDEN;
 				data->widgetState &= (~WidgetExtraData::MWS_POLISHED);
-
-				D2D1_RENDER_TARGET_PROPERTIES p = D2D1::RenderTargetProperties();
-				p.usage = D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE;
-				mApp->getD2D1Factory()->CreateHwndRenderTarget(p,
-					D2D1::HwndRenderTargetProperties(winHandle, D2D1_SIZE_U(width,height)),
-					&m_pRenderTarget);
 			}
 			data->parent = parent;
 			return;
@@ -544,6 +564,15 @@ namespace MetalBone
 				SetWindowPos(data->winHandle,HWND_BOTTOM,0,0,0,0,SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED);
 
 			MApplicationData::instance->topLevelWindows.insert(this);
+
+			D2D1_RENDER_TARGET_PROPERTIES p = D2D1::RenderTargetProperties();
+			D2D1_SIZE_U s;
+			s.width = width;
+			s.height = height;
+			p.usage = D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE;
+			mApp->getD2D1Factory()->CreateHwndRenderTarget(&p,
+				&(D2D1::HwndRenderTargetProperties(winHandle, s)),
+				&(data->renderTarget));
 		}
 
 		// TODO：如果这个Widget还没有获取相关资源，则在这里获取。

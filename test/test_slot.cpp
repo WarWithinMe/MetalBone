@@ -1,54 +1,35 @@
-#ifndef TEST_SLOT_CPP
-#define TEST_SLOT_CPP
-#include "../MBGlobal.h"
+#include "MBGlobal.h"
 #include <stdio.h>
 #include <string>
 
 class slotClass : public has_slots
 {
 	public:
-		void test()
-		{
+		void test() {
 			fprintf(stdout, "%s\n", "Testing slot 'test'");
 		}
-
-		void test1(int c)
-		{
+		void test1(int c) {
 			fprintf(stdout, "%s:%d\n", "Testing slot 'test1'",c);
 		}
-
-		void test2(int c,int b)
-		{
+		void test2(int c,int b) {
 			fprintf(stdout, "%s:%d,%d\n", "Testing slot 'test2'",c,b);
 		}
-
-		void test3(int c,int b,int c2)
-		{
+		void test3(int c,int b,int c2) {
 			fprintf(stdout, "%s:%d,%d,%d\n", "Testing slot 'test3'",c,b,c2);
 		}
-
-		void test4(int c,int b,int c2, int c3)
-		{
+		void test4(int c,int b,int c2, int c3) {
 			fprintf(stdout, "%s:%d,%d,%d,%d\n", "Testing slot 'test4'",c,b,c2,c3);
 		}
-
-		void test5(int c,int b,int c2, int c3,int c4)
-		{
+		void test5(int c,int b,int c2, int c3,int c4) {
 			fprintf(stdout, "%s:%d,%d,%d,%d,%d\n", "Testing slot 'test2'",c,b,c2,c3,c4);
 		}
-
-		void test6(int c,int b,int c2, int c3,int c4,int c5)
-		{
+		void test6(int c,int b,int c2, int c3,int c4,int c5) {
 			fprintf(stdout, "%s:%d,%d,%d,%d,%d,%d\n", "Testing slot 'test2'",c,b,c2,c3,c4,c5);
 		}
-
-		void test7(int c,int b,int c2, int c3,int c4,int c5,int c6)
-		{
+		void test7(int c,int b,int c2, int c3,int c4,int c5,int c6) {
 			fprintf(stdout, "%s:%d,%d,%d,%d,%d,%d,%d\n", "Testing slot 'test2'",c,b,c2,c3,c4,c5,c6);
 		}
-
-		void test8(int c,int b,int c2, int c3,int c4,int c5,int c6,int c7)
-		{
+		void test8(int c,int b,int c2, int c3,int c4,int c5,int c6,int c7) {
 			fprintf(stdout, "%s:%d,%d,%d,%d,%d,%d,%d,%d\n", "Testing slot 'test2'",c,b,c2,c3,c4,c5,c6,c7);
 		}
 };
@@ -143,4 +124,3 @@ void test_slot()
 	newSignal1.disconnect(&newSlot1);
 	newSignal1.emit(5);
 }
-#endif

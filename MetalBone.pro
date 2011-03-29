@@ -5,7 +5,7 @@ TEMPLATE = app
 DEFINES -= QT_LARGEFILE_SUPPORT
 DEFINES += _UNICODE UNICODE
 win32-msvc*: DEFINES += MSVC
-LIBS += -lGdi32 -luser32 -lvld -L"D:/Program Files/Visual Leak Detector/lib/Win32"
+LIBS += -lGdi32 -luser32 -lvld -ld2d1 -lOle32 -L"D:/Program Files/Visual Leak Detector/lib/Win32"
 INCLUDEPATH += "D:/Program Files/Visual Leak Detector/include"
 QMAKE_INCDIR_QT =
 QMAKE_LIBDIR_QT =
@@ -23,14 +23,11 @@ HEADERS += MWidget.h
 HEADERS += MApplication.h
 HEADERS += externutils/XUnzip.h
 
-HEADERS += test/test_widgetclose.cpp
+HEADERS += test/test_widget.cpp
 HEADERS += test/test_stylesheet.cpp
 HEADERS += test/test_slot.cpp
-HEADERS += test/test_resource.cpp
-HEADERS += test/test_displaylist.cpp
 
-SOURCES += \
-    testMain.cpp
+SOURCES += testMain.cpp
 SOURCES += MWidget.cpp
 SOURCES += MBGlobal.cpp
 SOURCES += MStyleSheet.cpp

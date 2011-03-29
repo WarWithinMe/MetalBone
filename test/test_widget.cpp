@@ -1,11 +1,9 @@
-#ifndef TEST_DISPLAYLIST_H
-#define TEST_DISPLAYLIST_H
 #include "../MWidget.h"
 #include "../MApplication.h"
-
 #include <list>
 #include <set>
 #include <stdio.h>
+
 template<class T>
 void outputChildren(const T& container,MWidget* parent)
 {
@@ -124,4 +122,17 @@ void testDisplay()
 	outputChildren(app.topLevelWindows(),0);
 }
 
-#endif // TEST_DISPLAYLIST_H
+void testWidgetclose()
+{
+	MApplication app;
+	MWidget* widget = new MWidget();
+	widget->show();
+	widget->setWindowTitle(L"Widget1");
+	widget->setAttributes(WA_DeleteOnClose);
+	MWidget* widget2 = new MWidget();
+	widget2->show();
+	widget2->setWindowTitle(L"Widget2");
+	widget2->setAttributes(WA_DeleteOnClose);
+	widget2->showMaximized();
+	app.exec();
+}

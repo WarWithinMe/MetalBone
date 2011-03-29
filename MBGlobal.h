@@ -52,13 +52,13 @@ METALBONE_EXPORT void dumpMemory(LPCVOID address, SIZE_T size); // dumpMemory() 
 #  define ENSURE_IN_MAIN_THREAD mb_noop()
 #endif // MB_DEBUG
 
-//template<class Interface>
-//inline void SafeRelease(Interface **ppInterfaceToRelease) {
-//	if (*ppInterfaceToRelease != 0) {
-//		(*ppInterfaceToRelease)->Release();
-//		(*ppInterfaceToRelease) = 0;
-//	}
-//}
+template<class Interface>
+inline void SafeRelease(Interface*& ppInterfaceToRelease) {
+	if (ppInterfaceToRelease != 0) {
+		ppInterfaceToRelease->Release();
+		ppInterfaceToRelease = 0;
+	}
+}
 
 
 

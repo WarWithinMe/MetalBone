@@ -4,12 +4,14 @@
 #include <string>
 #include <windows.h>
 #include <d2d1.h>
+#include <wincodec.h>
 
 #define mApp MetalBone::MApplication::instance()
 
 namespace MetalBone
 {
 	class MWidget;
+	class MStyleSheetStyle;
 	struct MApplicationData;
 
 	class MApplication
@@ -53,9 +55,10 @@ namespace MetalBone
 			// 数值没有单位（单位默认是px）
 			// 不支持颜色名
 			void setStyleSheet(const std::wstring& css);
+			MStyleSheetStyle* getStyleSheet();
 
 			ID2D1Factory* getD2D1Factory();
-
+			IWICImagingFactory* getWICImagingFactory();
 
 #ifdef METALBONE_USE_SIGSLOT
 			Signal0 aboutToQuit;		// 当MApplication退出Message Loop的时候发送aboutToQuit信号
