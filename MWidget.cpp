@@ -321,7 +321,7 @@ namespace MetalBone
 		return false;
 	}
 
-	bool MWidget::isHidden() const { return m_widgetState & MWS_HIDDEN; }
+	bool MWidget::isHidden() const { return (m_widgetState & MWS_HIDDEN) != 0; }
 
 	void MWidget::setOpaqueBackground(bool on)
 	{
@@ -448,7 +448,6 @@ namespace MetalBone
 			if(m_winHandle != NULL)
 			{
 				DestroyWindow(m_winHandle);
-				m_winHandle = NULL;
 				MApplicationData::instance->topLevelWindows.erase(this);
 			}
 		} else {
@@ -473,6 +472,7 @@ namespace MetalBone
 
 		setTopLevelParentRecursively(tlp);
 		m_parent = parent;
+		m_winHandle = NULL;
 	}
 
 	void MWidget::show()
@@ -486,14 +486,6 @@ namespace MetalBone
 				ShowWindow(m_winHandle,SW_SHOW);
 		} else if(!isHidden())
 			return;
-
-		// Polish stylesheet 
-		if(!(m_widgetState & MWS_POLISHED))
-			mApp->getStyleSheet()->polish(this);
-
-		// Mark the widget visible. When polishing stylesheet, this is still 
-		// hidden, so even if this widget's size changed, it won't repaint itself.
-		m_widgetState &= (~MWS_HIDDEN);
 
 		// This is a window or not?
 		if((m_windowFlags & WF_Window) || m_parent == 0)
@@ -510,9 +502,9 @@ namespace MetalBone
 				}
 
 				RECT rect = {0,0,width,height};
-				AdjustWindowRectEx(&rect,winStyle,false,winExStyle);
-
 				generateStyleFlags(m_windowFlags,&winStyle,&winExStyle);
+
+				AdjustWindowRectEx(&rect,winStyle,false,winExStyle);
 				m_winHandle = CreateWindowExW(winExStyle,
 					gMWidgetClassName,
 					m_windowTitle.c_str(),
@@ -542,9 +534,18 @@ namespace MetalBone
 					&(D2D1::HwndRenderTargetProperties(m_winHandle, s)),
 					&m_renderTarget);
 			}
-		} else {
-			m_parent->repaint(x,y,width,height);
 		}
+
+		// We have to create the window first if necessary before polishing stylesheet 
+		if(!(m_widgetState & MWS_POLISHED))
+			mApp->getStyleSheet()->polish(this);
+
+		// Mark the widget visible. When polishing stylesheet, this is still 
+		// hidden, so even if this widget's size changed, it won't repaint itself.
+		m_widgetState &= (~MWS_HIDDEN);
+
+		if(m_winHandle == NULL)
+			m_parent->repaint(x,y,width,height);
 	}
 
 	void MWidget::hide()
@@ -564,7 +565,7 @@ namespace MetalBone
 		m_winHandle(NULL),
 		m_renderTarget(0),
 		x(200),y(200),
-		width(480),height(640),
+		width(640),height(480),
 		minWidth(0),minHeight(0),
 		maxWidth(0xffffffff),maxHeight(0xffffffff),
 		m_attributes(0),
@@ -645,5 +646,24 @@ namespace MetalBone
 			AdjustWindowRectEx(&rect,winStyle,false,winExStyle);
 			MoveWindow(m_winHandle,x,y,rect.right - rect.left,rect.bottom - rect.top,true);
 		}
+	}
+
+	void MWidget::repaint(int x, int y, unsigned int width, unsigned int height)
+	{
+		if(isHidden())
+			return;
+
+		MWidget* parent = m_parent;
+		while(parent != 0)
+		{
+			x += parent->x;
+			y += parent->y;
+		}
+
+		RECT rect = {x,y,x+width,y+height};
+		if(x > (int)m_topLevelParent->width || y > (int)m_topLevelParent->height || rect.right < 0 || rect.bottom < 0)
+			return;
+
+		InvalidateRect(m_winHandle,&rect,true);
 	}
 }

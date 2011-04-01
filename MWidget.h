@@ -1,6 +1,7 @@
 #ifndef GUI_MWIDGET_H
 #define GUI_MWIDGET_H
 #include "MBGlobal.h"
+#include "MStyleSheet.h"
 #include <string>
 #include <d2d1.h>
 namespace MetalBone
@@ -31,10 +32,11 @@ namespace MetalBone
 	enum WidgetAttributes
 	{
 		WA_DeleteOnClose     = 0x1,
-		WA_ConstStyleSheet   = 0x2, // If set, we only polish widget once, so that changing
+		WA_NoStyleSheet      = 0x2,
+		WA_ConstStyleSheet   = 0x4, // If set, we only polish widget once, so that changing
 									// parent won't recalc the stylesheet again.
-		WA_OpaqueBackground  = 0x4,
-		WA_Hover             = 0x8  // Change apperent when hover
+		WA_OpaqueBackground  = 0x8,
+		WA_Hover             = 0x10  // Change apperent when hover
 	};
 
 	enum WindowStates
@@ -79,6 +81,7 @@ namespace MetalBone
 
 			inline ID2D1RenderTarget* getRenderTarget();
 			inline void repaint();
+			void repaint(int x, int y, unsigned int width, unsigned int height);
 
 			// Return the parent widget of this or 0.
 			inline MWidget* parent() const;
@@ -123,10 +126,7 @@ namespace MetalBone
 
 
 
-			virtual void draw();
-			void repaint(int x, int y, unsigned int width, unsigned int height);
-
-
+			virtual void draw(){}
 
 
 
@@ -172,6 +172,8 @@ namespace MetalBone
 	inline const std::wstring& MWidget::objectName()   const          { return m_objectName; }
 	inline const std::wstring& MWidget::windowTitle()  const          { return m_windowTitle; }
 	inline D2D_SIZE_U   MWidget::size()                const          { return D2D1::SizeU(width,height); }
+	inline D2D_SIZE_U   MWidget::minSize()             const          { return D2D1::SizeU(minWidth,minHeight); }
+	inline D2D_SIZE_U   MWidget::maxSize()             const          { return D2D1::SizeU(maxWidth,maxHeight); }
 	inline MWidget*     MWidget::parent()              const          { return m_parent; }
 	inline HWND         MWidget::windowHandle()        const          { return m_topLevelParent->m_winHandle; }
 	inline unsigned int MWidget::windowFlags()         const          { return m_windowFlags; }
@@ -180,7 +182,7 @@ namespace MetalBone
 	inline void         MWidget::repaint()                            { repaint(x,y,width,height); }
 	inline void         MWidget::setObjectName(const std::wstring& n) { m_objectName = n; }
 	inline void         MWidget::setStyleSheet(const std::wstring& css){ mApp->getStyleSheet()->setWidgetSS(this,css); }
-	inline bool         MWidget::testAttributes(WidgetAttributes a) const { return m_attributes & a; }
+	inline bool         MWidget::testAttributes(WidgetAttributes a) const { return (m_attributes & a) != 0; }
 	inline const std::list<MWidget*>& MWidget::children() const       { return m_children;}
 	inline ID2D1RenderTarget* MWidget::getRenderTarget()              { return windowWidget()->m_renderTarget; }
 	void                MWidget::setWindowTitle(const std::wstring& t)

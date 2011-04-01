@@ -73,7 +73,7 @@ void testDisplay()
 	//	0	"Widget3"		Handle:0
 	//	============================
 	//	Top Level Windows
-	window2.addChild(&widget3);
+	widget3.setParent(&window2);
 	outputChildren(window.children(),&window);
 	outputChildren(window2.children(),&window2);
 	outputChildren(app.topLevelWindows(),0);

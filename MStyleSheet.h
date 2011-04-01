@@ -126,12 +126,15 @@ namespace MetalBone
 
 		struct GeometryData
 		{
-			int width     :-1;
-			int height    :-1;
-			int minWidth  :-1;
-			int minHeight :-1;
-			int maxWidth  :-1;
-			int maxHeight :-1;
+			GeometryData():width(-1),height(-1),
+				minWidth(-1),minHeight(-1),
+				maxWidth(-1),maxHeight(-1){}
+			int width;
+			int height;
+			int minWidth;
+			int minHeight;
+			int maxWidth;
+			int maxHeight;
 		};
 
 		struct RenderRuleData
@@ -213,7 +216,7 @@ namespace MetalBone
 			// minWidth, hover, etc.) according to the RenderRule.
 			// One should call polish first if there's no StyleRules(cached)
 			// for a widget.
-			void polish(MWidget* w){} // TODO: implement polish()
+			void polish(MWidget* w);
 			inline void draw(MWidget* w, unsigned int pseudo = 0);
 
 			// Remove every stylesheet resource cached for MWidget w;
@@ -221,8 +224,6 @@ namespace MetalBone
 
 
 // TODO: void recreateResources();
-
-
 
 
 		private:

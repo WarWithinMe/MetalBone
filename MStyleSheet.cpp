@@ -431,14 +431,14 @@ namespace MetalBone
 		if(geoData->height != -1 && geoData->height != size2.height)
 			size2.height = geoData->height;
 
-		if(geoData->minWidth > size2.width)
+		if((unsigned int)geoData->minWidth > size2.width)
 			size2.width = geoData->minWidth;
-		else if (geoData->maxWidth < size.width)
+		else if ((unsigned int)geoData->maxWidth < size.width)
 			size2.width = geoData->maxWidth;
 
-		if(geoData->minHeight > size2.height)
+		if((unsigned int)geoData->minHeight > size2.height)
 			size2.height = geoData->minHeight;
-		else if(geoData->maxHeight < size2.height)
+		else if((unsigned int)geoData->maxHeight < size2.height)
 			size2.height = geoData->maxHeight;
 
 		D2D_SIZE_U range = w->minSize();
