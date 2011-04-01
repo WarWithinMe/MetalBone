@@ -18,30 +18,20 @@
 namespace MetalBone
 {
 	class MWidget;
-	namespace CSS {
-		/*
-		enum Alignment { AlignLeft = 0x1, AlignRight = 0x2, AlignHCenter = 0x4, AlignTop = 0x10, AlignBottom = 0x20,
-			AlignVCenter = 0x40, AlignCenter = AlignVCenter | AlignHCenter };
-		enum BorderStyle { BorderStyle_None, BorderStyle_Dotted, BorderStyle_Dashed, BorderStyle_Solid,
-			BorderStyle_Double, BorderStyle_DotDash, BorderStyle_DotDotDash };
-		enum Corner { TopLeftCorner, TopRightCorner, BottomLeftCorner, BottomRightCorner};
-		enum TileMode { TileMode_Repeat, TileMode_Stretch };
-		enum Repeat { Repeat_None, Repeat_X, Repeat_Y, Repeat_XY };
-		enum Origin { Origin_Content, Origin_Padding, Origin_Border,Origin_Margin };
-		enum TextOverflow { Overflow_Clip, Overflow_ellipsis, Overflow_WrapClip, Overflow_WrapEllipsis };
-		enum TextDecoration { Decoration_None, Decoration_Underline, Decoration_Overline, Decoration_LineThrough };
-		*/
+	class MStyleSheetStyle;
+	namespace CSS
+	{
 		enum PseudoClassType {
-			PC_Default	= 0x1,		PC_Enabled		= 0x2,
-			PC_Disabled	= 0x4,		PC_Pressed		= 0x8,
-			PC_Focus		= 0x10,		PC_Hover			= 0x20,
-			PC_Checked	= 0x40,		PC_Unchecked		= 0x80,
-			PC_Selected	= 0x100,		PC_Horizontal		= 0x200,
-			PC_Vertical	= 0x400,		PC_Children		= 0x800,
-			PC_ReadOnly	= 0x1000,		PC_Sibling		= 0x2000,
-			PC_First		= 0x4000,		PC_Last			= 0x8000,
-			PC_Active		= 0x10000,	PC_Editable		= 0x20000,
-			PC_EditFocus	= 0x40000,	PC_Unknown		= 0x80000,
+			PC_Default    = 0x1,        PC_Enabled      = 0x2,
+			PC_Disabled   = 0x4,        PC_Pressed      = 0x8,
+			PC_Focus      = 0x10,       PC_Hover        = 0x20,
+			PC_Checked    = 0x40,       PC_Unchecked    = 0x80,
+			PC_Selected   = 0x100,      PC_Horizontal   = 0x200,
+			PC_Vertical   = 0x400,      PC_Children     = 0x800,
+			PC_ReadOnly   = 0x1000,     PC_Sibling      = 0x2000,
+			PC_First      = 0x4000,     PC_Last         = 0x8000,
+			PC_Active     = 0x10000,    PC_Editable     = 0x20000,
+			PC_EditFocus  = 0x40000,    PC_Unknown      = 0x80000,
 			knownPseudoCount = 20
 		};
 
@@ -50,57 +40,57 @@ namespace MetalBone
 		// Do not change the enum value's order. Because the algorithm rely on the order.
 		enum PropertyType {
 			PT_InheritBackground,
-			PT_Background,				PT_BackgroundClip,				PT_BackgroundRepeat,
-			PT_BackgroundPosition,			PT_BackgroundAlignment,
+			PT_Background,             PT_BackgroundClip,             PT_BackgroundRepeat,
+			PT_BackgroundPosition,     PT_BackgroundAlignment,
 
 			PT_BorderImage,
 
-			PT_Border,					PT_BorderWidth,				PT_BorderColor,
+			PT_Border,                 PT_BorderWidth,                PT_BorderColor,
 			PT_BorderStyles,
-			PT_BorderTop,					PT_BorderRight,				PT_BorderBottom,
+			PT_BorderTop,              PT_BorderRight,                PT_BorderBottom,
 			PT_BorderLeft,
-			PT_BorderTopWidth,				PT_BorderRightWidth,			PT_BorderBottomWidth,
+			PT_BorderTopWidth,         PT_BorderRightWidth,           PT_BorderBottomWidth,
 			PT_BorderLeftWidth,
-			PT_BorderTopColor,				PT_BorderRightColor,			PT_BorderBottomColor,
+			PT_BorderTopColor,         PT_BorderRightColor,           PT_BorderBottomColor,
 			PT_BorderLeftColor,
-			PT_BorderTopStyle,				PT_BorderRightStyle,			PT_BorderBottomStyle,
+			PT_BorderTopStyle,         PT_BorderRightStyle,           PT_BorderBottomStyle,
 			PT_BorderLeftStyle,
-			PT_BorderTopLeftRadius,		PT_BorderTopRightRadius,		PT_BorderBottomLeftRadius,
-			PT_BorderBottomRightRadius,		
+			PT_BorderTopLeftRadius,    PT_BorderTopRightRadius,       PT_BorderBottomLeftRadius,
+			PT_BorderBottomRightRadius,
 			PT_BorderRadius,
 
-			PT_Margin,					PT_MarginBottom,				PT_MarginLeft,
-			PT_MarginRight,				PT_MarginTop,
-			PT_Padding,					PT_PaddingBottom,				PT_PaddingLeft,
-			PT_PaddingRight,				PT_PaddingTop,
+			PT_Margin,                 PT_MarginTop,                  PT_MarginRight,
+			PT_MarginBottom,           PT_MarginLeft,
+			PT_Padding,                PT_PaddingTop,                 PT_PaddingRight,
+			PT_PaddingBottom,          PT_PaddingLeft,
 
-			PT_Color,						PT_Font,						PT_FontFamily,
-			PT_FontSize,					PT_FontStyle,					PT_FontWeight,
-			PT_TextAlignment,				PT_TextDecoration,				PT_TextIndent,
-			PT_TextOverflow,				PT_TextUnderlineStyle,			PT_TextOutline,
+			PT_Width,                  PT_Height,
+			PT_MinimumWidth,           PT_MinimumHeight,
+			PT_MaximumWidth,           PT_MaximumHeight,
+
+			PT_Color,                  PT_Font,                       PT_FontFamily,
+			PT_FontSize,               PT_FontStyle,                  PT_FontWeight,
+			PT_TextAlignment,          PT_TextDecoration,             PT_TextIndent,
+			PT_TextOverflow,           PT_TextUnderlineStyle,         PT_TextOutline,
 			PT_TextShadow,
-
-			PT_Height,					PT_Width,						PT_MaximumHeight,
-			PT_MaximumWidth,				PT_MinimumHeight,				PT_MinimumWidth,
 
 			knownPropertyCount
 		};
 
 		enum ValueType {
-			Value_Unknown,		Value_None,			Value_Transparent,
+			Value_Unknown,    Value_None,        Value_Transparent,
 
 			Value_Bold,
-			Value_Normal,			Value_Italic,			Value_Oblique,
-			Value_Clip,			Value_Ellipsis,		Value_Wrap,
-			Value_Underline,		Value_Overline,		Value_LineThrough,
-			Value_Dashed, Value_DotDash, Value_DotDotDash, Value_Dotted, Value_Solid, Value_Wave,
+			Value_Normal,     Value_Italic,      Value_Oblique,
+			Value_Clip,       Value_Ellipsis,    Value_Wrap,
+			Value_Underline,  Value_Overline,    Value_LineThrough,
 
-			Value_Padding,		Value_Border,			Value_Content,		Value_Margin,
-			Value_Top,			Value_Right,			Value_Left,			Value_Bottom,		Value_Center,
-			Value_NoRepeat,		Value_RepeatX,		Value_RepeatY,		Value_Repeat,		Value_Stretch,
+			Value_Dashed,     Value_DotDash,     Value_DotDotDash, Value_Dotted,    Value_Solid,   Value_Wave,
 
+			Value_Padding,    Value_Border,      Value_Content,    Value_Margin,
+			Value_Top,        Value_Right,       Value_Left,       Value_Bottom,    Value_Center,
+			Value_NoRepeat,   Value_RepeatX,     Value_RepeatY,    Value_Repeat,    Value_Stretch,
 			Value_True,
-
 			KnownValueCount
 		};
 
@@ -110,8 +100,8 @@ namespace MetalBone
 		struct CssValue;
 		struct MatchedStyleRule
 		{
-			const Selector*	 matchedSelector;
-			const StyleRule*	 styleRule;
+			const Selector*  matchedSelector;
+			const StyleRule* styleRule;
 		};
 		struct StyleSheet
 		{
@@ -133,16 +123,41 @@ namespace MetalBone
 			virtual ~BorderRenderObject() {}
 			virtual void draw() {}
 		};
+
+		struct GeometryData
+		{
+			int width     :-1;
+			int height    :-1;
+			int minWidth  :-1;
+			int minHeight :-1;
+			int maxWidth  :-1;
+			int maxHeight :-1;
+		};
+
 		struct RenderRuleData
 		{
-			RenderRuleData():refCount(1),borderImageRO(0),borderRO(0){}
+			RenderRuleData():refCount(1),opaqueBackground(true),
+					animated(false),geoData(0),
+					borderImageRO(0),borderRO(0)
+			{
+				memset(&margin, 0,sizeof(D2D_RECT_U));
+				memset(&padding,0,sizeof(D2D_RECT_U));
+			}
 			// TODO: ~RenderRuleData(){ /*Clean up resources.*/ }
-			int refCount;
+			int  refCount;
+			bool opaqueBackground;
+			bool animated; // Remark: We need to know whether the background is GIF animated image.
 
 			std::vector<BackgroundRenderObject*> backgroundROs;
 			BorderImageRenderObject* borderImageRO;
-
 			BorderRenderObject* borderRO;
+			GeometryData* geoData;
+
+			// Return true if we changed the widget's size
+			bool setGeometry(MWidget*);
+
+			D2D_RECT_U margin;
+			D2D_RECT_U padding;
 		};
 		struct RenderRuleCacheKey
 		{
@@ -166,17 +181,20 @@ namespace MetalBone
 					}
 				}
 
-				void init() { data = new RenderRuleData(); }
-				bool isValid() const { return data != 0; }
-				RenderRuleData* operator->() { return data; }
-
 				RenderRule& operator=(const RenderRule& other);
+				bool isValid() const { return data != 0; }
+				bool opaqueBackground() const { return data->opaqueBackground; }
+				bool setGeometry(MWidget* w) { return data->setGeometry(w); }
+
 				// TODO: Implement draw();
 				void draw(MWidget* w) {
 					w;
 				}
 			private:
+				void init() { data = new RenderRuleData(); }
+				RenderRuleData* operator->() { return data; }
 				RenderRuleData* data;
+			friend class MStyleSheetStyle;
 		};
 	} // namespace CSS
 
@@ -190,11 +208,11 @@ namespace MetalBone
 			void setAppSS				(const std::wstring&);
 			void setWidgetSS			(MWidget*, const std::wstring&);
 
-			// polish() basically calls getMachedStyleRules() to generate StyleRules
-			// for the widget. And within getMachedStyleRules(), we set Widget Properties
-			// (width, height, minWidth, hover, etc.) according to the StyleRules.
-			// Every time a StyleSheet is set or removed, we can automatically
-			// reset these properties within getMachedStyleRules().
+			// polish() calls getRenderRule() to generate RenderRule(default state)
+			// for the widget. Then we set Widget Properties (width, height,
+			// minWidth, hover, etc.) according to the RenderRule.
+			// One should call polish first if there's no StyleRules(cached)
+			// for a widget.
 			void polish(MWidget* w){} // TODO: implement polish()
 			inline void draw(MWidget* w, unsigned int pseudo = 0);
 
@@ -209,8 +227,8 @@ namespace MetalBone
 
 		private:
 			typedef std::tr1::unordered_map<MWidget*, CSS::StyleSheet*> WidgetSSCache;
-			WidgetSSCache		widgetSSCache; // Widget specific StyleSheets
-			CSS::StyleSheet*		appStyleSheet; // Application specific StyleSheets
+			WidgetSSCache    widgetSSCache; // Widget specific StyleSheets
+			CSS::StyleSheet* appStyleSheet; // Application specific StyleSheets
 
 			// Cache for RenderRules. Each RenderRule consists of several D2D resources.
 			// Assume these resources always are sharable (i.e. either created
@@ -231,23 +249,23 @@ namespace MetalBone
 			typedef std::vector<CSS::MatchedStyleRule> MatchedStyleRuleVector;
 			typedef std::tr1::unordered_map<MWidget*, MatchedStyleRuleVector>	WidgetStyleRuleMap;
 			typedef std::tr1::unordered_map<MWidget*, PseudoRenderRuleMap*>		WidgetRenderRuleMap;
-			WidgetStyleRuleMap widgetStyleRuleCache;
+			WidgetStyleRuleMap  widgetStyleRuleCache;
 			WidgetRenderRuleMap widgetRenderRuleCache;
 
 			// Each declaration can only declare one brush.
 			typedef std::tr1::unordered_map<unsigned int, ID2D1SolidColorBrush*> D2D1SolidBrushMap;
-			D2D1SolidBrushMap	solidBrushCache;
 			typedef std::tr1::unordered_map<std::wstring, ID2D1Bitmap*> D2D1BitmapMap;
-			D2D1BitmapMap bitmapCache;
+			D2D1SolidBrushMap solidBrushCache;
+			D2D1BitmapMap     bitmapCache;
 
 			CSS::RenderRule getRenderRule(MWidget*, unsigned int pseudo);
 			void getMachedStyleRules(MWidget*, MatchedStyleRuleVector&);
 			void clearRenderRuleCacheRecursively(MWidget*);
 
-			CSS::BackgroundRenderObject* createBackgroundRO();
-			CSS::BorderImageRenderObject* createBorderImageRO();
-			ID2D1Bitmap** createD2D1Bitmap(std::wstring&);
-			ID2D1SolidColorBrush** createD2D1SolidBrush(CSS::CssValue&);
+			ID2D1Bitmap**                 createD2D1Bitmap     (const std::wstring&, bool& isOpaque);
+			ID2D1SolidColorBrush**        createD2D1SolidBrush (CSS::CssValue&);
+			CSS::BackgroundRenderObject*  createBackgroundRO   (bool& isOpaqueBG);
+			CSS::BorderImageRenderObject* createBorderImageRO  (bool& isOpaqueBG);
 
 			typedef std::multimap<CSS::PropertyType,CSS::Declaration*> DeclMap;
 			void setSimpleBorederRO(CSS::SimpleBorderRenderObject*, DeclMap::iterator&, DeclMap::iterator);
@@ -257,6 +275,8 @@ namespace MetalBone
 			// so we don't have to pass it around functions.
 			ID2D1RenderTarget*	workingRenderTarget;
 			CSS::Declaration*	workingDeclaration;
+
+			void removeResources();
 #ifdef MB_DEBUG
 		public: void dumpStyleSheet();
 #endif

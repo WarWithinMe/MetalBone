@@ -6,6 +6,7 @@
 #include "MBGlobal.h"
 
 #include <D2d1helper.h>
+#include <algorithm>
 #include <wincodec.h>
 #include <stdlib.h>
 #include <typeinfo>
@@ -23,7 +24,7 @@ namespace MetalBone
 		if(hrsrc) {
 			HGLOBAL hglobal = LoadResource(hInstance,hrsrc);
 			if(hglobal) {
-				buffer = (const BYTE*) LockResource(hglobal);
+				buffer = (const BYTE*)LockResource(hglobal);
 				if(buffer) {
 					size = SizeofResource(hInstance,hrsrc);
 					return true;
@@ -40,13 +41,14 @@ namespace MetalBone
 		{
 			std::wstring temp(fileName,2,fileName.length() - 2);
 			iter = cache.find(temp);
-		}else
+		} else {
 			iter = cache.find(fileName);
+		}
 		if(iter == cache.cend())
 			return false;
 
 		buffer = iter->second->buffer;
-		size = iter->second->length;
+		size   = iter->second->length;
 		return true;
 	}
 
@@ -54,12 +56,7 @@ namespace MetalBone
 	{
 		ResourceCache::const_iterator iter = cache.cbegin();
 		ResourceCache::const_iterator iterEnd = cache.cend();
-		while(iter != iterEnd)
-		{
-			delete iter->second;
-			++iter;
-		}
-
+		while(iter != iterEnd) { delete iter->second; ++iter; }
 		cache.clear();
 	}
 
@@ -78,21 +75,21 @@ namespace MetalBone
 
 		DWORD size = GetFileSize(resFile,0);
 		newEntry->length = size;
-		newEntry->unity = true;
+		newEntry->unity  = true;
 		newEntry->buffer = new BYTE[size];
 
 		DWORD readSize;
 		if(ReadFile(resFile,newEntry->buffer,size,&readSize,0))
 		{
-			if(readSize != size)
+			if(readSize != size) {
 				delete newEntry;
-			else
-			{
+			} else {
 				cache.insert(ResourceCache::value_type(filePath, newEntry));
 				return true;
 			}
-		}else
+		} else {
 			delete newEntry;
+		}
 		return false;
 	}
 
@@ -141,8 +138,9 @@ namespace MetalBone
 			}
 
 			tempCache.at(0).second->unity = true;
-		}else
+		} else {
 			success = false;
+		}
 
 		CloseZip(zip);
 		return success;
@@ -155,18 +153,20 @@ namespace MetalBone
 	// ========== StyleSheet ==========
 	namespace CSS
 	{
-		struct CssValue {
-			enum Type { Unknown, Number, Length, Identifier, Uri, Color };
-
+		struct CssValue
+		{
+			enum  Type    { Unknown, Number, Length, Identifier, Uri, Color };
 			union Variant {
 				int vint;
 				unsigned int vuint;
 				std::wstring* vstring;
 			};
 
-			inline CssValue():type(Unknown){}
-			Type type;
+			Type    type;
 			Variant data;
+
+			inline CssValue():type(Unknown) { data.vint = 0; }
+			inline CssValue(const CssValue& rhs):type(rhs.type),data(rhs.data){}
 
 			inline D2D_COLOR_F getColor()
 			{
@@ -182,17 +182,18 @@ namespace MetalBone
 			}
 		};
 
-		// 1. StyleRule		- x:hover , y:clicked > z:checked { prop1: value1; prop2: value2; }
-		// 2. Selector		- x:hover | y:clicked > z:checked
-		// 3. BasicSelector	- x:hover | y:clicked | z:checked
-		// 4. Declaration	- prop1: value1; | prop2: value2;
+		typedef std::vector<CssValue> CssValueArray;
+
+		// 1. StyleRule     - x:hover , y:clicked > z:checked { prop1: value1; prop2: value2; }
+		// 2. Selector      - x:hover | y:clicked > z:checked
+		// 3. BasicSelector - x:hover | y:clicked | z:checked
+		// 4. Declaration   - prop1: value1; | prop2: value2;
 		struct Declaration
 		{
 			~Declaration();
 			void addValue(const std::wstring& css, int index, int length);
-
-			PropertyType property;
-			std::vector<CssValue> values;
+			PropertyType  property;
+			CssValueArray values;
 		};
 
 		struct BasicSelector
@@ -209,7 +210,7 @@ namespace MetalBone
 			std::wstring id; // #Id
 			unsigned int pseudo;
 			unsigned int pseudoCount;
-			Relation relationToNext;
+			Relation     relationToNext;
 		};
 
 		struct Selector
@@ -218,8 +219,7 @@ namespace MetalBone
 			~Selector();
 
 			std::vector<BasicSelector*> basicSelectors;
-			int specificity() const;
-
+			int  specificity() const;
 			bool matchPseudo(unsigned int) const;
 		};
 
@@ -235,12 +235,12 @@ namespace MetalBone
 		{
 			public:
 				MCSSParser(const std::wstring& c);
-
 				void parse(StyleSheet*);
+
 			private:
 				const std::wstring* css;
 				const int cssLength;
-				int pos;
+				int  pos;
 				bool noSelector;
 
 				void skipWhiteSpace();
@@ -253,187 +253,230 @@ namespace MetalBone
 			const wchar_t* name;
 			int value;
 		};
-
-		bool RenderRuleCacheKey::operator<(const RenderRuleCacheKey& rhs) const
-		{
-			if(this == &rhs)
-				return false;
-
-			int size1 = styleRules.size();
-			int size2 = rhs.styleRules.size();
-			if(size1 > size2)
-				return false;
-			else if(size1 < size2)
-				return true;
-			else
-			{
-				for(int i = 0; i < size1; ++i)
-				{
-					StyleRule* sr1 = styleRules.at(i);
-					StyleRule* sr2 = rhs.styleRules.at(i);
-					if(sr1 > sr2)
-						return false;
-					else if(sr1 < sr2)
-						return true;
-				}
-			}
-			return false;
-		}
-
-		RenderRule& RenderRule::operator=(const RenderRule& other)
-		{
-			if(&other != this)
-			{
-				if(data) {
-					--data->refCount;
-					if(data->refCount == 0)
-						delete data;
-				}
-				data = other.data;
-				if(data)
-					++data->refCount;
-			}
-			return *this;
-		}
-	}
+	} // namespace CSS
 
 	using namespace CSS;
 	static const CSSValuePair pseudos[knownPseudoCount] = {
-		{ L"active",		PC_Active },
-		{ L"checked",	PC_Checked },
-		{ L"default",	PC_Default },
-		{ L"disabled",	PC_Disabled },
-		{ L"edit-focus",	PC_EditFocus },
-		{ L"editable",	PC_Editable },
-		{ L"enabled",	PC_Enabled },
-		{ L"first",		PC_First },
-		{ L"focus",		PC_Focus },
-		{ L"has-children",PC_Children },
-		{ L"has-siblings", PC_Sibling },
-		{ L"horizontal", PC_Horizontal },
-		{ L"hover",		PC_Hover },
-		{ L"last",		PC_Last },
-		{ L"pressed",	PC_Pressed },
-		{ L"read-only",	PC_ReadOnly },
-		{ L"selected",	PC_Selected },
-		{ L"unchecked",	PC_Unchecked },
-		{ L"vertical",	PC_Vertical }
+		{ L"active",      PC_Active     },
+		{ L"checked",     PC_Checked    },
+		{ L"default",     PC_Default    },
+		{ L"disabled",    PC_Disabled   },
+		{ L"edit-focus",  PC_EditFocus  },
+		{ L"editable",    PC_Editable   },
+		{ L"enabled",     PC_Enabled    },
+		{ L"first",       PC_First      },
+		{ L"focus",       PC_Focus      },
+		{ L"has-children",PC_Children   },
+		{ L"has-siblings",PC_Sibling    },
+		{ L"horizontal",  PC_Horizontal },
+		{ L"hover",       PC_Hover      },
+		{ L"last",        PC_Last       },
+		{ L"pressed",     PC_Pressed    },
+		{ L"read-only",   PC_ReadOnly   },
+		{ L"selected",    PC_Selected   },
+		{ L"unchecked",   PC_Unchecked  },
+		{ L"vertical",    PC_Vertical   }
 	};
 
 	static const CSSValuePair properties[knownPropertyCount] = {
-		{ L"background",			PT_Background },
-		{ L"background-alignment",	PT_BackgroundAlignment },
-		{ L"background-clip",		PT_BackgroundClip },
-		{ L"background-position",	PT_BackgroundPosition },
-		{ L"background-repeat",	PT_BackgroundRepeat },
-		{ L"border",				PT_Border },
-		{ L"border-bottom",			PT_BorderBottom },
-		{ L"border-bottom-color",	PT_BorderBottomColor },
-		{ L"border-bottom-left-radius",	PT_BorderBottomLeftRadius },
-		{ L"border-bottom-right-radius",	PT_BorderBottomRightRadius },
-		{ L"border-bottom-style",	PT_BorderBottomStyle },
-		{ L"border-bottom-width",	PT_BorderBottomWidth },
-		{ L"border-color",			PT_BorderColor },
-		{ L"border-image",			PT_BorderImage },
-		{ L"border-left",			PT_BorderLeft },
-		{ L"border-left-color",		PT_BorderLeftColor },
-		{ L"border-left-style",		PT_BorderLeftStyle },
-		{ L"border-left-width",		PT_BorderLeftWidth },
-		{ L"border-radius",			PT_BorderRadius },
-		{ L"border-right",			PT_BorderRight },
-		{ L"border-right-color",		PT_BorderRightColor },
-		{ L"border-right-style",		PT_BorderRightStyle },
-		{ L"border-right-width",		PT_BorderRightWidth },
-		{ L"border-style",			PT_BorderStyles },
-		{ L"border-top",				PT_BorderTop },
-		{ L"border-top-color",		PT_BorderTopColor },
-		{ L"border-top-left-radius",	PT_BorderTopLeftRadius },
-		{ L"border-top-right-radius",	PT_BorderTopRightRadius },
-		{ L"border-top-style",		PT_BorderTopStyle },
-		{ L"border-top-width",		PT_BorderTopWidth },
-		{ L"border-width",			PT_BorderWidth },
-		{ L"color",					PT_Color },
-		{ L"font",					PT_Font },
-		{ L"font-family",			PT_FontFamily },
-		{ L"font-size",				PT_FontSize },
-		{ L"font-style",				PT_FontStyle },
-		{ L"font-weight",			PT_FontWeight },
-		{ L"height",				PT_Height },
-		{ L"inherit-background",	PT_InheritBackground },
-		{ L"margin",					PT_Margin },
-		{ L"margin-bottom",			PT_MarginBottom },
-		{ L"margin-left",			PT_MarginLeft },
-		{ L"margin-right",			PT_MarginRight },
-		{ L"margin-top",			PT_MarginTop },
-		{ L"max-height",			PT_MaximumHeight },
-		{ L"max-width",			PT_MaximumWidth },
-		{ L"min-height",			PT_MinimumHeight },
-		{ L"min-width",			PT_MinimumWidth },
-		{ L"padding",				PT_Padding },
-		{ L"padding-bottom",		PT_PaddingBottom },
-		{ L"padding-left",			PT_PaddingLeft },
-		{ L"padding-right",		PT_PaddingRight },
-		{ L"padding-top",			PT_PaddingTop },
-		{ L"text-align",			PT_TextAlignment },
-		{ L"text-decoration",		PT_TextDecoration },
-		{ L"text-indent",			PT_TextIndent },
-		{ L"text-outline",			PT_TextOutline },
-		{ L"text-overflow",		PT_TextOverflow },
-		{ L"text-shadow",			PT_TextShadow },
-		{ L"text-underline-style",	PT_TextUnderlineStyle },
-		{ L"width",				PT_Width }
+		{ L"background",                 PT_Background },
+		{ L"background-alignment",       PT_BackgroundAlignment },
+		{ L"background-clip",            PT_BackgroundClip },
+		{ L"background-position",        PT_BackgroundPosition },
+		{ L"background-repeat",          PT_BackgroundRepeat },
+		{ L"border",                     PT_Border },
+		{ L"border-bottom",              PT_BorderBottom },
+		{ L"border-bottom-color",        PT_BorderBottomColor },
+		{ L"border-bottom-left-radius",  PT_BorderBottomLeftRadius },
+		{ L"border-bottom-right-radius", PT_BorderBottomRightRadius },
+		{ L"border-bottom-style",        PT_BorderBottomStyle },
+		{ L"border-bottom-width",        PT_BorderBottomWidth },
+		{ L"border-color",               PT_BorderColor },
+		{ L"border-image",               PT_BorderImage },
+		{ L"border-left",                PT_BorderLeft },
+		{ L"border-left-color",          PT_BorderLeftColor },
+		{ L"border-left-style",          PT_BorderLeftStyle },
+		{ L"border-left-width",          PT_BorderLeftWidth },
+		{ L"border-radius",              PT_BorderRadius },
+		{ L"border-right",               PT_BorderRight },
+		{ L"border-right-color",         PT_BorderRightColor },
+		{ L"border-right-style",         PT_BorderRightStyle },
+		{ L"border-right-width",         PT_BorderRightWidth },
+		{ L"border-style",               PT_BorderStyles },
+		{ L"border-top",                 PT_BorderTop },
+		{ L"border-top-color",           PT_BorderTopColor },
+		{ L"border-top-left-radius",     PT_BorderTopLeftRadius },
+		{ L"border-top-right-radius",    PT_BorderTopRightRadius },
+		{ L"border-top-style",           PT_BorderTopStyle },
+		{ L"border-top-width",           PT_BorderTopWidth },
+		{ L"border-width",               PT_BorderWidth },
+		{ L"color",                      PT_Color },
+		{ L"font",                       PT_Font },
+		{ L"font-family",                PT_FontFamily },
+		{ L"font-size",                  PT_FontSize },
+		{ L"font-style",                 PT_FontStyle },
+		{ L"font-weight",                PT_FontWeight },
+		{ L"height",                     PT_Height },
+		{ L"inherit-background",         PT_InheritBackground },
+		{ L"margin",                     PT_Margin },
+		{ L"margin-bottom",              PT_MarginBottom },
+		{ L"margin-left",                PT_MarginLeft },
+		{ L"margin-right",               PT_MarginRight },
+		{ L"margin-top",                 PT_MarginTop },
+		{ L"max-height",                 PT_MaximumHeight },
+		{ L"max-width",                  PT_MaximumWidth },
+		{ L"min-height",                 PT_MinimumHeight },
+		{ L"min-width",                  PT_MinimumWidth },
+		{ L"padding",                    PT_Padding },
+		{ L"padding-bottom",             PT_PaddingBottom },
+		{ L"padding-left",               PT_PaddingLeft },
+		{ L"padding-right",              PT_PaddingRight },
+		{ L"padding-top",                PT_PaddingTop },
+		{ L"text-align",                 PT_TextAlignment },
+		{ L"text-decoration",            PT_TextDecoration },
+		{ L"text-indent",                PT_TextIndent },
+		{ L"text-outline",               PT_TextOutline },
+		{ L"text-overflow",              PT_TextOverflow },
+		{ L"text-shadow",                PT_TextShadow },
+		{ L"text-underline-style",       PT_TextUnderlineStyle },
+		{ L"width",                      PT_Width }
 	};
 
 	static const CSSValuePair knownValues[KnownValueCount - 1] = {
-		{ L"bold",		Value_Bold },
-		{ L"border",		Value_Border },
-		{ L"bottom",		Value_Bottom },
-		{ L"center",		Value_Center },
-		{ L"clip",		Value_Clip },
-		{ L"content",		Value_Content },
-		{ L"dashed",		Value_Dashed },
-		{ L"dot-dash",	Value_DotDash },
-		{ L"dot-dot-dash",	Value_DotDotDash },
-		{ L"dotted",		Value_Dotted },
-		{ L"ellipsis",	Value_Ellipsis },
-		{ L"italic",		Value_Italic },
-		{ L"left",		Value_Left },
-		{ L"line-through",	Value_LineThrough },
-		{ L"margin",		Value_Margin },
-		{ L"no-repeat",	Value_NoRepeat },
-		{ L"none",		Value_None },
-		{ L"normal",		Value_Normal },
-		{ L"oblique",		Value_Oblique },
-		{ L"overline",	Value_Overline },
-		{ L"padding",		Value_Padding },
-		{ L"repeat",		Value_Repeat },
-		{ L"repeat-x",	Value_RepeatX },
-		{ L"repeat-y",	Value_RepeatY },
-		{ L"right",		Value_Right },
-		{ L"solid",		Value_Solid },
-		{ L"stretch",		Value_Stretch },
-		{ L"top",			Value_Top },
-		{ L"transparent",	Value_Transparent },
-		{ L"true",		Value_True },
-		{ L"underline",	Value_Underline },
-		{ L"wave",		Value_Wave },
-		{ L"wrap",		Value_Wrap },
+		{ L"bold",         Value_Bold },
+		{ L"border",       Value_Border },
+		{ L"bottom",       Value_Bottom },
+		{ L"center",       Value_Center },
+		{ L"clip",         Value_Clip },
+		{ L"content",      Value_Content },
+		{ L"dashed",       Value_Dashed },
+		{ L"dot-dash",     Value_DotDash },
+		{ L"dot-dot-dash", Value_DotDotDash },
+		{ L"dotted",       Value_Dotted },
+		{ L"ellipsis",     Value_Ellipsis },
+		{ L"italic",       Value_Italic },
+		{ L"left",         Value_Left },
+		{ L"line-through", Value_LineThrough },
+		{ L"margin",       Value_Margin },
+		{ L"no-repeat",    Value_NoRepeat },
+		{ L"none",         Value_None },
+		{ L"normal",       Value_Normal },
+		{ L"oblique",      Value_Oblique },
+		{ L"overline",     Value_Overline },
+		{ L"padding",      Value_Padding },
+		{ L"repeat",       Value_Repeat },
+		{ L"repeat-x",     Value_RepeatX },
+		{ L"repeat-y",     Value_RepeatY },
+		{ L"right",        Value_Right },
+		{ L"solid",        Value_Solid },
+		{ L"stretch",      Value_Stretch },
+		{ L"top",          Value_Top },
+		{ L"transparent",  Value_Transparent },
+		{ L"true",         Value_True },
+		{ L"underline",    Value_Underline },
+		{ L"wave",         Value_Wave },
+		{ L"wrap",         Value_Wrap },
 	};
+
+	bool RenderRuleCacheKey::operator<(const RenderRuleCacheKey& rhs) const
+	{
+		if(this == &rhs)
+			return false;
+
+		int size1 = styleRules.size();
+		int size2 = rhs.styleRules.size();
+		if(size1 > size2) {
+			return false;
+		} else if(size1 < size2) {
+			return true;
+		} else {
+			for(int i = 0; i < size1; ++i)
+			{
+				StyleRule* sr1 = styleRules.at(i);
+				StyleRule* sr2 = rhs.styleRules.at(i);
+				if(sr1 > sr2)
+					return false;
+				else if(sr1 < sr2)
+					return true;
+			}
+		}
+		return false;
+	}
+
+	RenderRule& RenderRule::operator=(const RenderRule& other)
+	{
+		if(&other != this)
+		{
+			if(data) {
+				--data->refCount;
+				if(data->refCount == 0)
+					delete data;
+			}
+			data = other.data;
+			if(data)
+				++data->refCount;
+		}
+		return *this;
+	}
+
+	bool RenderRuleData::setGeometry(MWidget* w)
+	{
+		if(geoData == 0)
+			return false;
+
+		D2D_SIZE_U size = w->size();
+		D2D_SIZE_U size2 = size;
+		if(geoData->width != -1 && geoData->width != size2.width)
+			size2.width = geoData->width;
+		if(geoData->height != -1 && geoData->height != size2.height)
+			size2.height = geoData->height;
+
+		if(geoData->minWidth > size2.width)
+			size2.width = geoData->minWidth;
+		else if (geoData->maxWidth < size.width)
+			size2.width = geoData->maxWidth;
+
+		if(geoData->minHeight > size2.height)
+			size2.height = geoData->minHeight;
+		else if(geoData->maxHeight < size2.height)
+			size2.height = geoData->maxHeight;
+
+		D2D_SIZE_U range = w->minSize();
+		if(geoData->minWidth != -1)
+			range.width = geoData->minWidth;
+		if(geoData->minHeight != -1)
+			range.height = geoData->minHeight;
+		w->setMinimumSize(range.width,range.height);
+
+		range = w->maxSize();
+		if(geoData->maxWidth != -1)
+			range.width = geoData->maxWidth;
+		if(geoData->maxHeight != -1)
+			range.height = geoData->maxHeight;
+		w->setMaximumSize(range.width,range.height);
+
+		if(size2.width != size.width || size2.height != size.height)
+		{
+			w->resize(size2.width,size2.height);
+			return true;
+		}
+		return false;
+	}
 
 	const CSSValuePair* findCSSValue(const std::wstring& p, const CSSValuePair values[],int valueCount)
 	{
 		const CSSValuePair* crItem = 0;
 		int left = 0;
-		--valueCount; //int right = valueCount - 1;
-		while(left <= valueCount /*right*/)
+		--valueCount;
+		while(left <= valueCount)
 		{
-			int middle = (left + valueCount /*right*/) >> 1;
+			int middle = (left + valueCount) >> 1;
 			crItem = &(values[middle]);
 			int result = wcscmp(crItem->name,p.c_str());
 			if(result == 0)
 				return crItem;
 			else if(result == 1)
-				valueCount /*right*/ = middle - 1;
+				valueCount = middle - 1;
 			else
 				left = middle + 1;
 		}
@@ -459,7 +502,7 @@ namespace MetalBone
 	bool Selector::matchPseudo(unsigned int p) const
 	{
 		BasicSelector* bs = basicSelectors.at(basicSelectors.size() - 1);
-		return bs->pseudo == 0 ? true : 
+		return bs->pseudo == 0 ? true :
 				(p != (bs->pseudo & p)) ? false : (p != 0);
 	}
 
@@ -492,6 +535,8 @@ namespace MetalBone
 	{
 		int length = values.size();
 		for(int i = 0; i< length; ++i) {
+			// We cannot delete the String in the ~CssValue();
+			// Because the String are intended to share among CssValues.
 			if(values.at(i).type == CssValue::Uri)
 				delete values.at(i).data.vstring;
 		}
@@ -501,7 +546,7 @@ namespace MetalBone
 		css(&c),cssLength(c.size()),
 		pos(cssLength - 1),noSelector(false)
 	{
-		// 测试Declaration Block是否带有Selector
+		// Test if Declaration block contains Selector
 		while(pos > 0) {
 			if(iswspace(c.at(pos)))
 				--pos;
@@ -562,24 +607,23 @@ namespace MetalBone
 		{
 			StyleRule* newStyleRule = new StyleRule();
 			newStyleRule->order = order;
-			// 如果selector分析成功，则分析declaration。
-			// 如果declaration分析不成功，则保证declaration为空，
-			// 从而删除创建了的StyleRule
+			// If we successfully parsed Selector, we then parse Declaration.
+			// If we failed to parse Declaration, the Declaration must be empty,
+			// so that we can delete the created StyleRule.
 			if(parseSelector(newStyleRule))
 				parseDeclaration(newStyleRule);
 
-			if(newStyleRule->declarations.empty())
+			if(newStyleRule->declarations.empty()) {
 				delete newStyleRule;
-			else
-			{
+			} else {
 				const std::vector<Selector*>& sels = newStyleRule->selectors;
 				for(unsigned int i = 0; i < sels.size(); ++i)
 				{
 					const Selector* sel = sels.at(i);
 					const BasicSelector* bs = sel->basicSelectors.at(sel->basicSelectors.size() - 1);
-					if(!bs->id.empty())
+					if(!bs->id.empty()) {
 						ss->srIdMap.insert(StyleSheet::StyleRuleIdMap::value_type(bs->id,newStyleRule));
-					else if(!bs->elementName.empty())
+					} else if(!bs->elementName.empty())
 						ss->srElementMap.insert(StyleSheet::StyleRuleElementMap::value_type(bs->elementName,newStyleRule));
 					else
 						ss->universal.push_back(newStyleRule);
@@ -603,7 +647,7 @@ namespace MetalBone
 		while(pos < cssLengthMinus)
 		{
 			byte = css->at(pos);
-			if(byte == L'{') // 遇到Declaration Block
+			if(byte == L'{') // Declaration Block
 			{
 				int posBeforeEndingSpace = pos;
 				while(iswspace(css->at(posBeforeEndingSpace - 1)))
@@ -805,16 +849,16 @@ namespace MetalBone
 				++index;
 			}
 
-			// 遇到:pressed{ 这种情况的话，退出while loop的时候，
-			// 最后一个pseudo没有添加进去BasicSelector里面。
+			// When we meet ":pressed{" and it ends the loop,
+			// we should add the last pseudo into the BasicSelector
 			if(!pseudo.empty())
 				sel->addPseudoAndClearInput(pseudo);
 
 			if(index == length)
 				sel->relationToNext = BasicSelector::NoRelation;
 
-			// 现在只能够识别类名，所以.ClassA和ClassA是一样的
-			// TODO:添加类型识别
+			// TODO: Add more RTTI stuff. Now we can only identify the Class name,
+			// not its inherited Class name. So ".ClassA" is the same as "ClassA" .
 			if(!sel->elementName.empty() && sel->elementName.at(0) == L'.')
 				sel->elementName.erase(0,1);
 		}
@@ -831,28 +875,29 @@ namespace MetalBone
 		p.clear();
 	}
 
-	// Background:		{ Brush Image Repeat Clip Alignment pos-x pos-y }*;
-	// Border:			none | (Brush LineStyle Lengths)
-	// Border-radius:	Lengths
-	// Border-image:		none | Url Number{4} (stretch | repeat){0,2} // should be used as background & don't have to specify border width
-	// Color:			#rrggbb rgba(255,0,0,0) transparent
-	// Font:			(FontStyle | FontWeight){0,2} Length String
-	// FontStyle:		normal | italic | oblique
-	// FontWeight:		normal | bold
-	// Margin:			Length{1,4}
-	// Text-align:		Alignment;
-	// Text-decoration:	none | underline | overline | line-through
-	// Text-overflow:	clip | ellipsis | wrap
-	// Text-Shadow:		h-shadow v-shadow blur Color;
+	// Background:      { Brush Image Repeat Clip Alignment pos-x pos-y }*;
+	// Border:          none | (Brush LineStyle Lengths)
+	// Border-radius:   Lengths
+	// Border-image:    none | Url Number{4} (stretch | repeat){0,2}
+						// should be used as background & don't have to specify border width
+	// Color:           #rrggbb rgba(255,0,0,0) transparent
+	// Font:            (FontStyle | FontWeight){0,2} Length String
+	// FontStyle:       normal | italic | oblique
+	// FontWeight:      normal | bold
+	// Margin:          Length{1,4}
+	// Text-align:      Alignment;
+	// Text-decoration: none | underline | overline | line-through
+	// Text-overflow:   clip | ellipsis | wrap
+	// Text-Shadow:     h-shadow v-shadow blur Color;
 	// Text-underline-style: LineStyle
-	// Brush:			Color | Gradient
+	// Brush:           Color | Gradient
 	// Gradient:
-	// Repeat:			repeat | repeat-x | repeat-y | no-repeat
-	// Clip/Origin:		padding | border | content | margin
-	// Image:			url(filename)
-	// Alignment:		(left | top | right | bottom | center){0,2}
-	// LineStyle:		dashed | dot-dash | dot-dot-dash | dotted | solid | wave
-	// Length:			Number // do not support unit and the default unit is px
+	// Repeat:          repeat | repeat-x | repeat-y | no-repeat
+	// Clip/Origin:     padding | border | content | margin
+	// Image:           url(filename)
+	// Alignment:       (left | top | right | bottom | center){0,2}
+	// LineStyle:       dashed | dot-dash | dot-dot-dash | dotted | solid | wave
+	// Length:          Number // do not support unit and the default unit is px
 	void Declaration::addValue(const std::wstring& css, int index, int length)
 	{
 		std::wstring buffer;
@@ -987,7 +1032,7 @@ namespace MetalBone
 
 			++index;
 		}
-	} // namespace CSS
+	}
 
 	MStyleSheetStyle::~MStyleSheetStyle()
 	{
@@ -998,6 +1043,8 @@ namespace MetalBone
 			delete it->second;
 			++it;
 		}
+
+		removeResources();
 	}
 
 	void MStyleSheetStyle::setAppSS(const std::wstring& css)
@@ -1006,6 +1053,8 @@ namespace MetalBone
 		renderRuleCollection.clear();
 		widgetStyleRuleCache.clear();
 		widgetRenderRuleCache.clear();
+
+		removeResources();
 
 		appStyleSheet = new StyleSheet();
 		MCSSParser parser(css);
@@ -1051,6 +1100,27 @@ namespace MetalBone
 		}
 	}
 
+	void MStyleSheetStyle::removeResources()
+	{
+		D2D1SolidBrushMap::iterator sIter = solidBrushCache.begin();
+		D2D1SolidBrushMap::iterator sIterEnd = solidBrushCache.end();
+		while(sIter != sIterEnd)
+		{
+			SafeRelease(sIter->second);
+			++sIter;
+		}
+
+		D2D1BitmapMap::iterator bIter = bitmapCache.begin();
+		D2D1BitmapMap::iterator bIterEnd = bitmapCache.end();
+		while(bIter != bIterEnd)
+		{
+			SafeRelease(bIter->second);
+			++bIter;
+		}
+		solidBrushCache.clear();
+		bitmapCache.clear();
+	}
+
 	void getWidgetClassName(const MWidget* w,std::wstring& name)
 	{
 		std::wstringstream s;
@@ -1061,7 +1131,7 @@ namespace MetalBone
 #endif
 
 		int pos = 0;
-		while( (pos = name.find(L"::",pos)) != std::wstring::npos)
+		while((pos = name.find(L"::",pos)) != std::wstring::npos)
 		{
 			name.replace(pos,2,L"--");
 			pos += 2;
@@ -1277,18 +1347,18 @@ namespace MetalBone
 		};
 		struct ComplexBorderRenderObject : public BorderRenderObject
 		{
+			D2D_RECT_U styles;
+			D2D_RECT_U widths;
 			int radiuses[4]; // TL, TR, BL, BR
-			int width[4]; // T, R, B, L
-			unsigned int styles[4];
-			ID2D1SolidColorBrush** brushes[4];
+			ID2D1SolidColorBrush** brushes[4]; // T, R, B, L
 			ComplexBorderRenderObject() {
-				styles[0] = styles[1] = styles[2] = styles[3] = Value_Solid;
-				memset(radiuses,0,4 * sizeof(int));
-				memset(width,0,4 * sizeof(int));
+				styles.left = styles.top = styles.right = styles.bottom = Value_Solid;
+				memset(&widths,0,sizeof(D2D_RECT_U));
+				memset(&radiuses,0,4 * sizeof(int));
 				memset(brushes,0,4 * sizeof(ID2D1SolidColorBrush**));
 			}
 		};
-	}
+	} // namespace CSS
 
 	ID2D1SolidColorBrush** MStyleSheetStyle::createD2D1SolidBrush(CssValue& v)
 	{
@@ -1299,78 +1369,104 @@ namespace MetalBone
 		return &brush;
 	}
 
-	ID2D1Bitmap** MStyleSheetStyle::createD2D1Bitmap(std::wstring& uri)
+	bool isImageOpaque(const std::wstring& uri)
+	{
+		std::wstring ex = uri.substr(uri.size() - 3);
+		std::transform(ex.begin(),ex.end(),ex.begin(),::tolower);
+		if(ex.find(L"png") == 0 || ex.find(L"gif") == 0)
+			return false;
+		return true;
+	}
+
+	ID2D1Bitmap** MStyleSheetStyle::createD2D1Bitmap(const std::wstring& uri, bool& isOpaque)
 	{
 		ID2D1Bitmap*& bitmap = bitmapCache[uri];
 		if(bitmap != 0)
-			return &bitmap;
-
-		IWICImagingFactory*	wicFactory = mApp->getWICImagingFactory();
-		IWICBitmapDecoder*		decoder	   = 0;
-		IWICBitmapFrameDecode* frame	   = 0;
-		IWICFormatConverter*	converter  = 0;
-		IWICStream*			stream     = 0;
-
-		bool hasError = false;
-		HRESULT hr;
-		if(uri.at(0) == L':') {
-			// Lookup image file is inside MResources.
-			MResource res;
-			if(res.open(uri))
-			{
-				wicFactory->CreateStream(&stream);
-				stream->InitializeFromMemory((WICInProcPointer)res.byteBuffer(),res.length());
-				wicFactory->CreateDecoderFromStream(stream,NULL,WICDecodeMetadataCacheOnDemand,&decoder);
-			}else
-				hasError = true;
+		{
+			// Remark: This may causes error. If we cannot load a opaque image,
+			// we will create a empty image instead, which is transparent.
+			// But imageMustBeOpaque will return true.
+			isOpaque = isImageOpaque(uri);
 		} else {
-			hr = wicFactory->CreateDecoderFromFilename(uri.c_str(),NULL,
-				GENERIC_READ,WICDecodeMetadataCacheOnDemand,&decoder);
-			hasError = FAILED(hr);
+
+			IWICImagingFactory*    wicFactory = mApp->getWICImagingFactory();
+			IWICBitmapDecoder*     decoder	  = 0;
+			IWICBitmapFrameDecode* frame	  = 0;
+			IWICFormatConverter*   converter  = 0;
+			IWICStream*            stream     = 0;
+
+			bool hasError = false;
+			HRESULT hr;
+			if(uri.at(0) == L':') {
+				// Lookup image file is inside MResources.
+				MResource res;
+				if(res.open(uri))
+				{
+					wicFactory->CreateStream(&stream);
+					stream->InitializeFromMemory((WICInProcPointer)res.byteBuffer(),res.length());
+					wicFactory->CreateDecoderFromStream(stream,NULL,WICDecodeMetadataCacheOnDemand,&decoder);
+				}else
+					hasError = true;
+			} else {
+				hr = wicFactory->CreateDecoderFromFilename(uri.c_str(),NULL,
+														   GENERIC_READ,
+														   WICDecodeMetadataCacheOnDemand,&decoder);
+				hasError = FAILED(hr);
+			}
+
+			if(hasError)
+			{
+				std::wstring error = L"[MStyleSheetStyle] Cannot open image file: ";
+				error.append(uri);
+				error.append(1,L'\n');
+				mDebug(error.c_str());
+				// create a empty bitmap because we can't find the image.
+				hr = workingRenderTarget->CreateBitmap(
+							D2D1::SizeU(),
+							D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,
+																	 D2D1_ALPHA_MODE_PREMULTIPLIED)),
+							&bitmap);
+
+				isOpaque = false;
+			} else {
+				decoder->GetFrame(0,&frame);
+				wicFactory->CreateFormatConverter(&converter);
+				converter->Initialize(frame,
+									  GUID_WICPixelFormat32bppPBGRA,
+									  WICBitmapDitherTypeNone,NULL,
+									  0.f,WICBitmapPaletteTypeMedianCut);
+				workingRenderTarget->CreateBitmapFromWicBitmap(converter,NULL,&bitmap);
+
+				isOpaque = isImageOpaque(uri);
+			}
+
+			SafeRelease(decoder);
+			SafeRelease(frame);
+			SafeRelease(stream);
+			SafeRelease(converter);
 		}
 
-		if(hasError)
-		{
-			std::wstring error = L"[MStyleSheetStyle] Cannot open image file: ";
-			error.append(uri);
-			error.append(1,L'\n');
-			mDebug(error.c_str());
-			// create a empty bitmap because we can't find the image.
-			hr = workingRenderTarget->CreateBitmap(D2D1::SizeU(), D2D1::BitmapProperties(
-				D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_PREMULTIPLIED)),&bitmap);
-		}else
-		{
-			decoder->GetFrame(0,&frame);
-			wicFactory->CreateFormatConverter(&converter);
-			converter->Initialize(frame,GUID_WICPixelFormat32bppPBGRA,WICBitmapDitherTypeNone,NULL,
-				0.f,WICBitmapPaletteTypeMedianCut);
-			workingRenderTarget->CreateBitmapFromWicBitmap(converter,NULL,&bitmap);
-		}
-
-		SafeRelease(decoder);
-		SafeRelease(frame);
-		SafeRelease(stream);
-		SafeRelease(converter);
 		return &bitmap;
 	}
 
 	// Return true if the "prop" is AlignmentX value
-	bool setBackgroundRenderObjectProperty(BackgroundRenderObject* object, unsigned int prop,bool alignmentY = false)
+	bool setBackgroundRenderObjectProperty(BackgroundRenderObject* object,
+										unsigned int prop,bool alignmentY = false)
 	{
 		switch(prop) {
-			case Value_NoRepeat:	object->repeatX = object->repeatY =  false; break;
-			case Value_RepeatX:	object->repeatX = true; object->repeatY = false; break;
-			case Value_RepeatY:	object->repeatX = false; object->repeatY = true; break;
-			case Value_Repeat:		object->repeatX = object->repeatY = true; break;
+			case Value_NoRepeat:object->repeatX = object->repeatY =  false;       break;
+			case Value_RepeatX:	object->repeatX = true;  object->repeatY = false; break;
+			case Value_RepeatY:	object->repeatX = false; object->repeatY = true;  break;
+			case Value_Repeat:	object->repeatX = object->repeatY = true;         break;
 
 			case Value_Padding:
-			case Value_Border:
 			case Value_Content:
-			case Value_Margin:		object->clip = prop; break;
+			case Value_Border:
+			case Value_Margin:	object->clip = prop; break;
 
 			// We both set alignment X & Y, because one may only specific a alignment value.
 			case Value_Left:
-			case Value_Right:		object->alignmentX = object->alignmentY = prop; return true;
+			case Value_Right:	object->alignmentX = object->alignmentY = prop; return true;
 
 			case Value_Center:
 				object->alignmentY = prop;
@@ -1380,7 +1476,10 @@ namespace MetalBone
 					return true;
 				}else
 					return false;
-			default:	object->alignmentY = prop; break;
+
+			default:
+				object->alignmentY = prop;
+				break;
 		}
 		return false;
 	}
@@ -1399,7 +1498,7 @@ namespace MetalBone
 
 	// Background: { Brush/Image Repeat Clip Alignment pos-x pos-y }*;
 	// Only one brush allowed in a declaration.
-	BackgroundRenderObject* MStyleSheetStyle::createBackgroundRO()
+	BackgroundRenderObject* MStyleSheetStyle::createBackgroundRO(bool& isOpaqueBG)
 	{
 		BackgroundRenderObject* newObject = new BackgroundRenderObject();
 
@@ -1410,11 +1509,12 @@ namespace MetalBone
 			newObject->brushType = SolidBrush;
 			newObject->brush.solidBrush = createD2D1SolidBrush(brushValue);
 			// We simply ignore other value in the declration is this is a solid brush.
+			isOpaqueBG = false;
 			return newObject;
 		}
 
 		newObject->brushType = BitmapBrush;
-		newObject->brush.bitmap = createD2D1Bitmap(*(brushValue.data.vstring));
+		newObject->brush.bitmap = createD2D1Bitmap(*(brushValue.data.vstring),isOpaqueBG);
 
 		unsigned int index = 1;
 		while(index < values.size())
@@ -1443,13 +1543,13 @@ namespace MetalBone
 		return newObject;
 	}
 
-	BorderImageRenderObject* MStyleSheetStyle::createBorderImageRO()
+	BorderImageRenderObject* MStyleSheetStyle::createBorderImageRO(bool& isOpaqueBG)
 	{
 		std::vector<CssValue>& values = workingDeclaration->values;
 
 		BorderImageRenderObject* biro = new BorderImageRenderObject();
 		// Cache.
-		biro->borderImage = createD2D1Bitmap(*(values.at(0).data.vstring));
+		biro->borderImage = createD2D1Bitmap(*(values.at(0).data.vstring),isOpaqueBG);
 		int endIndex = values.size() - 1;
 		// Repeat or Stretch
 		if(values.at(endIndex).type == CssValue::Identifier) {
@@ -1513,7 +1613,7 @@ namespace MetalBone
 		obj->solidBrush = createD2D1SolidBrush(colorValue);
 	}
 
-	void setBorderROIntValue(int (&intArray)[4], std::vector<CssValue>& values,
+	void setGroupIntValue(int (&intArray)[4], std::vector<CssValue>& values,
 		int startValueIndex = 0, int endValueIndex = -1)
 	{
 		int size = (endValueIndex == -1 ? values.size() : endValueIndex + 1) - startValueIndex;
@@ -1532,7 +1632,7 @@ namespace MetalBone
 		}
 	}
 
-	void setBorderROUintValue(unsigned int (&intArray)[4], std::vector<CssValue>& values,
+	void setGroupUintValue(unsigned int (&intArray)[4], std::vector<CssValue>& values,
 		int startValueIndex = 0, int endValueIndex = -1)
 	{
 		int size = (endValueIndex == -1 ? values.size() : endValueIndex + 1) - startValueIndex;
@@ -1549,6 +1649,37 @@ namespace MetalBone
 			intArray[0] = intArray[1] =
 			intArray[2] = intArray[3] = values.at(startValueIndex).data.vuint;
 		}
+	}
+
+	void setD2DRectValue(D2D_RECT_U& rect, std::vector<CssValue>& values,
+		int startValueIndex = 0, int endValueIndex = -1)
+	{
+		int size = (endValueIndex == -1 ? values.size() : endValueIndex + 1) - startValueIndex;
+		if(size == 4) {
+			rect.top    = values.at(startValueIndex    ).data.vuint;
+			rect.right  = values.at(startValueIndex + 1).data.vuint;
+			rect.bottom = values.at(startValueIndex + 2).data.vuint;
+			rect.left   = values.at(startValueIndex + 3).data.vuint;
+		} else if(size == 2) {
+			rect.top    = rect.bottom = values.at(startValueIndex    ).data.vuint;
+			rect.right  = rect.left   = values.at(startValueIndex + 1).data.vuint;
+		}else
+		{
+			rect.top    = rect.bottom =
+			rect.right  = rect.left   = values.at(startValueIndex).data.vuint;
+		}
+	}
+
+	void setD2DRectValue(D2D_RECT_U& rect, int border, unsigned int value)
+	{
+		if(border == 0)
+			rect.top = value;
+		else if(border == 1)
+			rect.right = value;
+		else if(border == 2)
+			rect.bottom = value;
+		else
+			rect.left = value;
 	}
 
 	void MStyleSheetStyle::setComplexBorderRO(ComplexBorderRenderObject* obj,
@@ -1569,7 +1700,7 @@ namespace MetalBone
 						{
 						switch(valueType) {
 							case CssValue::Identifier:
-								setBorderROUintValue(obj->styles,values,rangeStartIndex,index - 1);
+								setD2DRectValue(obj->styles,values,rangeStartIndex,index - 1);
 								break;
 							case CssValue::Color: {
 								int size = index - rangeStartIndex;
@@ -1589,16 +1720,16 @@ namespace MetalBone
 								}
 							}
 								break;
-							default: setBorderROIntValue(obj->width,values,rangeStartIndex,index-1);
+							default: setD2DRectValue(obj->widths,values,rangeStartIndex,index-1);
 						}
 						}
 						++index;
 					}
 				}
 					break;
-				case PT_BorderRadius:	setBorderROIntValue( obj->radiuses,values); break;
-				case PT_BorderWidth:	setBorderROIntValue( obj->width   ,values); break;
-				case PT_BorderStyles:	setBorderROUintValue(obj->styles  ,values); break;
+				case PT_BorderRadius:	setGroupIntValue(obj->radiuses,values); break;
+				case PT_BorderWidth:	setD2DRectValue (obj->widths  ,values); break;
+				case PT_BorderStyles:	setD2DRectValue (obj->styles  ,values); break;
 				case PT_BorderColor:
 					if(values.size() == 4)
 					{
@@ -1628,9 +1759,9 @@ namespace MetalBone
 						if(values.at(i).type == CssValue::Color)
 							obj->brushes[index] = createD2D1SolidBrush(values.at(i));
 						else if(values.at(i).type == CssValue::Identifier)
-							obj->styles[index] = values.at(i).data.vuint;
+							setD2DRectValue(obj->styles,index,values.at(i).data.vuint);
 						else
-							obj->width[index] = values.at(i).data.vint;
+							setD2DRectValue(obj->widths,index,values.at(i).data.vuint);
 					}
 				}
 					break;
@@ -1645,13 +1776,13 @@ namespace MetalBone
 				case PT_BorderRightWidth:
 				case PT_BorderBottomWidth:
 				case PT_BorderLeftWidth:
-					obj->width[declIter->first - PT_BorderTopWidth] = values.at(0).data.vint;
+					setD2DRectValue(obj->widths, declIter->first - PT_BorderTopWidth, values.at(0).data.vint);
 					break;
 				case PT_BorderTopStyle:
 				case PT_BorderRightStyle:
 				case PT_BorderBottomStyle:
 				case PT_BorderLeftStyle:
-					obj->styles[declIter->first - PT_BorderTopStyle] = values.at(0).data.vuint;
+					setD2DRectValue(obj->styles, declIter->first - PT_BorderTopStyle, values.at(0).data.vint);
 					break;
 				case PT_BorderTopLeftRadius:
 				case PT_BorderTopRightRadius:
@@ -1795,14 +1926,13 @@ namespace MetalBone
 		}
 		// Remove duplicate declarations (except background, because we support multi backgrounds)
 		PropertyType lastType = knownPropertyCount;
-		DeclMap::reverse_iterator declRIter = declarations.rbegin();
-		DeclMap::reverse_iterator declRIterEnd = declarations.rend();
+		DeclMap::iterator declRIter = declarations.begin();
+		DeclMap::iterator declRIterEnd = declarations.end();
 		while(declRIter != declRIterEnd) {
 			PropertyType type = declRIter->second->property;
 			if(type != PT_Background) {
 				if(lastType == type) {
-					declarations.erase((++declRIter).base()); // Remark: test erasing reverse iterator.
-					continue;
+					declRIter = declarations.erase(--declRIter);
 				} else {
 					lastType = type;
 				}
@@ -1821,7 +1951,11 @@ namespace MetalBone
 		// --- Backgrounds ---
 		while(declIter->first == PT_Background) {
 			workingDeclaration = declIter->second;
-			renderRule->backgroundROs.push_back(createBackgroundRO());
+			bool isOpaqueBG = true;
+			renderRule->backgroundROs.push_back(createBackgroundRO(isOpaqueBG));
+			// We need to mark the RenderRule if it might be not opaque.
+			if(!isOpaqueBG)
+				renderRule->opaqueBackground = false;
 			if(++declIter == declIterEnd)
 				goto END;
 		}
@@ -1860,7 +1994,10 @@ namespace MetalBone
 		// --- BorderImage --- 
 		if(declIter->first == PT_BorderImage) {
 			workingDeclaration = declIter->second;
-			renderRule->borderImageRO = createBorderImageRO();
+			bool isOpaqueBG = true;
+			renderRule->borderImageRO = createBorderImageRO(isOpaqueBG);
+			if(!isOpaqueBG)
+				renderRule->opaqueBackground = false;
 			if(++declIter == declIterEnd)
 				goto END;
 		}
@@ -1900,16 +2037,99 @@ namespace MetalBone
 				renderRule->borderRO = obj;
 				setComplexBorderRO(obj, declIter, declIterEnd);
 			}
+
+			// If the border is not a rectangle, we consider it's not opaque.
+			if(bt != BT_Simple)
+				renderRule->opaqueBackground = false;
+
 			if(declIter == declIterEnd || ++declIter == declIterEnd)
 				goto END;
 		}
 
+		// --- Margin & Padding --- 
+		while(declIter->first <= PT_PaddingLeft)
+		{
+			std::vector<CssValue>& values = declIter->second->values;
+			switch(declIter->first)
+			{
+				case PT_Margin:
+					setD2DRectValue(renderRule->margin,values);
+					break;
+				case PT_MarginTop:
+				case PT_MarginRight:
+				case PT_MarginBottom:
+				case PT_MarginLeft:
+					setD2DRectValue(renderRule->margin,declIter->first - PT_MarginTop, values.at(0).data.vuint);
+					break;
+				case PT_Padding:
+					setD2DRectValue(renderRule->padding,values);
+					break;
+				case PT_PaddingTop:
+				case PT_PaddingRight:
+				case PT_PaddingBottom:
+				case PT_PaddingLeft:
+					setD2DRectValue(renderRule->padding,declIter->first - PT_PaddingTop, values.at(0).data.vuint);
+					break;
+			}
+			if(++declIter == declIterEnd)
+				goto END;
+		}
+
+		// --- Geometry ---
+		if(declIter->first <= PT_MinimumHeight)
+		{
+			GeometryData* geoData = new GeometryData();
+			renderRule->geoData = new GeometryData();
+			do {
+				int data = declIter->second->values.at(0).data.vint;
+				switch(declIter->first)
+				{
+					case PT_Width:        geoData->width     = data; break;
+					case PT_Height:       geoData->height    = data; break;
+					case PT_MinimumWidth: geoData->minWidth  = data; break;
+					case PT_MinimumHeight:geoData->minHeight = data; break;
+					case PT_MaximumWidth: geoData->maxWidth  = data; break;
+					case PT_MaximumHeight:geoData->maxHeight = data; break;
+				}
+			}while(++declIter != declIterEnd);
+		}
+
+		// TODO: Create TextRenderObject
 		END:
 		workingRenderTarget = 0;
 		workingDeclaration = 0;
 		return renderRule;
 	}
+
+	void MStyleSheetStyle::polish(MWidget* w)
+	{
+		RenderRule rule = getRenderRule(w,PC_Default);
+		rule.setGeometry(w);
+		w->setOpaqueBackground(rule.opaqueBackground());
+		rule = getRenderRule(w, PC_Hover);
+		if(rule.isValid())
+			w->setAttributes(WA_Hover);
+	}
 } // namespace MetalBone
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

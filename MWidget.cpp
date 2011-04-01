@@ -212,58 +212,23 @@ namespace MetalBone
 
 
 
+
+
+
+
+
+
+
+
+
+
 	// ========== MWidget ==========
-	struct WidgetExtraData
+	enum WidgetState
 	{
-		WidgetExtraData(MWidget* p)
-			: parent(p),
-			  widgetState(MWS_HIDDEN),
-			  attributes(0),
-			  windowFlags(WF_Widget),
-			  windowState(WindowNoState),
-			  winHandle(NULL){}
-
-		MWidget* parent;
-		unsigned int widgetState;
-		unsigned int attributes;
-		unsigned int windowFlags;
-		unsigned int windowState;
-
-		int maxWidth;
-		int maxHeight;
-		int minWidth;
-		int minHeight;
-
-		// 包含这个widget的Window Handle
-		HWND winHandle;
-
-		ID2D1HwndRenderTarget* renderTarget;
-
-		std::wstring windowTitle;
-		std::wstring objectName;
-		// index == 0 表示是最下方的子显示对象
-		std::list<MWidget*> children;
-
-		enum WidgetState
-		{
-			MWS_POLISHED = 1,
-			MWS_HIDDEN = 2
-		};
-
-		void setWinHandleRecursively(HWND handle);
+		MWS_POLISHED = 1,
+		MWS_HIDDEN   = 2,
+		MWS_OpaqueBG = 4
 	};
-
-	void WidgetExtraData::setWinHandleRecursively(HWND handle)
-	{
-		winHandle = handle;
-		std::list<MWidget*>::iterator iter = children.begin();
-		std::list<MWidget*>::iterator iterEnd = children.end();
-		while(iter != iterEnd)
-		{
-			(*iter)->data->setWinHandleRecursively(handle);
-			++iter;
-		}
-	}
 
 	void generateStyleFlags(unsigned int flags, DWORD* winStyleOut, DWORD* winExStyleOut)
 	{
@@ -316,106 +281,56 @@ namespace MetalBone
 		*winExStyleOut = flags & WF_DontShowOnTaskbar ? winExStyle : (winExStyle | WS_EX_APPWINDOW);
 	}
 
-	MWidget::MWidget(MWidget* parent)
-		: x(200),y(200),width(480),height(640),data(new WidgetExtraData(parent))
+	void MWidget::setMinimumSize(unsigned int w, unsigned int h)
 	{
-		M_ASSERT_X(mApp!=0, "MApplication must be created first.", "MWidget constructor");
-		ENSURE_IN_MAIN_THREAD;
+		if(w > maxWidth)
+			w = maxWidth;
+		if(h > maxHeight)
+			h = maxHeight;
+
+		minWidth = w;
+		minHeight = h;
+
+		w = width  < minWidth  ? minWidth  : width;
+		h = height < minHeight ? minHeight : height;
+		resize(w,h);
 	}
 
-	MWidget::~MWidget()
+	void MWidget::setMaximumSize(unsigned int w, unsigned int h)
 	{
-		if(data->parent == 0)
-		{
-			if(data->winHandle != NULL)
-			{
-				DestroyWindow(data->winHandle);
-				MApplicationData::instance->removeTopLevelWindows(this);
-			}
-		}else
-			setParent(0);
+		if(w < minWidth)
+			w = minWidth;
+		if(h < minHeight)
+			w = minHeight;
 
-		MApplicationData::instance->ssstyle.setWidgetSS(this,std::wstring());
-		MApplicationData::instance->ssstyle.removeCache(this);
+		maxWidth = w;
+		maxHeight = h;
 
-		std::list<MWidget*>::iterator iter = data->children.begin();
-		std::list<MWidget*>::iterator iterEnd = data->children.end();
-		while(iter != iterEnd)
-		{
-			delete (*iter);
-			++iter;
-		}
-		delete data;
-	}
-
-	void MWidget::setObjectName(const std::wstring& name)
-	{
-		data->objectName = name;
-	}
-
-	const std::wstring& MWidget::objectName() const
-	{
-		return data->objectName;
-	}
-
-	HWND MWidget::windowHandle() const
-	{
-		return data->winHandle;
-	}
-
-	MWidget* MWidget::parent() const
-	{
-		return data->parent;
-	}
-
-	ID2D1RenderTarget* MWidget::getRenderTarget()
-	{
-		return windowWidget()->data->renderTarget;
-	}
-
-	MWidget* MWidget::windowWidget() const
-	{
-		MWidget* widget = const_cast<MWidget*>(this);
-		while(widget->parent() != 0)
-			widget = widget->parent();
-		return widget;
+		w = width  > maxWidth  ? maxWidth  : width;
+		h = height > maxHeight ? maxHeight : height;
+		resize(w,h);
 	}
 
 	bool MWidget::isWindow() const
 	{
-		if(data->windowFlags & WF_Window)
+		if(m_windowFlags & WF_Window)
 			return true;
-		else if(data->parent == 0 && data->winHandle != NULL)
+		else if(m_parent == 0 && m_winHandle != NULL)
 			return true;
 
 		return false;
 	}
 
-	void MWidget::setWindowTitle(const std::wstring& title)
-	{
-		data->windowTitle = title;
-		if(isWindow())
-			SetWindowText(data->winHandle,title.c_str());
-	}
+	bool MWidget::isHidden() const { return m_widgetState & MWS_HIDDEN; }
 
-	const std::wstring& MWidget::windowTitle() const
+	void MWidget::setOpaqueBackground(bool on)
 	{
-		return data->windowTitle;
-	}
-
-	const std::list<MWidget*>& MWidget::children() const
-	{
-		return data->children;
-	}
-
-	unsigned int MWidget::windowFlags() const
-	{
-		return data->windowFlags;
+		on ? (m_widgetState |= MWS_OpaqueBG) : (m_widgetState &= (~MWS_OpaqueBG));
 	}
 
 	void MWidget::setWindowFlags(unsigned int flags)
 	{
-		data->windowFlags = flags;
+		m_windowFlags = flags;
 		if(!isWindow())
 			return;
 
@@ -423,9 +338,9 @@ namespace MetalBone
 		DWORD winExStyle = 0;
 		generateStyleFlags(flags,&winStyle,&winExStyle);
 
-		SetWindowLongPtrW(data->winHandle,GWL_STYLE,winStyle);
-		if(winExStyle)
-			SetWindowLongPtrW(data->winHandle,GWL_EXSTYLE,winExStyle);
+		SetWindowLongPtrW(m_winHandle,GWL_STYLE,winStyle);
+		if(winExStyle != 0)
+			SetWindowLongPtrW(m_winHandle,GWL_EXSTYLE,winExStyle);
 
 		HWND zpos = HWND_NOTOPMOST;
 		if(flags & WF_AlwaysOnTop)
@@ -433,186 +348,78 @@ namespace MetalBone
 		else if(flags & WF_AlwaysOnBottom)
 			zpos = HWND_BOTTOM;
 
-		SetWindowPos(data->winHandle,zpos,0,0,0,0,
-					 SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | (zpos == HWND_NOTOPMOST ? SWP_NOZORDER : 0));
-	}
-
-	unsigned int MWidget::attributes() const
-	{
-		return data->attributes;
-	}
-
-	bool MWidget::testAttributes(WidgetAttributes attr) const
-	{
-		return data->attributes & attr;
-	}
-
-	void MWidget::setAttributes(WidgetAttributes attr, bool on)
-	{
-		if(on)
-			data->attributes |= attr;
-		else
-			data->attributes &= (~attr);
-	}
-
-	void MWidget::setStyleSheet(const std::wstring& css)
-	{
-		MApplicationData::instance->ssstyle.setWidgetSS(this,css);
+		SetWindowPos(m_winHandle,zpos,0,0,0,0,
+			SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | (zpos == HWND_NOTOPMOST ? SWP_NOZORDER : 0));
 	}
 
 	void MWidget::ensurePolished()
 	{
-		if(data->widgetState & WidgetExtraData::MWS_POLISHED)
+		if(m_widgetState & MWS_POLISHED)
 			return;
 
-		data->widgetState |= WidgetExtraData::MWS_POLISHED;
-//		MApplicationData::instance->ssstyle.polish(this);
+		m_widgetState |= MWS_POLISHED;
+		mApp->getStyleSheet()->polish(this);
 	}
 
-	void MWidget::setParent(MWidget* parent)
+	void MWidget::setTopLevelParentRecursively(MWidget* w)
 	{
-		if(data->parent == parent)
-			return;
-
-		if(data->windowFlags & WF_Window) // 用户希望设置Window Owner
+		m_topLevelParent = w;
+		std::list<MWidget*>::iterator iter = m_children.begin();
+		std::list<MWidget*>::iterator iterEnd = m_children.end();
+		while(iter != iterEnd)
 		{
-			// 如果窗口已经建立，则必须要先删掉这个窗口，再重新创建。
-			if(data->winHandle != NULL)
-			{
-				DestroyWindow(data->winHandle);
-
-				DWORD winStyle = 0;
-				DWORD winExStyle = 0;
-				generateStyleFlags(data->windowFlags,&winStyle,&winExStyle);
-
-				HWND winHandle = parent ? parent->windowHandle() : NULL;
-				winHandle = CreateWindowExW(winExStyle,
-											gMWidgetClassName,
-											data->windowTitle.c_str(),
-											winStyle,
-											x,y,height,width,winHandle,NULL,
-											mApp->getAppHandle(), NULL);
-				data->setWinHandleRecursively(winHandle);
-
-				data->widgetState &= WidgetExtraData::MWS_HIDDEN;
-				data->widgetState &= (~WidgetExtraData::MWS_POLISHED);
-			}
-			data->parent = parent;
-			return;
+			(*iter)->setTopLevelParentRecursively(w);
+			++iter;
 		}
-
-		if(data->parent == 0)
-		{
-			if(data->winHandle != NULL) // 没有parent，并且已经创建了窗口，则要删除
-			{
-				DestroyWindow(data->winHandle);
-				data->winHandle = NULL;
-				MApplicationData::instance->topLevelWindows.erase(this);
-			}
-		}else
-		{
-			// 如果是普通的widget
-			data->parent->data->children.remove(this);
-
-			// TODO：更新旧的父亲的显示内容
-		}
-
-		HWND winHandle = NULL;
-		if(parent != 0)
-		{
-			parent->data->children.push_back(this);
-			winHandle = parent->data->winHandle;
-		}
-		data->setWinHandleRecursively(winHandle);
-
-		data->widgetState &= WidgetExtraData::MWS_HIDDEN;
-		data->widgetState &= (~WidgetExtraData::MWS_POLISHED);
-		data->parent = parent;
 	}
 
-	void MWidget::show()
+	void MWidget::setWindowOwner(MWidget* parent)
 	{
-		// 如果不是被隐藏的话，返回。
-		if(isWindow())
-		{
-			if(IsWindowVisible(data->winHandle))
-				return;
-		}else if(!(data->widgetState & WidgetExtraData::MWS_HIDDEN))
+		if(!isWindow())
 			return;
 
-		if(data->winHandle == NULL)
+		HWND parentWnd = (HWND)GetWindowLong(windowHandle(), GWL_HWNDPARENT);
+		HWND toSetParentWnd = (parent == 0) ? NULL : parent->windowHandle();
+		if(parentWnd == toSetParentWnd)
+			return;
+
+		if(m_winHandle != NULL)
 		{
-			// 表明这个MWidget是一个窗口，同时，没有为其创建window。
+			DestroyWindow(m_winHandle);
+
 			DWORD winStyle = 0;
 			DWORD winExStyle = 0;
-			HWND winHandle = NULL;
-			if(data->parent)
-				winHandle = data->parent->windowHandle();
+			generateStyleFlags(m_windowFlags,&winStyle,&winExStyle);
+			m_winHandle = CreateWindowExW(winExStyle,
+				gMWidgetClassName,
+				m_windowTitle.c_str(),
+				winStyle,
+				x,y,height,width,toSetParentWnd,NULL,
+				mApp->getAppHandle(), NULL);
 
-			generateStyleFlags(data->windowFlags,&winStyle,&winExStyle);
-			winHandle = CreateWindowExW(winExStyle,
-										gMWidgetClassName,
-										data->windowTitle.c_str(),
-										winStyle,
-										x,y,height,width,winHandle,NULL,
-										mApp->getAppHandle(), NULL);
-			data->setWinHandleRecursively(winHandle);
-
-			ShowWindow(data->winHandle,SW_SHOW);
-			UpdateWindow(data->winHandle);
-			if(data->windowFlags & WF_AlwaysOnBottom)
-				SetWindowPos(data->winHandle,HWND_BOTTOM,0,0,0,0,SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED);
-
-			MApplicationData::instance->topLevelWindows.insert(this);
-
-			D2D1_RENDER_TARGET_PROPERTIES p = D2D1::RenderTargetProperties();
-			D2D1_SIZE_U s;
-			s.width = width;
-			s.height = height;
-			p.usage = D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE;
-			mApp->getD2D1Factory()->CreateHwndRenderTarget(&p,
-				&(D2D1::HwndRenderTargetProperties(winHandle, s)),
-				&(data->renderTarget));
+			if(!isHidden())
+			{
+				ShowWindow(m_winHandle,SW_SHOW);
+				UpdateWindow(m_winHandle);
+			}
+		} else {
+			// We take down the parent, and use it when we construct the window
+			m_parent = parent;
 		}
-
-		// TODO：如果这个Widget还没有获取相关资源，则在这里获取。
-		// TODO：处理显示
-		data->widgetState &= (~WidgetExtraData::MWS_HIDDEN);
-	}
-
-	void MWidget::hide()
-	{
-		if(data->widgetState & WidgetExtraData::MWS_HIDDEN)
-			return;
-
-		data->widgetState &= WidgetExtraData::MWS_HIDDEN;
-
-		if(isWindow())
-		{
-			ShowWindow(data->winHandle,SW_HIDE);
-		}else
-		{
-
-		}
-	}
-
-	bool MWidget::isHidden() const
-	{
-		return data->widgetState & WidgetExtraData::MWS_HIDDEN;
 	}
 
 	void MWidget::closeWindow()
 	{
 		if(isWindow())
-			SendMessage(data->winHandle,WM_CLOSE,0,0);
+			SendMessage(m_winHandle,WM_CLOSE,0,0);
 	}
 
 	void MWidget::showMinimized()
 	{
 		if(isWindow())
 		{
-			data->windowState = WindowMinimized;
-			ShowWindow(data->winHandle,SW_MINIMIZE);
+			m_windowState = WindowMinimized;
+			ShowWindow(m_winHandle,SW_MINIMIZE);
 		}
 	}
 
@@ -620,13 +427,223 @@ namespace MetalBone
 	{
 		if(isWindow())
 		{
-			data->windowState = WindowMaximized;
-			ShowWindow(data->winHandle,SW_MAXIMIZE);
+			m_windowState = WindowMaximized;
+			ShowWindow(m_winHandle,SW_MAXIMIZE);
 		}
 	}
 
-	void MWidget::setGeometry(int x, int y, int width, int height)
+	void MWidget::setParent(MWidget* parent)
 	{
+		if(parent == m_parent)
+			return;
+		if(m_windowFlags & WF_Window)
+		{
+			mDebug(L"This is a Window. If you want to set the owner of this window, use setWindowOwner()");
+			return;
+		}
 
+		if(m_parent == 0)
+		{
+			// We have created a Window for this widget, we need to destroy it.
+			if(m_winHandle != NULL)
+			{
+				DestroyWindow(m_winHandle);
+				m_winHandle = NULL;
+				MApplicationData::instance->topLevelWindows.erase(this);
+			}
+		} else {
+			m_parent->m_children.remove(this);
+			m_parent->repaint(x,y,width,height);
+		}
+
+		// Setting a widget's parent to 0 makes it hide.
+		MWidget* tlp = parent;
+		if(parent == 0)
+		{
+			m_widgetState |= MWS_HIDDEN;
+			if(!testAttributes(WA_ConstStyleSheet))
+				m_widgetState &= (~MWS_POLISHED); // We need to repolish the widget.
+			tlp = this;
+		} else {
+			// We don't modify the widget's hidden state if it changes parent.
+			parent->m_children.push_back(this);
+			if(!isHidden())
+				parent->repaint(x,y,width,height); // We repaint the rect of this widget inside parent.
+		}
+
+		setTopLevelParentRecursively(tlp);
+		m_parent = parent;
+	}
+
+	void MWidget::show()
+	{
+		// If this has window handle (i.e. WF_Window or parentless shown WF_Widget )
+		if(m_winHandle != NULL)
+		{
+			if(IsWindowVisible(m_winHandle))
+				return;
+			else
+				ShowWindow(m_winHandle,SW_SHOW);
+		} else if(!isHidden())
+			return;
+
+		// Polish stylesheet 
+		if(!(m_widgetState & MWS_POLISHED))
+			mApp->getStyleSheet()->polish(this);
+
+		// Mark the widget visible. When polishing stylesheet, this is still 
+		// hidden, so even if this widget's size changed, it won't repaint itself.
+		m_widgetState &= (~MWS_HIDDEN);
+
+		// This is a window or not?
+		if((m_windowFlags & WF_Window) || m_parent == 0)
+		{
+			// Create a window for it.
+			if(m_winHandle == NULL)
+			{
+				DWORD winStyle = 0;
+				DWORD winExStyle = 0;
+				HWND parentHandle = NULL;
+				if(m_parent) {
+					parentHandle = m_parent->windowHandle();
+					m_parent = 0;
+				}
+
+				RECT rect = {0,0,width,height};
+				AdjustWindowRectEx(&rect,winStyle,false,winExStyle);
+
+				generateStyleFlags(m_windowFlags,&winStyle,&winExStyle);
+				m_winHandle = CreateWindowExW(winExStyle,
+					gMWidgetClassName,
+					m_windowTitle.c_str(),
+					winStyle,
+					x,y,
+					rect.right - rect.left, // Width
+					rect.bottom - rect.top, // Height
+					parentHandle,NULL,
+					mApp->getAppHandle(), NULL);
+
+				setTopLevelParentRecursively(this);
+
+				ShowWindow(m_winHandle,SW_SHOW);
+				UpdateWindow(m_winHandle);
+				if(m_windowFlags & WF_AlwaysOnBottom)
+					SetWindowPos(m_winHandle,HWND_BOTTOM,0,0,0,0,SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED);
+
+				MApplicationData::instance->topLevelWindows.insert(this);
+
+				// Create renderTarget for this window.
+				D2D1_RENDER_TARGET_PROPERTIES p = D2D1::RenderTargetProperties();
+				D2D1_SIZE_U s;
+				s.width = width;
+				s.height = height;
+				p.usage = D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE;
+				mApp->getD2D1Factory()->CreateHwndRenderTarget(&p,
+					&(D2D1::HwndRenderTargetProperties(m_winHandle, s)),
+					&m_renderTarget);
+			}
+		} else {
+			m_parent->repaint(x,y,width,height);
+		}
+	}
+
+	void MWidget::hide()
+	{
+		if(isHidden())
+			return;
+		m_widgetState |= MWS_HIDDEN;
+		if(isWindow())
+			ShowWindow(m_winHandle,SW_HIDE);
+		else {
+			m_parent->repaint(x,y,width,height);
+		}
+	}
+
+	MWidget::MWidget(MWidget* parent)
+		: m_parent(parent),
+		m_winHandle(NULL),
+		m_renderTarget(0),
+		x(200),y(200),
+		width(480),height(640),
+		minWidth(0),minHeight(0),
+		maxWidth(0xffffffff),maxHeight(0xffffffff),
+		m_attributes(0),
+		m_windowFlags(WF_Widget),
+		m_windowState(WindowNoState),
+		m_widgetState(MWS_HIDDEN)
+	{
+		M_ASSERT_X(mApp!=0, "MApplication must be created first.", "MWidget constructor");
+		ENSURE_IN_MAIN_THREAD;
+
+		m_topLevelParent = (parent != 0) ? parent->m_topLevelParent : this;
+	}
+
+	MWidget::~MWidget()
+	{
+		if(m_parent == 0)
+		{
+			if(m_winHandle != NULL)
+			{
+				DestroyWindow(m_winHandle);
+				MApplicationData::instance->removeTopLevelWindows(this);
+			}
+		}else
+			setParent(0);
+
+		mApp->getStyleSheet()->setWidgetSS(this,std::wstring());
+		mApp->getStyleSheet()->removeCache(this);
+
+		std::list<MWidget*>::iterator iter = m_children.begin();
+		std::list<MWidget*>::iterator iterEnd = m_children.end();
+		while(iter != iterEnd)
+		{
+			delete (*iter);
+			++iter;
+		}
+	}
+
+	void MWidget::setGeometry(int vx, int vy, unsigned int vwidth, unsigned int vheight)
+	{
+		if(vx == x && vy == y && vwidth == width && vheight == height)
+			return;
+
+		// Ensure the size is in a valid range.
+		if(vwidth < minWidth)
+			vwidth = minWidth;
+		else if(vwidth > maxWidth)
+			vwidth = maxWidth;
+		if(vheight < minHeight)
+			vheight = minHeight;
+		else if(vheight > maxHeight)
+			vheight = maxHeight;
+
+		if(isHidden())
+		{
+			x      = vx;
+			y      = vy;
+			width  = vwidth;
+			height = vheight;
+			return;
+		}
+
+		if(m_parent != 0) 
+		{
+			// If is a child widget, we need to update the old region within the parent.
+			m_parent->repaint(x,y,width,height);
+			x      = vx;
+			y      = vy;
+			width  = vwidth;
+			height = vheight;
+			// Update the new rect.
+			m_parent->repaint(x,y,width,height);
+		} else {
+			// It's a window. We change the size of it. And Windows will repaint it automatically.
+			RECT rect = {0,0,width,height};
+			DWORD winStyle = 0;
+			DWORD winExStyle = 0;
+			generateStyleFlags(m_windowFlags,&winStyle,&winExStyle);
+			AdjustWindowRectEx(&rect,winStyle,false,winExStyle);
+			MoveWindow(m_winHandle,x,y,rect.right - rect.left,rect.bottom - rect.top,true);
+		}
 	}
 }

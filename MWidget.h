@@ -7,32 +7,34 @@ namespace MetalBone
 {
 	enum WindowFlags
 	{
-		WF_Widget			= 0,
-		WF_Window			= 0x1, // 标题栏，最大化，最小化，关闭按钮
-		WF_Dialog			= 0x2 | WF_Window, // 标题栏，关闭按钮
-		WF_Popup				= 0x4 | WF_Window, // 没有系统边框，如果和WF_BORDER一起使用，则创建一个只有边框，没有标题栏的窗体
-		WF_Tool				= 0x8 | WF_Window,
+		WF_Widget           = 0,
+		WF_Window           = 0x1, // TitleBar, Maximize, Minimize, Close Button
+		WF_Dialog           = 0x2 | WF_Window, // TitleBar, Close Button
+		WF_Popup            = 0x4 | WF_Window, // No system border. Use it with WF_Border, you can
+											   // create a window which has border but no titlebar.
+		WF_Tool             = 0x8 | WF_Window,
 
-		WF_MaximizeButton	= 0x100, // 会同时创建关闭按钮。
-		WF_MinimizeButton	= 0x200, // 会同时创建关闭按钮。
-		WF_HelpButton		= 0x400, // 会同时创建关闭按钮。
-		WF_CloseButton		= 0x800,
-		WF_TitleBar			= 0x1000, // 只包含WF_CAPTION会创建一个只有标题栏，没有关闭按钮的窗体
-		WF_Border			= 0x2000,
-		WF_ThinBorder		= 0x4000,
+		WF_MaximizeButton   = 0x100, // Also create close button.
+		WF_MinimizeButton   = 0x200, // Also create close button.
+		WF_HelpButton       = 0x400, // Also create close button.
+		WF_CloseButton      = 0x800,
+		WF_TitleBar         = 0x1000,// Will create a window which has titlebar, but no buttons.
+		WF_Border           = 0x2000,
+		WF_ThinBorder       = 0x4000,
 
-		WF_AlwaysOnTop		= 0x10000,
-		WF_AlwaysOnBottom	= 0x20000,
+		WF_AlwaysOnTop      = 0x10000,
+		WF_AlwaysOnBottom   = 0x20000,
 
-		WF_DontShowOnTaskbar	= 0x40000
+		WF_DontShowOnTaskbar= 0x40000
 	};
 
 	enum WidgetAttributes
 	{
-		WA_DeleteOnClose			= 0x1,
-		WA_NoStyleSheet			= 0x2,
-		WA_TranspantBackground	= 0x4,
-		WA_Hover					= 0x8 // Change apperent when hover
+		WA_DeleteOnClose     = 0x1,
+		WA_ConstStyleSheet   = 0x2, // If set, we only polish widget once, so that changing
+									// parent won't recalc the stylesheet again.
+		WA_OpaqueBackground  = 0x4,
+		WA_Hover             = 0x8  // Change apperent when hover
 	};
 
 	enum WindowStates
@@ -48,89 +50,158 @@ namespace MetalBone
 	{
 		public:
 			MWidget(MWidget* parent = 0);
-			// 析构时会删除所有children。
-			virtual ~MWidget();
+			virtual ~MWidget(); // We will delete very child of this widget when desctruction.
 
-			// 记录WindowFlags。如果isWindow()返回真，则将WindowFlags应用到窗口。
-			void setWindowFlags(unsigned int);
-			unsigned int windowFlags() const;
+			inline void setObjectName (const std::wstring&);
+			inline void setWindowTitle(const std::wstring&);
+			inline const std::wstring& objectName()  const;
+			inline const std::wstring& windowTitle() const;
 
-			// 如果on为true，则设置这个attribute，否则清除这个attribute。
-			void setAttributes(WidgetAttributes,bool on = true);
-			bool testAttributes(WidgetAttributes) const;
-			unsigned int attributes() const;
-
-			void setStyleSheet(const std::wstring&);
-			void ensurePolished();
-
-			void setObjectName(const std::wstring&);
-			const std::wstring& objectName() const;
-
-			ID2D1RenderTarget* getRenderTarget();
-
-			// 如果MWidget类型为WF_Window，一定返回true。
-			// 如果MWidget类型为WF_Widget，如果有parent()返回不为0，则isWindow()一定返回false;
-			// 如果parent()为0，则windowHandle()不等于-1时，isWindow()返回true。
+			// Return the HWND handle contains this widget or NULL.
+			inline HWND windowHandle() const; 
+			// Return the top level widget contains this widget or this.
+			inline MWidget* windowWidget();   
+			// If WF_Window, return true.
+			// If WF_Widget, and if parent() return non-zero, this return false
+			// If parent() return zero, and windowHandle() return greater than -1, this return true.
 			bool	 isWindow() const;
-			HWND	 windowHandle() const; // 返回包含这个Widget的窗口的HWND Handle 或 NULL
-			MWidget* windowWidget() const; // 返回包含这个Widget的TopLevelWidget 或 this
+			// Set the window flags. The flag will take effort as soon as this widget
+			// becomes a window (i.e. isWindow() return true).
+			void setWindowFlags(unsigned int);
+			inline unsigned int windowFlags() const;
+			// If on is true, we set the attr, otherwise we clear it.
+			inline void setAttributes(WidgetAttributes,bool on = true);
+			inline bool testAttributes(WidgetAttributes) const;
+			inline unsigned int attributes() const;
 
-			inline void addChild(MWidget* c);
-			inline void removeChild(MWidget* c);
+			inline void setStyleSheet(const std::wstring&);
+			void ensurePolished(); // Call ensurePolished() to set Geometry of this.
 
-			// 如果是WF_Window，则包含parent的窗口，会被设置成这个窗口的Owner。
-			// 否则则添加到parent的显示列表那里。
-			// setParent()会同时调用hide()，来隐藏widget。
-			void	 setParent(MWidget* parent);
-			MWidget* parent() const; // 返回这个Widget的父MWidget 或 0
-			const std::list<MWidget*>&	children() const;
+			inline ID2D1RenderTarget* getRenderTarget();
+			inline void repaint();
 
-			void setWindowTitle(const std::wstring&);
-			const std::wstring& windowTitle() const;
+			// Return the parent widget of this or 0.
+			inline MWidget* parent() const;
+			// If parent is 0, the widget will be hidden.
+			void setParent(MWidget* parent);
+			// Sets the owner of this Window to the Window contains p.
+			void setWindowOwner(MWidget* p);
+			inline const std::list<MWidget*>& children() const;
+
+			bool isHidden() const;
+
+			// If isWindow() return false. No-op.
+			void showMaximized();
+			void showMinimized();
+			// Use SendMessage() to send a WM_CLOSE msg to the window.
+			// The window is then closed, and closeEvent() is called.
+			void closeWindow(); 
 
 			void show();
 			void hide();
-			bool isHidden() const;
+			inline D2D_SIZE_U size() const;
+			inline D2D_SIZE_U minSize() const;
+			inline D2D_SIZE_U maxSize() const;
+			inline void move(int x, int y);
+			inline void resize(unsigned int width, unsigned int height);
+			void setGeometry(int x, int y, unsigned int width, unsigned int height);
+			void setMinimumSize(unsigned int minWidth, unsigned int minHeight);
+			void setMaximumSize(unsigned int maxWidth, unsigned int maxHeight);
 
-			// 如果isWindow()返回false，则showMaximized(),showMinimized(),closeWindow()无操作。
-			void showMaximized();
-			void showMinimized();
-			void closeWindow(); // 利用SendMessage()向窗口发送一个WM_CLOSE事件。
 
-			// 只当Widget是窗口的情况下才会接收到这个事件。
-			// 默认情况下，MEvent为accepted。此时如果Widget带有WA_DeleteOnClose属性，
-			// 则会删除这个Widget;否则隐藏窗口。
+			// Only received this event when MWidget is a window.
+			// The MEvent is accepted by default, and if the MWidget has WA_DeleteOnClose,
+			// it will be deleted. Otherwise, the window is hidden.
 			virtual void closeEvent(MEvent*) {}
 
-			inline void move(int x, int y);
-			inline void resize(int width, int height);
-			void setGeometry(int x, int y, int width, int height);
+
+
+
+
+
+
+
+
+
+			virtual void draw();
+			void repaint(int x, int y, unsigned int width, unsigned int height);
+
+
+
+
+
+
+
+
+
 		private:
+			MWidget* m_parent;
+			MWidget* m_topLevelParent;
+			HWND m_winHandle; // Only valid when widget is a window.
+			ID2D1HwndRenderTarget* m_renderTarget;
+
+			std::wstring m_windowTitle;
+			std::wstring m_objectName;
+
 			int x;
 			int y;
-			int width;
-			int height;
+			unsigned int width;
+			unsigned int height;
+			unsigned int minWidth;
+			unsigned int minHeight;
+			unsigned int maxWidth;
+			unsigned int maxHeight;
 
-			struct WidgetExtraData* data;
-			friend struct WidgetExtraData;
+			unsigned int m_attributes;
+			unsigned int m_windowFlags;
+			unsigned int m_windowState;
+			unsigned int m_widgetState;
+
+			// children[0] is the bottom-most child.
+			std::list<MWidget*> m_children;
+
+			void setTopLevelParentRecursively(MWidget*);
+			void setOpaqueBackground(bool);
+		friend class MStyleSheetStyle;
 	};
 
-	inline void MWidget::addChild(MWidget* c){ c->setParent(this); }
+
+
+
+
+	inline const std::wstring& MWidget::objectName()   const          { return m_objectName; }
+	inline const std::wstring& MWidget::windowTitle()  const          { return m_windowTitle; }
+	inline D2D_SIZE_U   MWidget::size()                const          { return D2D1::SizeU(width,height); }
+	inline MWidget*     MWidget::parent()              const          { return m_parent; }
+	inline HWND         MWidget::windowHandle()        const          { return m_topLevelParent->m_winHandle; }
+	inline unsigned int MWidget::windowFlags()         const          { return m_windowFlags; }
+	inline unsigned int MWidget::attributes()          const          { return m_attributes; }
+	inline MWidget*     MWidget::windowWidget()                       { return m_topLevelParent; }
+	inline void         MWidget::repaint()                            { repaint(x,y,width,height); }
+	inline void         MWidget::setObjectName(const std::wstring& n) { m_objectName = n; }
+	inline void         MWidget::setStyleSheet(const std::wstring& css){ mApp->getStyleSheet()->setWidgetSS(this,css); }
+	inline bool         MWidget::testAttributes(WidgetAttributes a) const { return m_attributes & a; }
+	inline const std::list<MWidget*>& MWidget::children() const       { return m_children;}
+	inline ID2D1RenderTarget* MWidget::getRenderTarget()              { return windowWidget()->m_renderTarget; }
+	void                MWidget::setWindowTitle(const std::wstring& t)
+	{
+		m_windowTitle = t;
+		if(isWindow())
+			SetWindowText(windowHandle(),t.c_str());
+	}
 	inline void MWidget::move(int xpos, int ypos)
 	{
 		if(xpos != x && ypos != y)
 			setGeometry(xpos,ypos,width,height);
 	}
-	inline void MWidget::resize(int w, int h)
+	inline void MWidget::resize(unsigned int w, unsigned int h)
 	{
 		if(w != width && h != height)
 			setGeometry(x,y,w,h);
 	}
-	inline void MWidget::removeChild(MWidget* c)
+	inline void MWidget::setAttributes(WidgetAttributes attr, bool on)
 	{
-		M_ASSERT(c->parent() == this);
-		c->setParent(0);
+		on ? (m_attributes |= attr) : (m_attributes &= (~attr));
 	}
-
 }
 #endif // MWIDGET_H
