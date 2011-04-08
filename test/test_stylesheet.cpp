@@ -91,7 +91,8 @@ L"   background:#112233 url(:/Wishc.png) no-repeat;}";
 	PushButton browser2;
 	browser2.setParent(&browser);
 	browser.show();
-	mApp->getStyleSheet()->draw(&browser2,CSS::PC_Pressed);
+	RECT rect = {0,0,1,1};
+	mApp->getStyleSheet()->draw(&browser2,rect,CSS::PC_Pressed);
 	mApp->getStyleSheet()->dumpStyleSheet();
 }
 
@@ -163,57 +164,58 @@ L"   border-radius: 2px 3px                                 ;}";
 	MWidget bg;
 	bg.setObjectName(L"BackgroundWidget");
 	bg.show();
-	mApp->getStyleSheet()->draw(&bg,CSS::PC_Default);
-	mApp->getStyleSheet()->draw(&bg,CSS::PC_Pressed);
-	mApp->getStyleSheet()->draw(&bg,CSS::PC_Hover);
+	RECT rect = {0,0,1,1};
+	mApp->getStyleSheet()->draw(&bg,rect,CSS::PC_Default);
+	mApp->getStyleSheet()->draw(&bg,rect,CSS::PC_Pressed);
+	mApp->getStyleSheet()->draw(&bg,rect,CSS::PC_Hover);
 
 	MWidget inheritBg;
 	MWidget inheritBgChild;
 	inheritBg.setObjectName(L"BackgroundInheritWidget");
 	inheritBgChild.setObjectName(L"BackgroundInheritChildWidget");
 	inheritBgChild.setParent(&inheritBg);
-	bg.show();
-	mApp->getStyleSheet()->draw(&inheritBgChild,CSS::PC_Default);
+	inheritBg.show();
+	mApp->getStyleSheet()->draw(&inheritBgChild,rect,CSS::PC_Default);
 
 	MWidget borderImage;
 	borderImage.setObjectName(L"BorderImageWidget");
 	borderImage.show();
-	mApp->getStyleSheet()->draw(&borderImage,CSS::PC_Default);
+	mApp->getStyleSheet()->draw(&borderImage,rect,CSS::PC_Default);
 
 	MWidget simpleBorder;
 	simpleBorder.setObjectName(L"SimpleBorderWidget");
 	simpleBorder.show();
-	mApp->getStyleSheet()->draw(&simpleBorder,CSS::PC_Default);
+	mApp->getStyleSheet()->draw(&simpleBorder,rect,CSS::PC_Default);
 	MWidget simpleBorder2;
 	simpleBorder2.setObjectName(L"SimpleBorderWidget2");
 	simpleBorder2.show();
-	mApp->getStyleSheet()->draw(&simpleBorder2,CSS::PC_Default);
+	mApp->getStyleSheet()->draw(&simpleBorder2,rect,CSS::PC_Default);
 
 	MWidget radiusBorder;
 	radiusBorder.setObjectName(L"RadiusBorderWidget");
 	radiusBorder.show();
-	mApp->getStyleSheet()->draw(&radiusBorder,CSS::PC_Default);
+	mApp->getStyleSheet()->draw(&radiusBorder,rect,CSS::PC_Default);
 
 	MWidget complexBorder;
 	complexBorder.setObjectName(L"ComplexBorderWidget");
 	complexBorder.show();
-	mApp->getStyleSheet()->draw(&complexBorder,CSS::PC_Default);
+	mApp->getStyleSheet()->draw(&complexBorder,rect,CSS::PC_Default);
 	MWidget complexBorder2;
 	complexBorder2.setObjectName(L"ComplexBorderWidget2");
 	complexBorder2.show();
-	mApp->getStyleSheet()->draw(&complexBorder2,CSS::PC_Default);
+	mApp->getStyleSheet()->draw(&complexBorder2,rect,CSS::PC_Default);
 	MWidget complexBorder3;
 	complexBorder3.setObjectName(L"ComplexBorderWidget3");
 	complexBorder3.show();
-	mApp->getStyleSheet()->draw(&complexBorder3,CSS::PC_Default);
+	mApp->getStyleSheet()->draw(&complexBorder3,rect,CSS::PC_Default);
 	MWidget complexBorder4;
 	complexBorder4.setObjectName(L"ComplexBorderWidget4");
 	complexBorder4.show();
-	mApp->getStyleSheet()->draw(&complexBorder4,CSS::PC_Default);
+	mApp->getStyleSheet()->draw(&complexBorder4,rect,CSS::PC_Default);
 	MWidget complexBorder5;
 	complexBorder5.setObjectName(L"ComplexBorderWidget5");
 	complexBorder5.show();
-	mApp->getStyleSheet()->draw(&complexBorder5,CSS::PC_Default);
+	mApp->getStyleSheet()->draw(&complexBorder5,rect,CSS::PC_Default);
 
 //	mApp->getStyleSheet()->dumpStyleSheet();
 }

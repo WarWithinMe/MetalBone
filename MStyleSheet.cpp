@@ -284,6 +284,7 @@ namespace MetalBone
 		{ L"background-clip",            PT_BackgroundClip },
 		{ L"background-position",        PT_BackgroundPosition },
 		{ L"background-repeat",          PT_BackgroundRepeat },
+		{ L"background-size",            PT_BackgroundSize },
 		{ L"border",                     PT_Border },
 		{ L"border-bottom",              PT_BorderBottom },
 		{ L"border-bottom-color",        PT_BorderBottomColor },
@@ -502,6 +503,10 @@ namespace MetalBone
 	bool Selector::matchPseudo(unsigned int p) const
 	{
 		BasicSelector* bs = basicSelectors.at(basicSelectors.size() - 1);
+		// Special treatment for Hover Pseudo.
+		if(p == PC_Hover)
+			return bs->pseudo == p;
+
 		return bs->pseudo == 0 ? true :
 				(p != (bs->pseudo & p)) ? false : (p != 0);
 	}
@@ -628,9 +633,9 @@ namespace MetalBone
 					else
 						ss->universal.push_back(newStyleRule);
 				}
-			}
 
-			ss->styleRules.push_back(newStyleRule);
+				ss->styleRules.push_back(newStyleRule);
+			}
 
 			++order;
 		}
@@ -1234,7 +1239,7 @@ namespace MetalBone
 			}
 
 			// check for Id
-			if(!widget->objectName().empty())
+			if(!sheet->srIdMap.empty() && !widget->objectName().empty())
 			{
 				std::pair<StyleSheet::StyleRuleIdMap::const_iterator,
 						StyleSheet::StyleRuleIdMap::const_iterator> result =
@@ -1272,20 +1277,7 @@ namespace MetalBone
 			srs.push_back(wrIt->second);
 			++wrIt;
 		}
-
-		// TODO: Apply widget properties
-		// transparecy, geometry, hover ...
 	}
-
-
-
-
-
-
-
-
-
-
 
 	namespace CSS
 	{
@@ -1307,30 +1299,67 @@ namespace MetalBone
 		// so that we don't need to check them when we use them.
 		struct BackgroundRenderObject
 		{
-			BackgroundRenderObject():x(0),y(0),clip(Value_Border),alignmentX(Value_Left),
-					alignmentY(Value_Top),repeatX(false),repeatY(false){}
+			BackgroundRenderObject():bitmapBrush(0),
+					x(0),y(0),width(0),height(0),
+					clip(Value_Margin),alignmentX(Value_Left),
+					alignmentY(Value_Top),repeatX(false),repeatY(false),
+					lastUsedBitmap(0){}
+
+			~BackgroundRenderObject() { SafeRelease(bitmapBrush); }
+
+			// Return true if the brush should be deleted when drawing finshes.
+			ID2D1BitmapBrush* getBitmapBrush(ID2D1RenderTarget*);
+
 			D2D1BrushPointer brush;
+			ID2D1BitmapBrush* bitmapBrush;
 			BrushType brushType;
 			int x;
 			int y;
+			unsigned int width;
+			unsigned int height;
 			unsigned int clip;
 			unsigned int alignmentX;
 			unsigned int alignmentY;
 			bool repeatX;
 			bool repeatY;
+			private:
+				ID2D1Bitmap* lastUsedBitmap;
 		};
 
 		struct BorderImageRenderObject
 		{
-			BorderImageRenderObject():top(0),right(0),bottom(0),left(0),
-						repeatX(true),repeatY(true){}
-			ID2D1Bitmap** borderImage;
-			int top;
-			int right;
-			int bottom;
-			int left;
+			enum Portion
+			{
+				Conner = 0,
+				TopCenter,
+				CenterLeft,
+				Center,
+				CenterRight,
+				BottomCenter
+			};
+			BorderImageRenderObject():topWidth(0),rightWidth(0),
+						bottomWidth(0),leftWidth(0),
+						repeatX(true),repeatY(true),lastUsedBitmap(0)
+			{ ZeroMemory(portionBrushes,sizeof(ID2D1BitmapBrush*)*6); }
+			~BorderImageRenderObject()
+			{
+				for(int i = 0; i < 6; ++i)
+					SafeRelease(portionBrushes[i]);
+			}
+			ID2D1Bitmap**  borderImage;
+			ID2D1BitmapBrush* portionBrushes[6];
+			int  topWidth;
+			int  rightWidth;
+			int  bottomWidth;
+			int  leftWidth;
 			bool repeatX;
 			bool repeatY;
+
+			ID2D1BitmapBrush* getPortionBrush(ID2D1RenderTarget* renderTarget, Portion p);
+			inline D2D1_SIZE_U imageSize() const { return (*borderImage)->GetPixelSize(); }
+
+			private:
+				ID2D1Bitmap* lastUsedBitmap;
 		};
 
 		struct SimpleBorderRenderObject : public BorderRenderObject
@@ -1435,7 +1464,10 @@ namespace MetalBone
 									  GUID_WICPixelFormat32bppPBGRA,
 									  WICBitmapDitherTypeNone,NULL,
 									  0.f,WICBitmapPaletteTypeMedianCut);
-				workingRenderTarget->CreateBitmapFromWicBitmap(converter,NULL,&bitmap);
+				workingRenderTarget->CreateBitmapFromWicBitmap(converter,
+									D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, 
+															D2D1_ALPHA_MODE_PREMULTIPLIED)),
+									&bitmap);
 
 				isOpaque = isImageOpaque(uri);
 			}
@@ -1455,19 +1487,20 @@ namespace MetalBone
 	{
 		switch(prop) {
 			case Value_NoRepeat:object->repeatX = object->repeatY =  false;       break;
-			case Value_RepeatX:	object->repeatX = true;  object->repeatY = false; break;
-			case Value_RepeatY:	object->repeatX = false; object->repeatY = true;  break;
-			case Value_Repeat:	object->repeatX = object->repeatY = true;         break;
+			case Value_RepeatX: object->repeatX = true;  object->repeatY = false; break;
+			case Value_RepeatY: object->repeatX = false; object->repeatY = true;  break;
+			case Value_Repeat:  object->repeatX = object->repeatY = true;         break;
 
 			case Value_Padding:
 			case Value_Content:
 			case Value_Border:
-			case Value_Margin:	object->clip = prop; break;
+			case Value_Margin:  object->clip = prop; break;
 
 			// We both set alignment X & Y, because one may only specific a alignment value.
 			case Value_Left:
-			case Value_Right:	object->alignmentX = object->alignmentY = prop; return true;
-
+			case Value_Right:	 object->alignmentX = prop; return true;
+			case Value_Top:
+			case Value_Bottom: object->alignmentY = prop; return true;
 			case Value_Center:
 				object->alignmentY = prop;
 				if(!alignmentY)
@@ -1476,9 +1509,6 @@ namespace MetalBone
 					return true;
 				}else
 					return false;
-
-			default:
-				object->alignmentY = prop;
 				break;
 		}
 		return false;
@@ -1496,11 +1526,22 @@ namespace MetalBone
 		}
 	}
 
+	namespace CSS {
+		enum BackgroundOpaqueType {
+			NonOpaque,
+			OpaqueClipMargin,
+			OpaqueClipBorder,
+			OpaqueClipPadding
+		};
+	}
+
 	// Background: { Brush/Image Repeat Clip Alignment pos-x pos-y }*;
 	// Only one brush allowed in a declaration.
-	BackgroundRenderObject* MStyleSheetStyle::createBackgroundRO(bool& isOpaqueBG)
+	BackgroundRenderObject* MStyleSheetStyle::createBackgroundRO(unsigned int& opaqueType)
 	{
 		BackgroundRenderObject* newObject = new BackgroundRenderObject();
+
+		bool opaqueBrush = true;
 
 		std::vector<CssValue>& values = workingDeclaration->values;
 		CssValue& brushValue = values.at(0);
@@ -1508,13 +1549,10 @@ namespace MetalBone
 		{
 			newObject->brushType = SolidBrush;
 			newObject->brush.solidBrush = createD2D1SolidBrush(brushValue);
-			// We simply ignore other value in the declration is this is a solid brush.
-			isOpaqueBG = false;
-			return newObject;
+		} else {
+			newObject->brushType = BitmapBrush;
+			newObject->brush.bitmap = createD2D1Bitmap(*(brushValue.data.vstring),opaqueBrush);
 		}
-
-		newObject->brushType = BitmapBrush;
-		newObject->brush.bitmap = createD2D1Bitmap(*(brushValue.data.vstring),isOpaqueBG);
 
 		unsigned int index = 1;
 		while(index < values.size())
@@ -1536,10 +1574,41 @@ namespace MetalBone
 				if(index < values.size() && values.at(index).type == CssValue::Number)
 					prop = values.at(index).data.vint;
 				newObject->y = prop;
+				++index;
+				if(index < values.size() && values.at(index).type == CssValue::Number)
+					newObject->width = values.at(index).data.vint;
+				++index;
+				if(index < values.size() && values.at(index).type == CssValue::Number)
+					newObject->height = values.at(index).data.vint;
 			}
 
 			++index;
 		}
+
+		if(!opaqueBrush)
+			opaqueType = NonOpaque;
+		else
+		{
+			if(newObject->clip == Value_Margin)
+				opaqueType = OpaqueClipMargin;
+			else if(newObject->clip == Value_Border)
+				opaqueType = OpaqueClipBorder;
+			else
+				opaqueType = OpaqueClipPadding;
+		}
+
+		if(values.at(0).type != CssValue::Color)
+		{
+			D2D1_SIZE_U size = (*newObject->brush.bitmap)->GetPixelSize();
+			// If the user doesn't specify the width of the background,
+			// we set it. Otherwise, check if the width is valid.
+			if(newObject->width == 0 || newObject->width + newObject->x > size.width)
+				newObject->width = size.width - newObject->x;
+
+			if(newObject->height == 0 || newObject->height + newObject->y > size.height)
+				newObject->height = size.height - newObject->y;
+		}
+
 		return newObject;
 	}
 
@@ -1569,15 +1638,16 @@ namespace MetalBone
 		}
 		// Border
 		if(endIndex == 4) {
-			biro->top		= values.at(1).data.vint;
-			biro->right	= values.at(2).data.vint;
-			biro->bottom	= values.at(3).data.vint;
-			biro->left	= values.at(4).data.vint;
+			biro->topWidth    = values.at(1).data.vint;
+			biro->rightWidth  = values.at(2).data.vint;
+			biro->bottomWidth = values.at(3).data.vint;
+			biro->leftWidth   = values.at(4).data.vint;
 		} else if(endIndex == 2) {
-			biro->bottom = biro->top   = values.at(1).data.vint;
-			biro->left   = biro->right = values.at(2).data.vint;
+			biro->bottomWidth = biro->topWidth   = values.at(1).data.vint;
+			biro->leftWidth   = biro->rightWidth = values.at(2).data.vint;
 		} else {
-			biro->left = biro->right = biro->bottom = biro->top = values.at(1).data.vint;
+			biro->leftWidth   = biro->rightWidth =
+			biro->bottomWidth = biro->topWidth   = values.at(1).data.vint;
 		}
 
 		return biro;
@@ -1940,22 +2010,27 @@ namespace MetalBone
 			++declRIter;
 		}
 
+		if(declarations.size() == 0)
+			return renderRule;
+
 		// == 5.Create RenderRule
 		// Remark: If the declaration have values in wrong order, it might crash the program.
 		// Maybe we should add some logic to avoid this flaw.
 		renderRule.init();
-		workingRenderTarget = w->getRenderTarget();
+		workingRenderTarget = w->getDCRenderTarget();
 		DeclMap::iterator declIter = declarations.begin();
 		DeclMap::iterator declIterEnd = declarations.end();
+
+		std::vector<unsigned int> bgOpaqueTypes;// 0.NonOpaque,1.Opaque,2.OpauqeClipMargin,3.OpaqueClipBoarder,4.OpaqueClipPadding
+		bool opaqueBorderImage = false;
+		BorderType bt = BT_Simple;
 
 		// --- Backgrounds ---
 		while(declIter->first == PT_Background) {
 			workingDeclaration = declIter->second;
-			bool isOpaqueBG = true;
-			renderRule->backgroundROs.push_back(createBackgroundRO(isOpaqueBG));
-			// We need to mark the RenderRule if it might be not opaque.
-			if(!isOpaqueBG)
-				renderRule->opaqueBackground = false;
+			unsigned int bgOpaqueType = NonOpaque;
+			renderRule->backgroundROs.push_back(createBackgroundRO(bgOpaqueType));
+			bgOpaqueTypes.push_back(bgOpaqueType);
 			if(++declIter == declIterEnd)
 				goto END;
 		}
@@ -1982,6 +2057,23 @@ namespace MetalBone
 			if(++declIter == declIterEnd)
 				goto END;
 		}
+		if(declIter->first == PT_BackgroundSize) {
+			std::vector<CssValue>& values = declIter->second->values;
+			int propw = values.at(0).data.vint;
+			int proph = propw;
+			if(values.size() == 2)
+				proph = values.at(1).data.vint;
+
+			std::vector<BackgroundRenderObject*>::iterator iter = renderRule->backgroundROs.begin();
+			std::vector<BackgroundRenderObject*>::iterator iterEnd = renderRule->backgroundROs.end();
+			while(iter != iterEnd) {
+				(*iter)->width  = propw;
+				(*iter)->height = proph;
+				++iter;
+			}
+			if(++declIter == declIterEnd)
+				goto END;
+		}
 		if(declIter->first == PT_BackgroundAlignment) {
 			std::vector<CssValue>& values = declIter->second->values;
 			setBackgroundRenderObjectsProperty(renderRule->backgroundROs,values.at(0).data.vuint);
@@ -1990,14 +2082,11 @@ namespace MetalBone
 			if(++declIter == declIterEnd)
 				goto END;
 		}
-
+		
 		// --- BorderImage --- 
 		if(declIter->first == PT_BorderImage) {
 			workingDeclaration = declIter->second;
-			bool isOpaqueBG = true;
-			renderRule->borderImageRO = createBorderImageRO(isOpaqueBG);
-			if(!isOpaqueBG)
-				renderRule->opaqueBackground = false;
+			renderRule->borderImageRO = createBorderImageRO(opaqueBorderImage);
 			if(++declIter == declIterEnd)
 				goto END;
 		}
@@ -2020,7 +2109,7 @@ namespace MetalBone
 		{
 			workingDeclaration = declIter->second;
 			std::vector<CssValue>& values = workingDeclaration->values;
-			BorderType bt = testBorderObjectType(values,declIter,declIterEnd);
+			bt = testBorderObjectType(values,declIter,declIterEnd);
 			if(bt == BT_Simple)
 			{
 				SimpleBorderRenderObject* obj = new RadiusBorderRenderObject();
@@ -2038,10 +2127,6 @@ namespace MetalBone
 				setComplexBorderRO(obj, declIter, declIterEnd);
 			}
 
-			// If the border is not a rectangle, we consider it's not opaque.
-			if(bt != BT_Simple)
-				renderRule->opaqueBackground = false;
-
 			if(declIter == declIterEnd || ++declIter == declIterEnd)
 				goto END;
 		}
@@ -2054,21 +2139,25 @@ namespace MetalBone
 			{
 				case PT_Margin:
 					setD2DRectValue(renderRule->margin,values);
+					renderRule->hasMargin = true;
 					break;
 				case PT_MarginTop:
 				case PT_MarginRight:
 				case PT_MarginBottom:
 				case PT_MarginLeft:
 					setD2DRectValue(renderRule->margin,declIter->first - PT_MarginTop, values.at(0).data.vuint);
+					renderRule->hasMargin = true;
 					break;
 				case PT_Padding:
 					setD2DRectValue(renderRule->padding,values);
+					renderRule->hasPadding = true;
 					break;
 				case PT_PaddingTop:
 				case PT_PaddingRight:
 				case PT_PaddingBottom:
 				case PT_PaddingLeft:
 					setD2DRectValue(renderRule->padding,declIter->first - PT_PaddingTop, values.at(0).data.vuint);
+					renderRule->hasPadding = true;
 					break;
 			}
 			if(++declIter == declIterEnd)
@@ -2095,7 +2184,33 @@ namespace MetalBone
 		}
 
 		// TODO: Create TextRenderObject
+
 		END:
+		// Check if this RenderRule is opaque.
+		bool opaqueBorder = (!renderRule->hasMargin && bt == BT_Simple);
+		for(int i = bgOpaqueTypes.size() - 1; i >= 0; --i) {
+			switch(bgOpaqueTypes.at(i)) {
+			case OpaqueClipMargin:
+				renderRule->opaqueBackground = true;
+				i = -1;
+				break;
+			case OpaqueClipBorder:
+				if(opaqueBorder) {
+					renderRule->opaqueBackground = true;
+					i = -1;
+				}
+				break;
+			case OpaqueClipPadding:
+				if(opaqueBorder && !renderRule->hasPadding) {
+					renderRule->opaqueBackground = true;
+					i = -1;
+				}
+				break;
+			}
+		}
+		if(opaqueBorderImage)
+			renderRule->opaqueBackground = true;
+
 		workingRenderTarget = 0;
 		workingDeclaration = 0;
 		return renderRule;
@@ -2104,11 +2219,407 @@ namespace MetalBone
 	void MStyleSheetStyle::polish(MWidget* w)
 	{
 		RenderRule rule = getRenderRule(w,PC_Default);
-		rule.setGeometry(w);
-		w->setOpaqueBackground(rule.opaqueBackground());
-		rule = getRenderRule(w, PC_Hover);
 		if(rule.isValid())
+		{
+			rule.setGeometry(w);
+			w->setOpaqueBackground(rule.opaqueBackground());
+		}
+		if(getRenderRule(w, PC_Hover).isValid())
 			w->setAttributes(WA_Hover);
+	}
+
+	RenderRuleData::~RenderRuleData()
+	{
+		for(int i = backgroundROs.size() -1; i >=0; --i)
+		{
+			delete backgroundROs.at(i);
+		}
+		delete borderImageRO;
+		delete borderRO;
+		delete geoData;
+	}
+
+	ID2D1BitmapBrush* BackgroundRenderObject::getBitmapBrush(ID2D1RenderTarget* renderTarget)
+	{
+		M_ASSERT_X(brushType == BitmapBrush, "This BackgroundRenderObject doesn't have a BitmapBrush.","BackgroundRenderObject::getBitmapBrush()");
+
+		// The bitmapBrush is still valid.
+		if(lastUsedBitmap == *(brush.bitmap))
+			return bitmapBrush;
+
+		// Create the brush.
+		lastUsedBitmap = *(brush.bitmap);
+		// For some reason, the bitmap have been recreated.
+		// We need to recreated the bitmapBrush.
+		SafeRelease(bitmapBrush);
+		renderTarget->CreateBitmapBrush(lastUsedBitmap,
+							D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_WRAP,D2D1_EXTEND_MODE_WRAP),
+							D2D1::BrushProperties(), &bitmapBrush);
+
+		return bitmapBrush;
+	}
+
+	void RenderRuleData::draw(MWidget* w,int xPosInWnd, int yPosInWnd, const RECT& clipRectInWnd)
+	{
+		ID2D1DCRenderTarget* rt = w->getDCRenderTarget();
+		if(rt == 0)
+			return;
+
+		D2D1_SIZE_U widgetSize = w->size();
+		RECT widgetRect = {xPosInWnd, yPosInWnd, xPosInWnd+widgetSize.width, yPosInWnd+widgetSize.height};
+
+		// === Draw Backgrounds ===
+		if(backgroundROs.size() > 0)
+			drawBackgrounds(rt, widgetRect, clipRectInWnd);
+
+		// === Draw BorderImage ===
+		if(borderImageRO != 0)
+			drawBorderImage(rt, widgetRect, clipRectInWnd);
+	}
+
+	void RenderRuleData::drawBackgrounds(ID2D1RenderTarget* rt,const RECT& widgetRect, const RECT& clipRect)
+	{
+		for(unsigned int i = 0; i < backgroundROs.size(); ++i)
+		{
+			RECT contentRect = widgetRect;
+
+			ID2D1Geometry*          bgGeo = 0;
+			BackgroundRenderObject* bgro  = backgroundROs.at(i);
+
+			if(bgro->clip != Value_Margin)
+			{
+				if(hasMargin) {
+					contentRect.left   += margin.left;
+					contentRect.top    += margin.top;
+					contentRect.right  -= margin.right;
+					contentRect.bottom -= margin.bottom;
+				}
+
+				if(bgro->clip == Value_Border) {
+					if(borderRO != 0)
+						bgGeo = borderRO->getGeometry();
+				} else {
+					if(borderRO != 0) {
+						RECT borderWidth;
+						borderRO->getBorderWidth(borderWidth);
+						contentRect.left   += borderWidth.left;
+						contentRect.top    += borderWidth.top;
+						contentRect.right  -= borderWidth.right;
+						contentRect.bottom -= borderWidth.bottom;
+					}
+					if(hasPadding) {
+						contentRect.left   += padding.left;
+						contentRect.top    += padding.top;
+						contentRect.right  -= padding.right;
+						contentRect.bottom -= padding.bottom;
+					}
+				}
+			}
+
+			int dx = -bgro->x;
+			int dy = -bgro->y;
+			ID2D1Brush* brush;
+			if(bgro->brushType == BitmapBrush)
+				brush = bgro->getBitmapBrush(rt);
+			else
+				brush = *(bgro->brush.solidBrush);
+			
+			if(bgGeo)
+			{
+				// TODO: Draw the background with clipping the border.
+			} else {
+				if(bgro->alignmentX != Value_Left) {
+					if(bgro->alignmentX == Value_Center)
+						contentRect.left = (contentRect.left + contentRect.right - bgro->width) / 2;
+					else
+						contentRect.left = contentRect.right - bgro->width;
+				}
+				if(bgro->alignmentY != Value_Top) {
+					if(bgro->alignmentY == Value_Center)
+						contentRect.top = (contentRect.top + contentRect.bottom - bgro->height) / 2;
+					else
+						contentRect.top = contentRect.bottom - bgro->height;
+				}
+				if(!bgro->repeatX) {
+					int r = contentRect.left + bgro->width;
+					if(contentRect.right > r)
+						contentRect.right  = r;
+				}
+				if(!bgro->repeatY) {
+					int b = contentRect.top + bgro->height;
+					if(contentRect.bottom > b)
+						contentRect.bottom = b;
+				}
+
+				dx += (int)contentRect.left;
+				dy += (int)contentRect.top;
+				if(dx != 0 || dy != 0)
+					brush->SetTransform(D2D1::Matrix3x2F::Translation((FLOAT)dx,(FLOAT)dy));
+
+				if(contentRect.left   < clipRect.left)
+					contentRect.left   = clipRect.left;
+				if(contentRect.top    < clipRect.top)
+					contentRect.top    = clipRect.top;
+				if(contentRect.right  > clipRect.right)
+					contentRect.right  = clipRect.right;
+				if(contentRect.bottom > clipRect.bottom)
+					contentRect.bottom = clipRect.bottom;
+
+				D2D1_RECT_F cr;
+				cr.left   = (FLOAT)contentRect.left;
+				cr.top    = (FLOAT)contentRect.top;
+				cr.right  = (FLOAT)contentRect.right;
+				cr.bottom = (FLOAT)contentRect.bottom;
+
+				rt->FillRectangle(cr,brush);
+			}
+
+			if(dx != 0 || dy != 0)
+				brush->SetTransform(D2D1::Matrix3x2F::Identity());
+		}
+	}
+
+	ID2D1BitmapBrush* BorderImageRenderObject::getPortionBrush(ID2D1RenderTarget* rt, Portion p)
+	{
+		if(lastUsedBitmap != *borderImage)
+		{
+			// If the borderImage has been recreated, we must recreate all
+			// the portion brushes.
+			for(int i = 0; i < 6; ++i)
+				SafeRelease(portionBrushes[i]);
+
+			ZeroMemory(portionBrushes, sizeof(ID2D1BitmapBrush*)*6);
+			lastUsedBitmap = *borderImage;
+		} else if(portionBrushes[p] != 0) {
+			// The cache is still valid, so we just return the cahced brush.
+			return portionBrushes[p];
+		}
+
+		ID2D1BitmapBrush* pb = 0;
+		if(p == Conner)
+		{
+			rt->CreateBitmapBrush(lastUsedBitmap,
+								  D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_WRAP,D2D1_EXTEND_MODE_WRAP),
+								  D2D1::BrushProperties(), &pb);
+			portionBrushes[Conner] = pb;
+			return pb;
+		}
+
+		D2D1_RECT_F pbmpRect;
+		D2D1_SIZE_U pbmpSize(imageSize());
+		switch(p)
+		{
+			case TopCenter:
+				pbmpRect.left   = (FLOAT)leftWidth;
+				pbmpRect.right  = (FLOAT)pbmpSize.width - leftWidth;
+				pbmpRect.top    = 0.f; 
+				pbmpRect.bottom = (FLOAT)topWidth;
+				pbmpSize.width  = int(pbmpRect.right - rightWidth);
+				pbmpSize.height = topWidth;
+				break;
+			case CenterLeft:
+				pbmpRect.left   = 0.f;
+				pbmpRect.right  = (FLOAT)leftWidth;
+				pbmpRect.top    = (FLOAT)topWidth;
+				pbmpRect.bottom = (FLOAT)pbmpSize.height - bottomWidth;
+				pbmpSize.width  = leftWidth;
+				pbmpSize.height = int(pbmpRect.bottom - topWidth);
+				break;
+			case Center:
+				pbmpRect.left   = (FLOAT)leftWidth;
+				pbmpRect.right  = (FLOAT)pbmpSize.width  - rightWidth;
+				pbmpRect.top    = (FLOAT)topWidth;
+				pbmpRect.bottom = (FLOAT)pbmpSize.height - bottomWidth;
+				pbmpSize.width  = int(pbmpRect.right  - leftWidth);
+				pbmpSize.height = int(pbmpRect.bottom - topWidth);
+				break;
+			case CenterRight:
+				pbmpRect.left   = (FLOAT)pbmpSize.width  - rightWidth;
+				pbmpRect.right  = (FLOAT)pbmpSize.width;
+				pbmpRect.top    = (FLOAT)topWidth;
+				pbmpRect.bottom = (FLOAT)pbmpSize.height - bottomWidth;
+				pbmpSize.width  = rightWidth;
+				pbmpSize.height = int(pbmpRect.bottom - topWidth);
+				break;
+			case BottomCenter:
+				pbmpRect.left   = (FLOAT)leftWidth;
+				pbmpRect.right  = (FLOAT)pbmpSize.width  - rightWidth;
+				pbmpRect.top    = (FLOAT)pbmpSize.height - bottomWidth;
+				pbmpRect.bottom = (FLOAT)pbmpSize.height;
+				pbmpSize.width  = int(pbmpRect.right  - leftWidth);
+				pbmpSize.height = bottomWidth;
+				break;
+		}
+		// There is a bug in ID2D1Bitmap::CopyFromBitmap(), we need to avoid this.
+		ID2D1BitmapRenderTarget* intermediateRT;
+		ID2D1Bitmap* portionBmp;
+		D2D1_RECT_F intermediateRect = {pbmpRect.left,pbmpRect.top,pbmpRect.right,pbmpRect.bottom};
+		HRESULT hr = rt->CreateCompatibleRenderTarget(D2D1::SizeF((unsigned int)pbmpSize.width,(unsigned int)pbmpSize.height),&intermediateRT);
+		if(SUCCEEDED(hr))
+		{
+			intermediateRT->BeginDraw();
+			intermediateRT->DrawBitmap(lastUsedBitmap,D2D1::RectF(0.f,0.f,pbmpSize.width,pbmpSize.height),
+										1.0f,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,
+										pbmpRect);
+			intermediateRT->EndDraw();
+			intermediateRT->GetBitmap(&portionBmp);
+			rt->CreateBitmapBrush(portionBmp,
+								  D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_CLAMP,D2D1_EXTEND_MODE_CLAMP),
+								  D2D1::BrushProperties(), &pb);
+
+			SafeRelease(portionBmp);
+			SafeRelease(intermediateRT);
+		}
+		portionBrushes[p] = pb;
+		return pb;
+	}
+
+	void RenderRuleData::drawBorderImage(ID2D1RenderTarget* rt,const RECT& widgetRect, const RECT& clipRect)
+	{
+		if(borderImageRO != 0)
+		{
+			// 0.TopLeft     1.TopCenter     2.TopRight
+			// 3.CenterLeft  4.Center        5.CenterRight
+			// 6.BottomLeft  7.BottomCenter  8.BottomRight
+			bool drawParts[9] = {true,true,true,true,true,true,true,true,true};
+			int x1 = widgetRect.left   + borderImageRO->leftWidth;
+			int x2 = widgetRect.right  - borderImageRO->rightWidth;
+			int y1 = widgetRect.top    + borderImageRO->topWidth;
+			int y2 = widgetRect.bottom - borderImageRO->bottomWidth;
+			D2D1_SIZE_U borderImageSize = borderImageRO->imageSize();
+			FLOAT scaleX = FLOAT(x2 - x1) / (borderImageSize.width - borderImageRO->leftWidth - borderImageRO->rightWidth);
+			FLOAT scaleY = FLOAT(y2 - y1) / (borderImageSize.height - borderImageRO->topWidth - borderImageRO->bottomWidth);
+			if(clipRect.left > x1) {
+				drawParts[0] = drawParts[3] = drawParts[6] = false;
+				if(clipRect.left > x2)
+					drawParts[1] = drawParts[4] = drawParts[7] = false;
+			}
+			if(clipRect.top > y1) {
+				drawParts[0] = drawParts[1] = drawParts[2] = false;
+				if(clipRect.top > y2)
+					drawParts[3] = drawParts[4] = drawParts[5] = false;
+			}
+			if(clipRect.right <= x2) {
+				drawParts[2] = drawParts[5] = drawParts[8] = false;
+				if(clipRect.right <= x1)
+					drawParts[1] = drawParts[4] = drawParts[7] = false;
+			}
+			if(clipRect.bottom <= y2) {
+				drawParts[6] = drawParts[7] = drawParts[8] = false;
+				if(clipRect.bottom <= y1)
+					drawParts[3] = drawParts[4] = drawParts[5] = false;
+			}
+
+			// Draw!
+			D2D1_SIZE_U imageSize = borderImageRO->imageSize();
+			D2D1_RECT_F drawRect;
+			ID2D1BitmapBrush* brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::Conner);
+			// Assume we can always get a valid brush for Conner.
+			if(drawParts[0]) {
+				drawRect.left   = (FLOAT)widgetRect.left;
+				drawRect.right  = (FLOAT)x1;
+				drawRect.top    = (FLOAT)widgetRect.top;
+				drawRect.bottom = (FLOAT)y1;
+				brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
+				rt->FillRectangle(drawRect,brush);
+			}
+			if(drawParts[2]) {
+				drawRect.left   = (FLOAT)x2;
+				drawRect.right  = (FLOAT)widgetRect.right;
+				drawRect.top    = (FLOAT)widgetRect.top;
+				drawRect.bottom = (FLOAT)y1;
+				brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.right - imageSize.width, drawRect.top));
+				rt->FillRectangle(drawRect,brush);
+			}
+			if(drawParts[6]) {
+				drawRect.left   = (FLOAT)widgetRect.left;
+				drawRect.right  = (FLOAT)x1;
+				drawRect.top    = (FLOAT)y2;
+				drawRect.bottom = (FLOAT)widgetRect.bottom;
+				brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.bottom - imageSize.height));
+				rt->FillRectangle(drawRect,brush);
+			}
+			if(drawParts[8]) {
+				drawRect.left   = (FLOAT)x2;
+				drawRect.right  = (FLOAT)widgetRect.right;
+				drawRect.top    = (FLOAT)y2;
+				drawRect.bottom = (FLOAT)widgetRect.bottom;
+				brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.right - imageSize.width, drawRect.bottom - imageSize.height));
+				rt->FillRectangle(drawRect,brush);
+			}
+			if(drawParts[1]) {
+				drawRect.left   = (FLOAT)x1;
+				drawRect.right  = (FLOAT)x2;
+				drawRect.top    = (FLOAT)widgetRect.top;
+				drawRect.bottom = (FLOAT)y1;
+				brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::TopCenter);
+				if(brush) {
+					D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
+					if(!borderImageRO->repeatX)
+						matrix = D2D1::Matrix3x2F::Scale(scaleX,1.0f) * matrix;
+					brush->SetTransform(matrix);
+					rt->FillRectangle(drawRect,brush);
+				}
+			}
+			if(drawParts[3]) {
+				drawRect.left   = (FLOAT)widgetRect.left;
+				drawRect.right  = (FLOAT)x1;
+				drawRect.top    = (FLOAT)y1;
+				drawRect.bottom = (FLOAT)y2;
+				brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::CenterLeft);
+				if(brush) {
+					D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
+					if(!borderImageRO->repeatY)
+						matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
+					brush->SetTransform(matrix);
+					rt->FillRectangle(drawRect,brush);
+				}
+			}
+			if(drawParts[4]) {
+				drawRect.left   = (FLOAT)x1;
+				drawRect.right  = (FLOAT)x2;
+				drawRect.top    = (FLOAT)y1;
+				drawRect.bottom = (FLOAT)y2;
+				brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::Center);
+				if(brush) {
+					D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
+					if(!borderImageRO->repeatX)
+						matrix = D2D1::Matrix3x2F::Scale(scaleX, borderImageRO->repeatY ? 1.0f : scaleY) * matrix; 
+					else if(!borderImageRO->repeatY)
+						matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
+					brush->SetTransform(matrix);
+					rt->FillRectangle(drawRect,brush);
+				}
+			}
+			if(drawParts[5]) {
+				drawRect.left   = (FLOAT)x2;
+				drawRect.right  = (FLOAT)widgetRect.right;
+				drawRect.top    = (FLOAT)y1;
+				drawRect.bottom = (FLOAT)y2;
+				brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::CenterRight);
+				if(brush) {
+					D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
+					if(!borderImageRO->repeatY)
+						matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
+					brush->SetTransform(matrix);
+					rt->FillRectangle(drawRect,brush);
+				}
+			}
+			if(drawParts[7]) {
+				drawRect.left   = (FLOAT)x1;
+				drawRect.right  = (FLOAT)x2;
+				drawRect.top    = (FLOAT)y2;
+				drawRect.bottom = (FLOAT)widgetRect.bottom;
+				brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::BottomCenter);
+				if(brush) {
+					D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
+					if(!borderImageRO->repeatX)
+						matrix = D2D1::Matrix3x2F::Scale(scaleX,1.0f) * matrix;
+					brush->SetTransform(matrix);
+					rt->FillRectangle(drawRect,brush);
+				}
+			}
+		}
 	}
 } // namespace MetalBone
 

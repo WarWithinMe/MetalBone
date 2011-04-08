@@ -7,9 +7,9 @@
 #include <windows.h>
 #include <tchar.h>
 
-#include "test/test_slot.cpp"
-#include "test/test_widget.cpp"
-#include "test/test_stylesheet.cpp"
+// #include "test/test_slot.cpp"
+// #include "test/test_widget.cpp"
+// #include "test/test_stylesheet.cpp"
 
 #ifdef MSVC
 int WINAPI _tWinMain(HINSTANCE,HINSTANCE,PTSTR,int)
@@ -20,6 +20,18 @@ int main(int argc,char** argv)
 //	testDisplay();
 //	testWidgetclose();
 //	test_resource();
-	testCSSBackgroundRenderObject();
+//	testCSSBackgroundRenderObject();
+//	
+
+	// std::wstring css = L"#MainWindow{background:url(test.jpg) 30 20 20 30 no-repeat right center padding;padding:150;}";
+	std::wstring css = L"#MainWindow{border-image:url(testBorderImage.jpg) 10 stretch stretch;}";
+	MApplication app;
+	app.setStyleSheet(css);
+	MWidget* mainWindow = new MWidget();
+	mainWindow->setObjectName(L"MainWindow");
+	mainWindow->resize(400,380);
+	mainWindow->show();
+	mainWindow->setAttributes(WA_DeleteOnClose);
+	app.exec();
 	return 0;
 }

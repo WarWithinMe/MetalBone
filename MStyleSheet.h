@@ -41,7 +41,7 @@ namespace MetalBone
 		enum PropertyType {
 			PT_InheritBackground,
 			PT_Background,             PT_BackgroundClip,             PT_BackgroundRepeat,
-			PT_BackgroundPosition,     PT_BackgroundAlignment,
+			PT_BackgroundPosition,     PT_BackgroundSize,             PT_BackgroundAlignment,
 
 			PT_BorderImage,
 
@@ -122,6 +122,8 @@ namespace MetalBone
 		{
 			virtual ~BorderRenderObject() {}
 			virtual void draw() {}
+			virtual ID2D1Geometry* getGeometry() { return NULL; }
+			virtual void getBorderWidth(RECT&){}
 		};
 
 		struct GeometryData
@@ -139,17 +141,20 @@ namespace MetalBone
 
 		struct RenderRuleData
 		{
-			RenderRuleData():refCount(1),opaqueBackground(true),
-					animated(false),geoData(0),
+			RenderRuleData():refCount(1),opaqueBackground(false),
+					animated(false),hasMargin(false),
+					hasPadding(false),geoData(0),
 					borderImageRO(0),borderRO(0)
 			{
 				memset(&margin, 0,sizeof(D2D_RECT_U));
 				memset(&padding,0,sizeof(D2D_RECT_U));
 			}
-			// TODO: ~RenderRuleData(){ /*Clean up resources.*/ }
+			~RenderRuleData();
 			int  refCount;
 			bool opaqueBackground;
 			bool animated; // Remark: We need to know whether the background is GIF animated image.
+			bool hasMargin;
+			bool hasPadding;
 
 			std::vector<BackgroundRenderObject*> backgroundROs;
 			BorderImageRenderObject* borderImageRO;
@@ -158,6 +163,9 @@ namespace MetalBone
 
 			// Return true if we changed the widget's size
 			bool setGeometry(MWidget*);
+			void draw(MWidget* w, int x, int y, const RECT& rect);
+			void drawBackgrounds(ID2D1RenderTarget*,const RECT& widgetRectInWnd, const RECT& clipRectInWnd);
+			void drawBorderImage(ID2D1RenderTarget*,const RECT& widgetRectInWnd, const RECT& clipRectInWnd);
 
 			D2D_RECT_U margin;
 			D2D_RECT_U padding;
@@ -185,14 +193,9 @@ namespace MetalBone
 				}
 
 				RenderRule& operator=(const RenderRule& other);
-				bool isValid() const { return data != 0; }
-				bool opaqueBackground() const { return data->opaqueBackground; }
-				bool setGeometry(MWidget* w) { return data->setGeometry(w); }
-
-				// TODO: Implement draw();
-				void draw(MWidget* w) {
-					w;
-				}
+				inline bool isValid() const { return data != 0; }
+				inline bool opaqueBackground() const { return data->opaqueBackground; }
+				inline bool setGeometry(MWidget* w) { return data->setGeometry(w); }
 			private:
 				void init() { data = new RenderRuleData(); }
 				RenderRuleData* operator->() { return data; }
@@ -217,13 +220,14 @@ namespace MetalBone
 			// One should call polish first if there's no StyleRules(cached)
 			// for a widget.
 			void polish(MWidget* w);
-			inline void draw(MWidget* w, unsigned int pseudo = 0);
+			inline void draw(MWidget* w, int xPosInWnd, int yPosInWnd, 
+						    const RECT& clipRectInWnd, unsigned int p = CSS::PC_Default);
 
 			// Remove every stylesheet resource cached for MWidget w;
 			inline void removeCache(MWidget*);
 
-
-// TODO: void recreateResources();
+// TODO: Implement recreateResource
+void recreateResources(MWidget*) {}
 
 
 		private:
@@ -265,17 +269,17 @@ namespace MetalBone
 
 			ID2D1Bitmap**                 createD2D1Bitmap     (const std::wstring&, bool& isOpaque);
 			ID2D1SolidColorBrush**        createD2D1SolidBrush (CSS::CssValue&);
-			CSS::BackgroundRenderObject*  createBackgroundRO   (bool& isOpaqueBG);
+			CSS::BackgroundRenderObject*  createBackgroundRO   (unsigned int& opaqueType);
 			CSS::BorderImageRenderObject* createBorderImageRO  (bool& isOpaqueBG);
 
 			typedef std::multimap<CSS::PropertyType,CSS::Declaration*> DeclMap;
-			void setSimpleBorederRO(CSS::SimpleBorderRenderObject*, DeclMap::iterator&, DeclMap::iterator);
+			void setSimpleBorederRO(CSS::SimpleBorderRenderObject*,  DeclMap::iterator&, DeclMap::iterator);
 			void setComplexBorderRO(CSS::ComplexBorderRenderObject*, DeclMap::iterator&, DeclMap::iterator);
 
 			// We save the working renderTarget and declaration here,
 			// so we don't have to pass it around functions.
-			ID2D1RenderTarget*	workingRenderTarget;
-			CSS::Declaration*	workingDeclaration;
+			ID2D1DCRenderTarget* workingRenderTarget;
+			CSS::Declaration*    workingDeclaration;
 
 			void removeResources();
 #ifdef MB_DEBUG
@@ -286,7 +290,12 @@ namespace MetalBone
 
 
 
-	inline void MStyleSheetStyle::draw(MWidget* w,unsigned int p) { getRenderRule(w,p).draw(w); }
+	inline void MStyleSheetStyle::draw(MWidget* w, int x, int y, const RECT& r, unsigned int p)
+	{
+		CSS::RenderRule rule = getRenderRule(w,p);
+		if(rule.isValid())
+			rule->draw(w,x,y,r); 
+	}
 	inline void MStyleSheetStyle::removeCache(MWidget* w)
 	{
 		// We just have to remove from these two cache, without touching

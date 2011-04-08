@@ -1,7 +1,8 @@
+#include "MWidget.h"
 #include "MApplication.h"
 #include "MStyleSheet.h"
-#include "MWidget.h"
 #include "MEvent.h"
+
 #include <list>
 #include <set>
 #include <tchar.h>
@@ -25,11 +26,11 @@ namespace MetalBone
 		MWidget* findWidgetByHandle(HWND handle) const;
 		void removeTopLevelWindows(MWidget*);
 
-		bool				quitOnLastWindowClosed;
-		HINSTANCE			appHandle;
-		MStyleSheetStyle		ssstyle;
-		ID2D1Factory*		d2d1Factory;
-		IWICImagingFactory*	wicFactory;
+		bool                quitOnLastWindowClosed;
+		HINSTANCE           appHandle;
+		MStyleSheetStyle    ssstyle;
+		ID2D1Factory*       d2d1Factory;
+		IWICImagingFactory* wicFactory;
 
 		static MApplication::WinProc customWndProc;
 		static MApplicationData* instance;
@@ -37,11 +38,7 @@ namespace MetalBone
 
 	MApplication::WinProc MApplicationData::customWndProc = 0;
 	MApplicationData* MApplicationData::instance = 0;
-	MApplicationData::MApplicationData()
-		: quitOnLastWindowClosed(true)
-	{
-		instance = this;
-	}
+	MApplicationData::MApplicationData() : quitOnLastWindowClosed(true) { instance = this; }
 
 	MWidget* MApplicationData::findWidgetByHandle(HWND handle) const
 	{
@@ -49,7 +46,7 @@ namespace MetalBone
 		std::set<MWidget*>::const_iterator iterEnd = topLevelWindows.end();
 		while(iter != iterEnd)
 		{
-			MWidget* w = (*iter);
+			MWidget* w = *iter;
 			if(w->windowHandle() == handle)
 				return w;
 			++iter;
@@ -57,44 +54,9 @@ namespace MetalBone
 		return 0;
 	}
 
-	LRESULT MApplicationData::windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
-	{
-		if(customWndProc)
-		{
-			LRESULT result;
-			if(customWndProc(hwnd,msg,wparam,lparam,&result))
-				return result;
-		}
-
-		switch(msg)
-		{
-			case WM_CLOSE:
-			{
-				MWidget* window = instance->findWidgetByHandle(hwnd);
-				M_ASSERT(window != 0);
-				MEvent closeEvent;
-				window->closeEvent(&closeEvent);
-				if(closeEvent.isAccepted())
-				{
-					if(window->testAttributes(WA_DeleteOnClose))
-						delete window;
-					else
-						window->hide();
-				}
-				break;
-			}
-			default:
-				return DefWindowProcW(hwnd,msg,wparam,lparam);
-		}
-
-		return 0;
-	}
-
 	void MApplicationData::removeTopLevelWindows(MWidget* w)
 	{
 		topLevelWindows.erase(w);
-		if(topLevelWindows.size() == 0 && quitOnLastWindowClosed)
-			mApp->exit(0);
 	}
 
 	MApplication* MApplication::s_instance = 0;
@@ -112,16 +74,17 @@ namespace MetalBone
 		setupRegisterClass(wc);
 		RegisterClassW(&wc);
 
-		CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+		HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+		M_ASSERT_X(SUCCEEDED(hr), "Cannot initialize COM!", "MApplicationData()");
+
 #ifdef MB_DEBUG_D2D
 		D2D1_FACTORY_OPTIONS opts;
 		opts.debugLevel = D2D1_DEBUG_LEVEL_WARNING;
-		HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, opts, &(mImpl->d2d1Factory));
-		M_ASSERT_X(SUCCEEDED(hr), "Cannot create D2D1Factory. This is a fatal problem.", "MApplicationData()");
+		hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, opts, &(mImpl->d2d1Factory));
 #else
-		HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &(mImpl->d2d1Factory));
-		M_ASSERT_X(SUCCEEDED(hr), "Cannot create D2D1Factory. This is a fatal problem.", "MApplicationData()");
+		hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &(mImpl->d2d1Factory));
 #endif
+		M_ASSERT_X(SUCCEEDED(hr), "Cannot create D2D1Factory. This is a fatal problem.", "MApplicationData()");
 		
 		hr = CoCreateInstance(CLSID_WICImagingFactory,NULL,
 							  CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&(mImpl->wicFactory)));
@@ -149,7 +112,6 @@ namespace MetalBone
 	void MApplication::setStyleSheet(const std::wstring& css)
 	{
 		mImpl->ssstyle.setAppSS(css);
-		// TODO: Repolish
 	}
 
 	void MApplication::setupRegisterClass(WNDCLASS& wc)
@@ -208,7 +170,52 @@ namespace MetalBone
 		return result;
 	}
 
+	LRESULT MApplicationData::windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+	{
+		if(customWndProc)
+		{
+			LRESULT result;
+			if(customWndProc(hwnd,msg,wparam,lparam,&result))
+				return result;
+		}
 
+		switch(msg)
+		{
+			case WM_CLOSE:
+			{
+				MWidget* window = instance->findWidgetByHandle(hwnd);
+				M_ASSERT(window != 0);
+				MEvent closeEvent;
+				window->closeEvent(&closeEvent);
+				if(closeEvent.isAccepted()) {
+					if(window->testAttributes(WA_DeleteOnClose))
+						delete window;
+					else
+						window->hide();
+				}
+			}
+				break;
+			case WM_PAINT:
+			{
+				MWidget* window = instance->findWidgetByHandle(hwnd);
+				M_ASSERT(window != 0);
+				PAINTSTRUCT ps;
+				HDC dc = BeginPaint(hwnd,&ps);
+				window->drawWindow(ps);
+				EndPaint(hwnd,&ps);
+			}
+				break;
+			case WM_DESTROY:
+				// Check if the user wants to quit when the last window is closed.
+				if(instance->topLevelWindows.size() == 0 && instance->quitOnLastWindowClosed)
+					mApp->exit(0);
+				break;
+			default:
+				return DefWindowProcW(hwnd,msg,wparam,lparam);
+		}
+
+		return 0;
+	}
 
 
 
@@ -475,6 +482,21 @@ namespace MetalBone
 		m_winHandle = NULL;
 	}
 
+	void MWidget::createRenderTarget()
+	{
+		SafeRelease(m_renderTarget);
+		// Create renderTarget for this window.
+		D2D1_RENDER_TARGET_PROPERTIES p = D2D1::RenderTargetProperties();
+		D2D1_SIZE_U s;
+		s.width  = width;
+		s.height = height;
+		p.usage  = D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE;
+		p.type   = D2D1_RENDER_TARGET_TYPE_HARDWARE;
+		p.pixelFormat.format    = DXGI_FORMAT_B8G8R8A8_UNORM;
+		p.pixelFormat.alphaMode = D2D1_ALPHA_MODE_PREMULTIPLIED;
+		mApp->getD2D1Factory()->CreateDCRenderTarget(&p,&m_renderTarget);
+	}
+
 	void MWidget::show()
 	{
 		// If this has window handle (i.e. WF_Window or parentless shown WF_Widget )
@@ -515,28 +537,15 @@ namespace MetalBone
 					parentHandle,NULL,
 					mApp->getAppHandle(), NULL);
 
+				MApplicationData::instance->topLevelWindows.insert(this);
 				setTopLevelParentRecursively(this);
 
-				ShowWindow(m_winHandle,SW_SHOW);
-				UpdateWindow(m_winHandle);
-				if(m_windowFlags & WF_AlwaysOnBottom)
-					SetWindowPos(m_winHandle,HWND_BOTTOM,0,0,0,0,SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED);
-
-				MApplicationData::instance->topLevelWindows.insert(this);
-
-				// Create renderTarget for this window.
-				D2D1_RENDER_TARGET_PROPERTIES p = D2D1::RenderTargetProperties();
-				D2D1_SIZE_U s;
-				s.width = width;
-				s.height = height;
-				p.usage = D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE;
-				mApp->getD2D1Factory()->CreateHwndRenderTarget(&p,
-					&(D2D1::HwndRenderTargetProperties(m_winHandle, s)),
-					&m_renderTarget);
+				createRenderTarget();
 			}
 		}
 
-		// We have to create the window first if necessary before polishing stylesheet 
+		// We have to create the window first (if necessary) before polishing stylesheet
+		// Remark: If the StyleSheet sets the geometry of the window, problems might occur ?
 		if(!(m_widgetState & MWS_POLISHED))
 			mApp->getStyleSheet()->polish(this);
 
@@ -546,6 +555,12 @@ namespace MetalBone
 
 		if(m_winHandle == NULL)
 			m_parent->repaint(x,y,width,height);
+		else {
+			ShowWindow(m_winHandle,SW_SHOW);
+			UpdateWindow(m_winHandle);
+			if(m_windowFlags & WF_AlwaysOnBottom)
+				SetWindowPos(m_winHandle,HWND_BOTTOM,0,0,0,0,SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED);
+		}
 	}
 
 	void MWidget::hide()
@@ -558,6 +573,11 @@ namespace MetalBone
 		else {
 			m_parent->repaint(x,y,width,height);
 		}
+	}
+
+	void MWidget::setStyleSheet(const std::wstring& css)
+	{
+		mApp->getStyleSheet()->setWidgetSS(this,css);
 	}
 
 	MWidget::MWidget(MWidget* parent)
@@ -581,14 +601,8 @@ namespace MetalBone
 
 	MWidget::~MWidget()
 	{
-		if(m_parent == 0)
-		{
-			if(m_winHandle != NULL)
-			{
-				DestroyWindow(m_winHandle);
-				MApplicationData::instance->removeTopLevelWindows(this);
-			}
-		}else
+		HWND winHandle = m_parent == 0 ? m_winHandle : NULL;
+		if(m_parent != 0)
 			setParent(0);
 
 		mApp->getStyleSheet()->setWidgetSS(this,std::wstring());
@@ -600,6 +614,12 @@ namespace MetalBone
 		{
 			delete (*iter);
 			++iter;
+		}
+
+		if(winHandle != NULL)
+		{
+			MApplicationData::instance->removeTopLevelWindows(this);
+			DestroyWindow(winHandle);
 		}
 	}
 
@@ -648,6 +668,14 @@ namespace MetalBone
 		}
 	}
 
+	bool MWidget::isOpaqueDrawing() const
+	{
+		if((m_attributes & WA_OpaqueBackground) == 0)
+			return false;
+
+		return (m_widgetState & MWS_OpaqueBG) != 0;
+	}
+
 	void MWidget::repaint(int x, int y, unsigned int width, unsigned int height)
 	{
 		if(isHidden())
@@ -665,5 +693,86 @@ namespace MetalBone
 			return;
 
 		InvalidateRect(m_winHandle,&rect,true);
+	}
+
+	void MWidget::drawWindow(PAINTSTRUCT& ps)
+	{
+		M_ASSERT(isWindow());
+		int retryTimes = 3;
+		HRESULT result;
+		HDC dc = ps.hdc;
+
+		do {
+			RECT rect;
+			GetClientRect(m_winHandle,&rect);
+			m_renderTarget->BindDC(dc,&rect);
+			m_renderTarget->BeginDraw();
+
+			rect = ps.rcPaint;
+
+			std::list<MWidget*>::reverse_iterator childIter = m_children.rbegin();
+			std::list<MWidget*>::reverse_iterator childIterEnd = m_children.rend();
+			std::list<MWidget*> nonOpaqueChildren;
+			while(childIter != childIterEnd)
+			{
+				// We start with the topmost child, if we found a child is opaque,
+				// we immediately draw it, and exclude it from the region.
+				MWidget* child = *childIter;
+				if(!child->isHidden()) {
+					if(child->isOpaqueDrawing())
+					{
+						RECT drawRect = {child->x, child->y, child->width + child->x, child->height + child->y};
+						if(RectVisible(dc,&drawRect))
+						{
+							RECT intersect;
+							IntersectRect(&intersect,&drawRect,&rect);
+							child->draw(intersect);
+							if(ExcludeClipRect(dc, drawRect.left, drawRect.top,
+										drawRect.right,drawRect.bottom) == NULLREGION) { break; }
+						}
+					} else {
+						nonOpaqueChildren.push_back(child);
+					}
+				}
+				++childIter;
+			}
+
+			// We draw the window itself
+			mApp->getStyleSheet()->draw(this,0,0,rect);
+
+			// Now we draw the non-opaque children.
+			childIter = nonOpaqueChildren.rbegin();
+			childIterEnd = nonOpaqueChildren.rend();
+			while(childIter != childIterEnd)
+			{
+				MWidget* child = *childIter;
+				RECT drawRect = {child->x, child->y, child->width + child->x, child->height + child->y};
+				if(RectVisible(dc,&drawRect))
+				{
+					RECT intersect;
+					IntersectRect(&intersect,&drawRect,&rect);
+					child->draw(intersect);
+					if(ExcludeClipRect(dc, drawRect.left, drawRect.top,
+						drawRect.right,drawRect.bottom) == NULLREGION) { break; }
+				}
+				(*childIter)->draw(drawRect);
+				++childIter;
+			}
+			MPaintEvent p;
+			p.setUpdateRect(&rect);
+			paintEvent(&p);
+
+			result = m_renderTarget->EndDraw();
+			if(result == D2DERR_RECREATE_TARGET)
+			{
+				createRenderTarget();
+				mApp->getStyleSheet()->recreateResources(this);
+			}
+		}while(FAILED(result) && (--retryTimes > 0));
+	}
+
+	void MWidget::draw(RECT& rect)
+	{
+
 	}
 }
