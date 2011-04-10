@@ -116,15 +116,26 @@ namespace MetalBone
 
 		struct BackgroundRenderObject;
 		struct BorderImageRenderObject;
-		struct SimpleBorderRenderObject;
-		struct ComplexBorderRenderObject;
+		// I have removed some interfaces of BorderRenderObject,
+		// because some only works for Simple~
+		// some only works for Complex~
+		// Maybe the BorderRenderObject is a bad design.
+		// But for now, I don't have another idea.
 		struct BorderRenderObject
 		{
+			enum ROType {
+				SimpleBorder,
+				RadiusBorder,
+				ComplexBorder
+			};
+
+			ROType type;
 			virtual ~BorderRenderObject() {}
-			virtual void draw() {}
-			virtual ID2D1Geometry* getGeometry() { return NULL; }
-			virtual void getBorderWidth(RECT&){}
+			virtual void getBorderWidth(RECT&) = 0;
+			virtual bool isVisible() = 0;
 		};
+		struct SimpleBorderRenderObject;
+		struct ComplexBorderRenderObject;
 
 		struct GeometryData
 		{
@@ -161,14 +172,15 @@ namespace MetalBone
 			BorderRenderObject* borderRO;
 			GeometryData* geoData;
 
+			D2D_RECT_U margin;
+			D2D_RECT_U padding;
+
 			// Return true if we changed the widget's size
 			bool setGeometry(MWidget*);
 			void draw(MWidget* w, int x, int y, const RECT& rect);
-			void drawBackgrounds(ID2D1RenderTarget*,const RECT& widgetRectInWnd, const RECT& clipRectInWnd);
+			void drawBackgrounds(ID2D1RenderTarget*,ID2D1Geometry*,const RECT& widgetRectInWnd, const RECT& clipRectInWnd);
 			void drawBorderImage(ID2D1RenderTarget*,const RECT& widgetRectInWnd, const RECT& clipRectInWnd);
-
-			D2D_RECT_U margin;
-			D2D_RECT_U padding;
+			void drawBorder(ID2D1RenderTarget*,const RECT& widgetRectInWnd, const RECT& clipRectInWnd);
 		};
 		struct RenderRuleCacheKey
 		{

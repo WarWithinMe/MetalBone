@@ -745,7 +745,6 @@ namespace MetalBone
 				{
 					Declaration* d = new Declaration();
 					d->property = static_cast<PropertyType>(crItem->value);
-					sr->declarations.push_back(d);
 
 					++pos;
 					skipWhiteSpace();
@@ -778,6 +777,13 @@ namespace MetalBone
 						}else
 							++pos;
 					}
+					// If we don't have valid values for the declaration.
+					// We delete the declaration.
+					if(d->values.empty())
+						delete d;
+					else
+						sr->declarations.push_back(d);
+						
 				} else {
 					while(pos < cssLength) // Unknown Property, Skip to Next.
 					{
@@ -926,21 +932,27 @@ namespace MetalBone
 						value.data.vint = _wtoi(buffer.c_str());
 						values.push_back(value);
 						buffer.clear();
-					}else if(iswdigit(buffer.at(0)) || buffer.at(0) == L'-') // Number
+					} else if(iswdigit(buffer.at(0)) || buffer.at(0) == L'-') // Number
 					{
 						value = CssValue();
 						value.type = CssValue::Number;
 						value.data.vint = _wtoi(buffer.c_str());
 						values.push_back(value);
 						buffer.clear();
-					}else // Identifier
+					} else // Identifier
 					{
 						const CSSValuePair* crItem = findCSSValue(buffer,knownValues,KnownValueCount - 1);
 						if(crItem != 0)
 						{
 							value = CssValue();
-							value.type = CssValue::Identifier;
-							value.data.vuint = crItem->value;
+							if(crItem->value == Value_Transparent)
+							{
+								value.type = CssValue::Color;
+								value.data.vuint = 0;
+							} else {
+								value.type = CssValue::Identifier;
+								value.data.vuint = crItem->value;
+							}
 							values.push_back(value);
 							buffer.clear();
 						}
@@ -1364,27 +1376,183 @@ namespace MetalBone
 
 		struct SimpleBorderRenderObject : public BorderRenderObject
 		{
-			SimpleBorderRenderObject():width(0),style(Value_Solid),solidBrush(0){}
+			SimpleBorderRenderObject():width(0),style(Value_Solid),solidBrush(0),rectGeo(0)
+			{ type = SimpleBorder; }
 			int width;
 			unsigned int style;
 			ID2D1SolidColorBrush** solidBrush;
+			ID2D1RectangleGeometry* rectGeo;
+
+			void getBorderWidth(RECT& rect)
+			{ rect.left = rect.right = rect.bottom = rect.top = width; }
+
+			bool isVisible() { return *solidBrush != 0 && width != 0; }
+			ID2D1Brush* getBrush() { return *solidBrush; }
+			int getWidth() { return width; }
 		};
 		struct RadiusBorderRenderObject : public SimpleBorderRenderObject
 		{
-			RadiusBorderRenderObject():radius(0){}
+			RadiusBorderRenderObject():radius(0){ type = RadiusBorder; }
 			int radius;
 		};
 		struct ComplexBorderRenderObject : public BorderRenderObject
 		{
-			D2D_RECT_U styles;
-			D2D_RECT_U widths;
+			D2D1_RECT_U styles;
+			D2D1_RECT_U widths;
 			int radiuses[4]; // TL, TR, BL, BR
 			ID2D1SolidColorBrush** brushes[4]; // T, R, B, L
 			ComplexBorderRenderObject() {
+				type = ComplexBorder;
 				styles.left = styles.top = styles.right = styles.bottom = Value_Solid;
-				memset(&widths,0,sizeof(D2D_RECT_U));
-				memset(&radiuses,0,4 * sizeof(int));
-				memset(brushes,0,4 * sizeof(ID2D1SolidColorBrush**));
+				memset(&widths  , 0, sizeof(RECT));
+				memset(&radiuses, 0, 4 * sizeof(int));
+				memset(brushes  , 0, 4 * sizeof(ID2D1SolidColorBrush**));
+			}
+
+			void getBorderWidth(RECT& rect)
+			{
+				rect.left   = widths.left;
+				rect.right  = widths.right;
+				rect.bottom = widths.bottom;
+				rect.top    = widths.top;
+			}
+
+			bool isVisible() {
+				if(brushes[0] == 0 || *(brushes[0]) == 0)
+					return false;
+				if(widths.left == 0 && widths.right == 0 && widths.top == 0 && widths.bottom == 0)
+					return false;
+				return true;
+			}
+
+			ID2D1Geometry* createGeometry(const D2D1_RECT_F& rect)
+			{
+				ID2D1GeometrySink* sink;
+				ID2D1PathGeometry* pathGeo;
+				mApp->getD2D1Factory()->CreatePathGeometry(&pathGeo);
+				pathGeo->Open(&sink);
+				sink->BeginFigure(D2D1::Point2F(rect.left + radiuses[0],rect.top),D2D1_FIGURE_BEGIN_FILLED);
+				sink->AddLine(D2D1::Point2F(rect.right - radiuses[1],rect.top));
+				if(radiuses[1] != 0)
+					sink->AddArc(D2D1::ArcSegment(
+								D2D1::Point2F(rect.right,rect.top + radiuses[1]),
+								D2D1::SizeF((FLOAT)radiuses[1],(FLOAT)radiuses[1]),
+								0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+				sink->AddLine(D2D1::Point2F(rect.right,rect.bottom - radiuses[2]));
+				if(radiuses[2] != 0)
+					sink->AddArc(D2D1::ArcSegment(
+								D2D1::Point2F(rect.right - radiuses[2],rect.bottom),
+								D2D1::SizeF((FLOAT)radiuses[2],(FLOAT)radiuses[2]),
+								0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+				sink->AddLine(D2D1::Point2F(rect.left + radiuses[3],rect.bottom));
+				if(radiuses[3] != 0)
+					sink->AddArc(D2D1::ArcSegment(
+								D2D1::Point2F(rect.left,rect.bottom - radiuses[3]),
+								D2D1::SizeF((FLOAT)radiuses[3],(FLOAT)radiuses[3]),
+								0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+				sink->AddLine(D2D1::Point2F(rect.left, rect.top + radiuses[0]));
+				if(radiuses[0] != 0)
+					sink->AddArc(D2D1::ArcSegment(
+								D2D1::Point2F(rect.left + radiuses[0],rect.top),
+								D2D1::SizeF((FLOAT)radiuses[0],(FLOAT)radiuses[0]),
+								0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+				sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+				sink->Close();
+				SafeRelease(sink);
+				return pathGeo; 
+			}
+			
+			void draw(ID2D1RenderTarget* rt,ID2D1Geometry* geo,const D2D1_RECT_F& rect)
+			{
+				if(widths.left == widths.right && widths.right == widths.top && widths.top == widths.bottom &&
+					brushes[0] == brushes[1] && brushes[1] == brushes[2] && brushes[2] == brushes[3])
+				{
+					rt->DrawGeometry(geo,*(brushes[0]),(FLOAT)widths.left);
+				} else {
+					if(widths.top > 0) {
+						if(radiuses[0] != 0 || radiuses[1] != 0)
+						{
+							ID2D1PathGeometry* pathGeo;
+							mApp->getD2D1Factory()->CreatePathGeometry(&pathGeo);
+							ID2D1GeometrySink* sink;
+							pathGeo->Open(&sink);
+							if(radiuses[0] != 0) {
+								sink->BeginFigure(D2D1::Point2F(rect.left, rect.top + radiuses[0]),D2D1_FIGURE_BEGIN_FILLED);
+								sink->AddArc(D2D1::ArcSegment(
+									D2D1::Point2F(rect.left + radiuses[0],rect.top),
+									D2D1::SizeF((FLOAT)radiuses[0],(FLOAT)radiuses[0]),
+									0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+							} else {
+								sink->BeginFigure(D2D1::Point2F(rect.left,rect.top),D2D1_FIGURE_BEGIN_FILLED);
+							}
+
+							if(radiuses[1] != 0) {
+								sink->AddLine(D2D1::Point2F(rect.right - radiuses[1],rect.top));
+								sink->AddArc(D2D1::ArcSegment(
+									D2D1::Point2F(rect.right,rect.top + radiuses[1]),
+									D2D1::SizeF((FLOAT)radiuses[1],(FLOAT)radiuses[1]),
+									0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+							} else {
+								sink->AddLine(D2D1::Point2F(rect.right,rect.top));
+							}
+							sink->EndFigure(D2D1_FIGURE_END_OPEN);
+							sink->Close();
+							rt->DrawGeometry(pathGeo,*(brushes[0]),(FLOAT)widths.top);
+							SafeRelease(sink);
+							SafeRelease(pathGeo);
+						} else {
+							rt->DrawLine(D2D1::Point2F(rect.left,rect.top),
+								D2D1::Point2F(rect.right,rect.top),*(brushes[0]),(FLOAT)widths.top);
+						}
+					}
+					
+					if(widths.right > 0)
+						rt->DrawLine(D2D1::Point2F(rect.right,rect.top+radiuses[1]),
+									D2D1::Point2F(rect.right,rect.bottom - radiuses[2]),
+									*(brushes[1]),(FLOAT)widths.right);
+
+					if(widths.bottom > 0) {
+						if(radiuses[2] != 0 || radiuses[3] != 0)
+						{
+							ID2D1PathGeometry* pathGeo;
+							mApp->getD2D1Factory()->CreatePathGeometry(&pathGeo);
+							ID2D1GeometrySink* sink;
+							pathGeo->Open(&sink);
+							if(radiuses[2] != 0) {
+								sink->BeginFigure(D2D1::Point2F(rect.right, rect.bottom - radiuses[2]),D2D1_FIGURE_BEGIN_FILLED);
+								sink->AddArc(D2D1::ArcSegment(
+									D2D1::Point2F(rect.right - radiuses[2],rect.bottom),
+									D2D1::SizeF((FLOAT)radiuses[2],(FLOAT)radiuses[2]),
+									0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+							} else {
+								sink->BeginFigure(D2D1::Point2F(rect.right,rect.bottom),D2D1_FIGURE_BEGIN_FILLED);
+							}
+
+							if(radiuses[3] != 0) {
+								sink->AddLine(D2D1::Point2F(rect.left + radiuses[3],rect.bottom));
+								sink->AddArc(D2D1::ArcSegment(
+									D2D1::Point2F(rect.left,rect.bottom - radiuses[3]),
+									D2D1::SizeF((FLOAT)radiuses[3],(FLOAT)radiuses[3]),
+									0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+							} else {
+								sink->AddLine(D2D1::Point2F(rect.left,rect.bottom));
+							}
+							sink->EndFigure(D2D1_FIGURE_END_OPEN);
+							sink->Close();
+							rt->DrawGeometry(pathGeo,*(brushes[3]),(FLOAT)widths.bottom);
+							SafeRelease(sink);
+							SafeRelease(pathGeo);
+						} else {
+							rt->DrawLine(D2D1::Point2F(rect.right,rect.bottom),
+								D2D1::Point2F(rect.left,rect.bottom),*(brushes[3]),(FLOAT)widths.bottom);
+						}
+					}
+
+					if(widths.left > 0)
+						rt->DrawLine(D2D1::Point2F(rect.left,rect.bottom-radiuses[3]),
+									D2D1::Point2F(rect.left,rect.top-radiuses[0]),
+									*(brushes[3]),(FLOAT)widths.left);
+				}
 			}
 		};
 	} // namespace CSS
@@ -1549,7 +1717,7 @@ namespace MetalBone
 		{
 			newObject->brushType = SolidBrush;
 			newObject->brush.solidBrush = createD2D1SolidBrush(brushValue);
-		} else {
+		} else if(brushValue.type == CssValue::Uri) {
 			newObject->brushType = BitmapBrush;
 			newObject->brush.bitmap = createD2D1Bitmap(*(brushValue.data.vstring),opaqueBrush);
 		}
@@ -1666,9 +1834,15 @@ namespace MetalBone
 				for(unsigned int i = 0; i < values.size(); ++i) {
 					CssValue& v = values.at(i);
 					switch(v.type) {
-						case CssValue::Color:	colorValue = v; break;
-						case CssValue::Identifier:	obj->style = v.data.vuint; break;
-						default: obj->width = v.data.vint; break;
+						case CssValue::Identifier:	
+							obj->style = v.data.vuint;
+							break;
+						case CssValue::Color:
+							colorValue = v;
+							break;
+						default:
+							obj->width = v.data.vint;
+							break;
 					}
 				}
 			}
@@ -1755,7 +1929,7 @@ namespace MetalBone
 	void MStyleSheetStyle::setComplexBorderRO(ComplexBorderRenderObject* obj,
 			DeclMap::iterator& declIter, DeclMap::iterator declIterEnd)
 	{
-		while(declIter != declIterEnd && declIter->first < PT_Color)
+		while(declIter != declIterEnd && declIter->first <= PT_BorderRadius)
 		{
 			std::vector<CssValue>& values = declIter->second->values;
 			switch(declIter->first)
@@ -1768,14 +1942,14 @@ namespace MetalBone
 					{
 						if(index == values.size() || values.at(index).type != valueType)
 						{
-						switch(valueType) {
+							switch(valueType) {
 							case CssValue::Identifier:
 								setD2DRectValue(obj->styles,values,rangeStartIndex,index - 1);
 								break;
 							case CssValue::Color: {
 								int size = index - rangeStartIndex;
 								if(size == 4) {
-								 	obj->brushes[0] = createD2D1SolidBrush(values.at(rangeStartIndex  ));
+									obj->brushes[0] = createD2D1SolidBrush(values.at(rangeStartIndex  ));
 									obj->brushes[1] = createD2D1SolidBrush(values.at(rangeStartIndex+1));
 									obj->brushes[2] = createD2D1SolidBrush(values.at(rangeStartIndex+2));
 									obj->brushes[3] = createD2D1SolidBrush(values.at(rangeStartIndex+3));
@@ -1789,9 +1963,12 @@ namespace MetalBone
 									obj->brushes[3] = createD2D1SolidBrush(values.at(rangeStartIndex));
 								}
 							}
-								break;
+								 break;
 							default: setD2DRectValue(obj->widths,values,rangeStartIndex,index-1);
-						}
+							}
+							rangeStartIndex = index;
+							if(index < values.size())
+								valueType = values.at(index).type;
 						}
 						++index;
 					}
@@ -1828,9 +2005,9 @@ namespace MetalBone
 					{
 						if(values.at(i).type == CssValue::Color)
 							obj->brushes[index] = createD2D1SolidBrush(values.at(i));
-						else if(values.at(i).type == CssValue::Identifier)
-							setD2DRectValue(obj->styles,index,values.at(i).data.vuint);
-						else
+						else if(values.at(i).type == CssValue::Identifier) {
+							obj->brushes[index] = createD2D1SolidBrush(values.at(i));
+						}else
 							setD2DRectValue(obj->widths,index,values.at(i).data.vuint);
 					}
 				}
@@ -2127,7 +2304,7 @@ namespace MetalBone
 				setComplexBorderRO(obj, declIter, declIterEnd);
 			}
 
-			if(declIter == declIterEnd || ++declIter == declIterEnd)
+			if(declIter == declIterEnd)
 				goto END;
 		}
 
@@ -2231,9 +2408,7 @@ namespace MetalBone
 	RenderRuleData::~RenderRuleData()
 	{
 		for(int i = backgroundROs.size() -1; i >=0; --i)
-		{
 			delete backgroundROs.at(i);
-		}
 		delete borderImageRO;
 		delete borderRO;
 		delete geoData;
@@ -2266,18 +2441,67 @@ namespace MetalBone
 			return;
 
 		D2D1_SIZE_U widgetSize = w->size();
+		D2D1_SIZE_U tlpSize = w->windowWidget()->size();
 		RECT widgetRect = {xPosInWnd, yPosInWnd, xPosInWnd+widgetSize.width, yPosInWnd+widgetSize.height};
 
+		// TODO : move the layer stuff to some where in the upper calling stack.
+// 		bool needLayer = false;
+// 		needLayer = clipRectInWnd.left != 0 && clipRectInWnd.left > xPosInWnd;
+// 		if(!needLayer)
+// 			needLayer = clipRectInWnd.top   !=0 && clipRectInWnd.top > yPosInWnd;
+// 		if(!needLayer) 
+// 			needLayer = clipRectInWnd.right != tlpSize.width && clipRectInWnd.right < widgetRect.right;
+// 		if(!needLayer)
+// 			needLayer = clipRectInWnd.bottom != tlpSize.height && clipRectInWnd.bottom < widgetRect.bottom;
+// 		if(needLayer)
+
+
+		// We have to get the border geometry first if there's any.
+		// Because drawing the background may depends on the border geometry.
+		ID2D1Geometry* borderGeo = 0;
+		D2D1_RECT_F borderRect = {(FLOAT)xPosInWnd, (FLOAT)yPosInWnd,
+								FLOAT(xPosInWnd + widgetSize.width),
+								FLOAT(yPosInWnd + widgetSize.height)};
+		if(borderRO != 0) {
+			if(hasMargin) {
+				borderRect.left   += (FLOAT)margin.left;
+				borderRect.right  -= (FLOAT)margin.right;
+				borderRect.top    += (FLOAT)margin.top;
+				borderRect.bottom -= (FLOAT)margin.bottom;
+			}
+
+			if(borderRO->type == BorderRenderObject::ComplexBorder)
+				borderGeo = reinterpret_cast<ComplexBorderRenderObject*>(borderRO)->createGeometry(borderRect);
+		}
 		// === Draw Backgrounds ===
 		if(backgroundROs.size() > 0)
-			drawBackgrounds(rt, widgetRect, clipRectInWnd);
+			drawBackgrounds(rt, borderGeo, widgetRect, clipRectInWnd);
 
 		// === Draw BorderImage ===
 		if(borderImageRO != 0)
 			drawBorderImage(rt, widgetRect, clipRectInWnd);
+
+		// === Draw Border ===
+		if(borderRO != 0 && borderRO->isVisible())
+		{
+			if(borderRO->type == BorderRenderObject::SimpleBorder) {
+				SimpleBorderRenderObject* sbro = reinterpret_cast<SimpleBorderRenderObject*>(borderRO);
+				rt->DrawRectangle(borderRect,sbro->getBrush(),(FLOAT)sbro->width);
+			} else if(borderRO->type == BorderRenderObject::RadiusBorder) {
+				RadiusBorderRenderObject* rbro = reinterpret_cast<RadiusBorderRenderObject*>(borderRO);
+				D2D1_ROUNDED_RECT rrect;
+				rrect.rect = borderRect;
+				rrect.radiusX = rrect.radiusY = (FLOAT)rbro->radius;
+				rt->DrawRoundedRectangle(rrect,rbro->getBrush(),(FLOAT)rbro->width);
+			} else {
+				reinterpret_cast<ComplexBorderRenderObject*>(borderRO)->draw(rt, borderGeo, borderRect);
+			}
+		}
+		SafeRelease(borderGeo);
 	}
 
-	void RenderRuleData::drawBackgrounds(ID2D1RenderTarget* rt,const RECT& widgetRect, const RECT& clipRect)
+	void RenderRuleData::drawBackgrounds(ID2D1RenderTarget* rt,ID2D1Geometry* borderGeo,
+						const RECT& widgetRect, const RECT& clipRect)
 	{
 		for(unsigned int i = 0; i < backgroundROs.size(); ++i)
 		{
@@ -2295,10 +2519,7 @@ namespace MetalBone
 					contentRect.bottom -= margin.bottom;
 				}
 
-				if(bgro->clip == Value_Border) {
-					if(borderRO != 0)
-						bgGeo = borderRO->getGeometry();
-				} else {
+				if(bgro->clip != Value_Border) {
 					if(borderRO != 0) {
 						RECT borderWidth;
 						borderRO->getBorderWidth(borderWidth);
@@ -2323,56 +2544,55 @@ namespace MetalBone
 				brush = bgro->getBitmapBrush(rt);
 			else
 				brush = *(bgro->brush.solidBrush);
-			
-			if(bgGeo)
-			{
-				// TODO: Draw the background with clipping the border.
-			} else {
-				if(bgro->alignmentX != Value_Left) {
-					if(bgro->alignmentX == Value_Center)
-						contentRect.left = (contentRect.left + contentRect.right - bgro->width) / 2;
-					else
-						contentRect.left = contentRect.right - bgro->width;
-				}
-				if(bgro->alignmentY != Value_Top) {
-					if(bgro->alignmentY == Value_Center)
-						contentRect.top = (contentRect.top + contentRect.bottom - bgro->height) / 2;
-					else
-						contentRect.top = contentRect.bottom - bgro->height;
-				}
-				if(!bgro->repeatX) {
-					int r = contentRect.left + bgro->width;
-					if(contentRect.right > r)
-						contentRect.right  = r;
-				}
-				if(!bgro->repeatY) {
-					int b = contentRect.top + bgro->height;
-					if(contentRect.bottom > b)
-						contentRect.bottom = b;
-				}
 
-				dx += (int)contentRect.left;
-				dy += (int)contentRect.top;
-				if(dx != 0 || dy != 0)
-					brush->SetTransform(D2D1::Matrix3x2F::Translation((FLOAT)dx,(FLOAT)dy));
-
-				if(contentRect.left   < clipRect.left)
-					contentRect.left   = clipRect.left;
-				if(contentRect.top    < clipRect.top)
-					contentRect.top    = clipRect.top;
-				if(contentRect.right  > clipRect.right)
-					contentRect.right  = clipRect.right;
-				if(contentRect.bottom > clipRect.bottom)
-					contentRect.bottom = clipRect.bottom;
-
-				D2D1_RECT_F cr;
-				cr.left   = (FLOAT)contentRect.left;
-				cr.top    = (FLOAT)contentRect.top;
-				cr.right  = (FLOAT)contentRect.right;
-				cr.bottom = (FLOAT)contentRect.bottom;
-
-				rt->FillRectangle(cr,brush);
+			if(bgro->alignmentX != Value_Left) {
+				if(bgro->alignmentX == Value_Center)
+					contentRect.left = (contentRect.left + contentRect.right - bgro->width) / 2;
+				else
+					contentRect.left = contentRect.right - bgro->width;
 			}
+			if(bgro->alignmentY != Value_Top) {
+				if(bgro->alignmentY == Value_Center)
+					contentRect.top = (contentRect.top + contentRect.bottom - bgro->height) / 2;
+				else
+					contentRect.top = contentRect.bottom - bgro->height;
+			}
+			if(!bgro->repeatX) {
+				int r = contentRect.left + bgro->width;
+				if(contentRect.right > r)
+					contentRect.right  = r;
+			}
+			if(!bgro->repeatY) {
+				int b = contentRect.top + bgro->height;
+				if(contentRect.bottom > b)
+					contentRect.bottom = b;
+			}
+
+			dx += (int)contentRect.left;
+			dy += (int)contentRect.top;
+			if(dx != 0 || dy != 0)
+				brush->SetTransform(D2D1::Matrix3x2F::Translation((FLOAT)dx,(FLOAT)dy));
+
+			D2D1_RECT_F cr;
+			cr.left   = (FLOAT)contentRect.left;
+			cr.top    = (FLOAT)contentRect.top;
+			cr.right  = (FLOAT)contentRect.right;
+			cr.bottom = (FLOAT)contentRect.bottom;
+
+			if(bgro->clip == Value_Border && borderRO != 0) {
+				if(borderRO->type == BorderRenderObject::SimpleBorder) {
+					rt->FillRectangle(cr,brush);
+				} else if(borderRO->type == BorderRenderObject::RadiusBorder) {
+					D2D1_ROUNDED_RECT rrect;
+					rrect.rect = cr;
+					rrect.radiusX = 
+					rrect.radiusY = FLOAT(reinterpret_cast<RadiusBorderRenderObject*>(borderRO)->radius);
+					rt->FillRoundedRectangle(rrect,brush);
+				} else {
+					rt->FillGeometry(borderGeo,brush);
+				}
+			} else 
+				rt->FillRectangle(cr,brush);
 
 			if(dx != 0 || dy != 0)
 				brush->SetTransform(D2D1::Matrix3x2F::Identity());
@@ -2454,11 +2674,11 @@ namespace MetalBone
 		ID2D1BitmapRenderTarget* intermediateRT;
 		ID2D1Bitmap* portionBmp;
 		D2D1_RECT_F intermediateRect = {pbmpRect.left,pbmpRect.top,pbmpRect.right,pbmpRect.bottom};
-		HRESULT hr = rt->CreateCompatibleRenderTarget(D2D1::SizeF((unsigned int)pbmpSize.width,(unsigned int)pbmpSize.height),&intermediateRT);
+		HRESULT hr = rt->CreateCompatibleRenderTarget(D2D1::SizeF((FLOAT)pbmpSize.width,(FLOAT)pbmpSize.height),&intermediateRT);
 		if(SUCCEEDED(hr))
 		{
 			intermediateRT->BeginDraw();
-			intermediateRT->DrawBitmap(lastUsedBitmap,D2D1::RectF(0.f,0.f,pbmpSize.width,pbmpSize.height),
+			intermediateRT->DrawBitmap(lastUsedBitmap,D2D1::RectF(0.f,0.f,(FLOAT)pbmpSize.width,(FLOAT)pbmpSize.height),
 										1.0f,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,
 										pbmpRect);
 			intermediateRT->EndDraw();

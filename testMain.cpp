@@ -24,7 +24,7 @@ int main(int argc,char** argv)
 //	
 
 	// std::wstring css = L"#MainWindow{background:url(test.jpg) 30 20 20 30 no-repeat right center padding;padding:150;}";
-	std::wstring css = L"#MainWindow{border-image:url(testBorderImage.jpg) 10 stretch stretch;}";
+	std::wstring css = L"#MainWindow{background:url(testBg.jpg) border;margin:10px;border: 4px solid #000000;border-radius:5 10 0 15;}";
 	MApplication app;
 	app.setStyleSheet(css);
 	MWidget* mainWindow = new MWidget();
