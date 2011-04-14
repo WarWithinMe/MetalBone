@@ -1,7 +1,6 @@
 #ifndef GUI_MWIDGET_H
 #define GUI_MWIDGET_H
 #include "MBGlobal.h"
-#include "MStyleSheet.h"
 
 #include <string>
 #include <d2d1.h>
@@ -25,10 +24,12 @@ namespace MetalBone
 		WF_Border           = 0x2000,
 		WF_ThinBorder       = 0x4000,
 
-		WF_AlwaysOnTop      = 0x10000,
-		WF_AlwaysOnBottom   = 0x20000,
+		WF_AllowTransparency= 0x10000,// This will create a window with style WS_EX_LAYERED.
 
-		WF_DontShowOnTaskbar= 0x40000
+		WF_AlwaysOnTop      = 0x20000,
+		WF_AlwaysOnBottom   = 0x40000,
+
+		WF_DontShowOnTaskbar= 0x80000
 	};
 
 	enum WidgetAttributes
@@ -36,9 +37,11 @@ namespace MetalBone
 		WA_DeleteOnClose     = 0x1,
 		WA_NoStyleSheet      = 0x2,
 		WA_ConstStyleSheet   = 0x4,  // If set, we only polish widget once, so that changing
-								 // parent won't recalc the stylesheet again.
-		WA_OpaqueBackground  = 0x8,
-		WA_Hover             = 0x10  // Change apperent when hover
+								     // parent won't recalc the stylesheet again.
+		WA_AutoBG            = 0x8,  // Default. The widget's opacity is detemined by the CSS.
+		WA_OpaqueBG          = 0x10, // The widget is opaque. Clearing WA_AutoBG and WA_OpaqueBG makes it semi-transparent.
+
+		WA_Hover             = 0x30  // Change apperent when hover
 	};
 
 	enum WindowStates
@@ -51,6 +54,11 @@ namespace MetalBone
 
 	class MEvent;
 	class MPaintEvent;
+	class MStyleSheetStyle;
+	class MApplicationData;
+	class MWidget;
+	struct WindowExtras;
+	typedef std::list<MWidget*> MWidgetList; 
 	class MWidget
 	{
 		public:
@@ -58,18 +66,19 @@ namespace MetalBone
 			virtual ~MWidget(); // We will delete very child of this widget when desctruction.
 
 			inline void setObjectName (const std::wstring&);
-			inline void setWindowTitle(const std::wstring&);
 			inline const std::wstring& objectName()  const;
-			inline const std::wstring& windowTitle() const;
+			void setWindowTitle(const std::wstring&);
+			const std::wstring& windowTitle() const;
 
 			// Return the HWND handle contains this widget or NULL.
-			inline HWND windowHandle() const; 
+			HWND windowHandle() const; 
 			// Return the top level widget contains this widget or this.
 			inline MWidget* windowWidget();   
 			// If WF_Window, return true.
 			// If WF_Widget, and if parent() return non-zero, this return false
 			// If parent() return zero, and windowHandle() return greater than -1, this return true.
-			bool	 isWindow() const;
+			bool isWindow() const;
+			bool hasWindow() const;
 			// Set the window flags. The flag will take effort as soon as this widget
 			// becomes a window (i.e. isWindow() return true).
 			void setWindowFlags(unsigned int);
@@ -80,23 +89,31 @@ namespace MetalBone
 			inline unsigned int attributes() const;
 
 			void setStyleSheet(const std::wstring&);
-			void ensurePolished(); // Call ensurePolished() to set Geometry of this.
+			void ensurePolished(); // Call ensurePolished() to set Geometry for this.
 
-			inline ID2D1DCRenderTarget* getDCRenderTarget();
+			// Calling repaint() several times will result in a larger repaint
+			// rect, which encloses every specific repaint rect. Such as, call for
+			// rect(5,5,10,10) and rect(30,30,35,35) will results in a rect(5,5,35,35) 
 			inline void repaint();
 			void repaint(int x, int y, unsigned int width, unsigned int height);
+			ID2D1RenderTarget* getRenderTarget();
 
-			// Return the parent widget of this or 0.
-			inline MWidget* parent() const;
+			// Sets the owner of this Window to the Window contains p.
+			// If this widget is not a window, nothing happens.
+			void setWindowOwner(MWidget* p);
 			// If parent is 0, the widget will be hidden.
 			void setParent(MWidget* parent);
-			// Sets the owner of this Window to the Window contains p.
-			void setWindowOwner(MWidget* p);
-			inline const std::list<MWidget*>& children() const;
+			// Return the parent widget of this or 0.
+			inline MWidget* parent() const;
+			inline const MWidgetList& children() const;
 
+			// The widget can be invisible while it's not hidden.
+			// The widget is not visible because its parent is not visible,
+			// or if during last redraw, the widget doesn't redraw itself.
+			bool isVisible() const;
 			bool isHidden() const;
 
-			// If isWindow() return false. No-op.
+			// If isWindow() return false, nothing happen.
 			void showMaximized();
 			void showMinimized();
 			// Use SendMessage() to send a WM_CLOSE msg to the window.
@@ -107,9 +124,11 @@ namespace MetalBone
 			// ensured to be created.
 			void show();
 			void hide();
-			inline D2D_SIZE_U size() const;
-			inline D2D_SIZE_U minSize() const;
-			inline D2D_SIZE_U maxSize() const;
+			inline D2D_SIZE_U size()     const;
+			inline D2D_SIZE_U minSize()  const;
+			inline D2D_SIZE_U maxSize()  const;
+			inline POINT      pos()      const;
+			inline RECT       geometry() const; 
 			inline void move(int x, int y);
 			inline void resize(unsigned int width, unsigned int height);
 			void setGeometry(int x, int y, unsigned int width, unsigned int height);
@@ -118,9 +137,12 @@ namespace MetalBone
 
 
 			// Only received this event when MWidget is a window.
-			// The MEvent is accepted by default, and if the MWidget has WA_DeleteOnClose,
-			// it will be deleted. Otherwise, the window is hidden.
-			virtual void closeEvent(MEvent*) {}
+			// If the MEvent is not accepted, nothing happen.
+			// By default the MEvent is accepted, and the window will
+			// be destroyed which makes the widget hidden.
+			// If the widget has the attribute WA_DeleteOnClose,
+			// the widget is also be deleted.
+			virtual void closeEvent(MEvent*     ) {}
 			virtual void paintEvent(MPaintEvent*) {}
 
 
@@ -131,13 +153,12 @@ namespace MetalBone
 
 
 
-
+			// The StyleSheetStyle calls this to determine which RenderRule is needed.
+			virtual unsigned int getCurrentWidgetPseudo() { return 0; }
 			// The rect has been mapped to the topLevel parent.
-			virtual void draw(RECT& rect);
+			virtual void draw(RECT& clipRect);
 			// MApplcation call this overloaded method when it receives WM_PAINT event.
-			void drawWindow(PAINTSTRUCT& ps);
-
-
+			void drawWindow();
 
 
 
@@ -146,11 +167,10 @@ namespace MetalBone
 		private:
 			MWidget* m_parent;
 			MWidget* m_topLevelParent;
-			HWND m_winHandle; // Only valid when widget is a window.
-			ID2D1DCRenderTarget* m_renderTarget;
+			WindowExtras* m_windowExtras;
 
-			std::wstring m_windowTitle;
-			std::wstring m_objectName;
+			// children[0] is the bottom-most child.
+			MWidgetList m_children;
 
 			int x;
 			int y;
@@ -166,16 +186,17 @@ namespace MetalBone
 			unsigned int m_windowState;
 			unsigned int m_widgetState;
 
-			// children[0] is the bottom-most child.
-			std::list<MWidget*> m_children;
+			std::wstring m_objectName;
 
 			void setTopLevelParentRecursively(MWidget*);
-			void setOpaqueBackground(bool);
 			bool isOpaqueDrawing() const;
+			inline void setWidgetState(unsigned int,bool);
 
 			void createRenderTarget();
+			void destroyWnd();
+			void createWnd();
 
-		friend class MStyleSheetStyle;
+		friend class MApplicationData;
 	};
 
 
@@ -183,26 +204,19 @@ namespace MetalBone
 
 
 	inline const std::wstring& MWidget::objectName()   const          { return m_objectName; }
-	inline const std::wstring& MWidget::windowTitle()  const          { return m_windowTitle; }
 	inline D2D_SIZE_U   MWidget::size()                const          { return D2D1::SizeU(width,height); }
 	inline D2D_SIZE_U   MWidget::minSize()             const          { return D2D1::SizeU(minWidth,minHeight); }
 	inline D2D_SIZE_U   MWidget::maxSize()             const          { return D2D1::SizeU(maxWidth,maxHeight); }
+	inline POINT        MWidget::pos()                 const          { POINT p = {x,y}; return p; }
+	inline RECT         MWidget::geometry()            const          { RECT r = {x,y,x+width,y+height}; return r;}
 	inline MWidget*     MWidget::parent()              const          { return m_parent; }
-	inline HWND         MWidget::windowHandle()        const          { return m_topLevelParent->m_winHandle; }
 	inline unsigned int MWidget::windowFlags()         const          { return m_windowFlags; }
 	inline unsigned int MWidget::attributes()          const          { return m_attributes; }
+	inline const MWidgetList& MWidget::children()      const          { return m_children;}
 	inline MWidget*     MWidget::windowWidget()                       { return m_topLevelParent; }
-	inline void         MWidget::repaint()                            { repaint(x,y,width,height); }
+	inline void         MWidget::repaint()                            { repaint(0,0,width,height); }
 	inline void         MWidget::setObjectName(const std::wstring& n) { m_objectName = n; }
 	inline bool         MWidget::testAttributes(WidgetAttributes a) const { return (m_attributes & a) != 0; }
-	inline const std::list<MWidget*>& MWidget::children() const       { return m_children;}
-	inline ID2D1DCRenderTarget* MWidget::getDCRenderTarget()            { return windowWidget()->m_renderTarget; }
-	void                MWidget::setWindowTitle(const std::wstring& t)
-	{
-		m_windowTitle = t;
-		if(isWindow())
-			SetWindowText(windowHandle(),t.c_str());
-	}
 	inline void MWidget::move(int xpos, int ypos)
 	{
 		if(xpos != x && ypos != y)
@@ -216,6 +230,11 @@ namespace MetalBone
 	inline void MWidget::setAttributes(WidgetAttributes attr, bool on)
 	{
 		on ? (m_attributes |= attr) : (m_attributes &= (~attr));
+	}
+
+	inline void MWidget::setWidgetState(unsigned int s,bool on)
+	{
+		on ? (m_widgetState |= s) : (m_widgetState &= (~s));
 	}
 }
 #endif // MWIDGET_H

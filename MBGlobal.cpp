@@ -8,9 +8,20 @@
 #include <string>
 
 #ifdef MB_DEBUG
+inline void InlDebugBreak() { __asm { int 3 }; }
 void mb_debug(const wchar_t* what)
 {
 	OutputDebugStringW(what);
+}
+
+void mb_warning(bool cond, const wchar_t* what)
+{
+	if(!cond)
+		return;
+	std::wstringstream ss;
+	ss << L"[Warning] ";
+	ss << what;
+	OutputDebugStringW(ss.str().c_str());
 }
 
 void mb_assert(const char* assertion, const char* file, unsigned int line)
@@ -23,7 +34,11 @@ void mb_assert(const char* assertion, const char* file, unsigned int line)
 	ss << ". Line: ";
 	ss << line;
 	OutputDebugStringA(ss.str().c_str());
+#ifdef MB_DEBUGBREAK_INSTEADOF_ABORT
+	InlDebugBreak();
+#else
 	abort();
+#endif
 }
 
 void mb_assert_xw(const wchar_t* what, const wchar_t* where, const char* file, unsigned int line)
@@ -38,7 +53,11 @@ void mb_assert_xw(const wchar_t* what, const wchar_t* where, const char* file, u
 	ss << L". Line: ";
 	ss << line;
 	OutputDebugStringW(ss.str().c_str());
+#ifdef MB_DEBUGBREAK_INSTEADOF_ABORT
+	InlDebugBreak();
+#else
 	abort();
+#endif
 }
 
 void ensureInMainThread()

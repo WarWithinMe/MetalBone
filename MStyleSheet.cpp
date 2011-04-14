@@ -1,9 +1,10 @@
-#include "MStyleSheet.h"
-#include "MApplication.h"
-#include "MWidget.h"
 #include "MResource.h"
-#include "externutils/XUnzip.h"
+#include "MStyleSheet.h"
+#include "MWidget.h"
+#include "MApplication.h"
 #include "MBGlobal.h"
+
+#include "3rd/XUnzip.h"
 
 #include <D2d1helper.h>
 #include <algorithm>
@@ -1226,8 +1227,8 @@ namespace MetalBone
 
 	void MStyleSheetStyle::getMachedStyleRules(MWidget* widget, MatchedStyleRuleVector& srs)
 	{
-		if(widget->testAttributes(WA_NoStyleSheet))
-			return;
+// 		if(widget->testAttributes(WA_NoStyleSheet))
+// 			return;
 
 		// Get all possible stylesheets
 		std::vector<CSS::StyleSheet*> sheets;
@@ -2397,10 +2398,8 @@ namespace MetalBone
 	{
 		RenderRule rule = getRenderRule(w,PC_Default);
 		if(rule.isValid())
-		{
 			rule.setGeometry(w);
-			w->setOpaqueBackground(rule.opaqueBackground());
-		}
+
 		if(getRenderRule(w, PC_Hover).isValid())
 			w->setAttributes(WA_Hover);
 	}
@@ -2434,34 +2433,14 @@ namespace MetalBone
 		return bitmapBrush;
 	}
 
-	void RenderRuleData::draw(MWidget* w,int xPosInWnd, int yPosInWnd, const RECT& clipRectInWnd)
+	void RenderRuleData::draw(ID2D1RenderTarget* rt, const RECT& widgetRectInRT, const RECT& clipRectInRT)
 	{
-		ID2D1DCRenderTarget* rt = w->getDCRenderTarget();
-		if(rt == 0)
-			return;
-
-		D2D1_SIZE_U widgetSize = w->size();
-		D2D1_SIZE_U tlpSize = w->windowWidget()->size();
-		RECT widgetRect = {xPosInWnd, yPosInWnd, xPosInWnd+widgetSize.width, yPosInWnd+widgetSize.height};
-
-		// TODO : move the layer stuff to some where in the upper calling stack.
-// 		bool needLayer = false;
-// 		needLayer = clipRectInWnd.left != 0 && clipRectInWnd.left > xPosInWnd;
-// 		if(!needLayer)
-// 			needLayer = clipRectInWnd.top   !=0 && clipRectInWnd.top > yPosInWnd;
-// 		if(!needLayer) 
-// 			needLayer = clipRectInWnd.right != tlpSize.width && clipRectInWnd.right < widgetRect.right;
-// 		if(!needLayer)
-// 			needLayer = clipRectInWnd.bottom != tlpSize.height && clipRectInWnd.bottom < widgetRect.bottom;
-// 		if(needLayer)
-
-
+		M_ASSERT(rt != 0);
 		// We have to get the border geometry first if there's any.
 		// Because drawing the background may depends on the border geometry.
 		ID2D1Geometry* borderGeo = 0;
-		D2D1_RECT_F borderRect = {(FLOAT)xPosInWnd, (FLOAT)yPosInWnd,
-								FLOAT(xPosInWnd + widgetSize.width),
-								FLOAT(yPosInWnd + widgetSize.height)};
+		D2D1_RECT_F borderRect = {(FLOAT)widgetRectInRT.left, (FLOAT)widgetRectInRT.top,
+								(FLOAT)widgetRectInRT.right, (FLOAT)widgetRectInRT.bottom};
 		if(borderRO != 0) {
 			if(hasMargin) {
 				borderRect.left   += (FLOAT)margin.left;
@@ -2475,11 +2454,11 @@ namespace MetalBone
 		}
 		// === Draw Backgrounds ===
 		if(backgroundROs.size() > 0)
-			drawBackgrounds(rt, borderGeo, widgetRect, clipRectInWnd);
+			drawBackgrounds(rt, borderGeo, widgetRectInRT, clipRectInRT);
 
 		// === Draw BorderImage ===
 		if(borderImageRO != 0)
-			drawBorderImage(rt, widgetRect, clipRectInWnd);
+			drawBorderImage(rt, widgetRectInRT, clipRectInRT);
 
 		// === Draw Border ===
 		if(borderRO != 0 && borderRO->isVisible())

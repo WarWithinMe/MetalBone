@@ -177,7 +177,7 @@ namespace MetalBone
 
 			// Return true if we changed the widget's size
 			bool setGeometry(MWidget*);
-			void draw(MWidget* w, int x, int y, const RECT& rect);
+			void draw(ID2D1RenderTarget* rt, const RECT& widgetRectInRT, const RECT& clipRectInRT);
 			void drawBackgrounds(ID2D1RenderTarget*,ID2D1Geometry*,const RECT& widgetRectInWnd, const RECT& clipRectInWnd);
 			void drawBorderImage(ID2D1RenderTarget*,const RECT& widgetRectInWnd, const RECT& clipRectInWnd);
 			void drawBorder(ID2D1RenderTarget*,const RECT& widgetRectInWnd, const RECT& clipRectInWnd);
@@ -206,7 +206,7 @@ namespace MetalBone
 
 				RenderRule& operator=(const RenderRule& other);
 				inline bool isValid() const { return data != 0; }
-				inline bool opaqueBackground() const { return data->opaqueBackground; }
+				inline bool opaqueBackground() const { return data == 0 ? false : data->opaqueBackground; }
 				inline bool setGeometry(MWidget* w) { return data->setGeometry(w); }
 			private:
 				void init() { data = new RenderRuleData(); }
@@ -232,11 +232,12 @@ namespace MetalBone
 			// One should call polish first if there's no StyleRules(cached)
 			// for a widget.
 			void polish(MWidget* w);
-			inline void draw(MWidget* w, int xPosInWnd, int yPosInWnd, 
-						    const RECT& clipRectInWnd, unsigned int p = CSS::PC_Default);
-
+			inline void draw(MWidget* w,ID2D1RenderTarget* rt, const RECT& widgetRectInRT, 
+						    const RECT& clipRectInRT, unsigned int p = CSS::PC_Default); 
 			// Remove every stylesheet resource cached for MWidget w;
 			inline void removeCache(MWidget*);
+
+			CSS::RenderRule getRenderRule(MWidget*, unsigned int pseudo);
 
 // TODO: Implement recreateResource
 void recreateResources(MWidget*) {}
@@ -264,18 +265,17 @@ void recreateResources(MWidget*) {}
 			// Cache for widgets. Provide fast look up for their associated RenderRules.
 			// MatchedStyleRuleVector is ordered by specifity from low to high
 			typedef std::vector<CSS::MatchedStyleRule> MatchedStyleRuleVector;
-			typedef std::tr1::unordered_map<MWidget*, MatchedStyleRuleVector>	WidgetStyleRuleMap;
-			typedef std::tr1::unordered_map<MWidget*, PseudoRenderRuleMap*>		WidgetRenderRuleMap;
+			typedef std::tr1::unordered_map<MWidget*, MatchedStyleRuleVector> WidgetStyleRuleMap;
+			typedef std::tr1::unordered_map<MWidget*, PseudoRenderRuleMap*>   WidgetRenderRuleMap;
 			WidgetStyleRuleMap  widgetStyleRuleCache;
 			WidgetRenderRuleMap widgetRenderRuleCache;
 
 			// Each declaration can only declare one brush.
 			typedef std::tr1::unordered_map<unsigned int, ID2D1SolidColorBrush*> D2D1SolidBrushMap;
-			typedef std::tr1::unordered_map<std::wstring, ID2D1Bitmap*> D2D1BitmapMap;
+			typedef std::tr1::unordered_map<std::wstring, ID2D1Bitmap*>          D2D1BitmapMap;
 			D2D1SolidBrushMap solidBrushCache;
 			D2D1BitmapMap     bitmapCache;
 
-			CSS::RenderRule getRenderRule(MWidget*, unsigned int pseudo);
 			void getMachedStyleRules(MWidget*, MatchedStyleRuleVector&);
 			void clearRenderRuleCacheRecursively(MWidget*);
 
@@ -302,11 +302,12 @@ void recreateResources(MWidget*) {}
 
 
 
-	inline void MStyleSheetStyle::draw(MWidget* w, int x, int y, const RECT& r, unsigned int p)
+	inline void MStyleSheetStyle::draw(MWidget* w, ID2D1RenderTarget* rt,
+								const RECT& wr, const RECT& cr, unsigned int p)
 	{
 		CSS::RenderRule rule = getRenderRule(w,p);
 		if(rule.isValid())
-			rule->draw(w,x,y,r); 
+			rule->draw(rt,wr,cr); 
 	}
 	inline void MStyleSheetStyle::removeCache(MWidget* w)
 	{

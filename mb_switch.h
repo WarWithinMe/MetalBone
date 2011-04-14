@@ -17,6 +17,8 @@
 // 使用全局多线程的Signal/Slot
 //#define SIGSLOT_MT_GLOBAL
 
+#define MB_DEBUGBREAK_INSTEADOF_ABORT
+
 #define MB_DEBUG
 #define MB_DEBUG_D2D
 

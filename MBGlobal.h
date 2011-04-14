@@ -40,10 +40,12 @@ METALBONE_EXPORT void mb_assert(const char* assertion, const char* file, unsigne
 METALBONE_EXPORT void mb_assert_xw(const wchar_t* what, const wchar_t* where, const char* file, unsigned int line);
 METALBONE_EXPORT void ensureInMainThread();
 METALBONE_EXPORT void mb_debug(const wchar_t* what);
+METALBONE_EXPORT void mb_warning(bool,const wchar_t* what);
 METALBONE_EXPORT void dumpMemory(LPCVOID address, SIZE_T size); // dumpMemory() from VLD utility
 
 #  define M_ASSERT(cond) ((!(cond)) ? mb_assert(#cond,__FILE__,__LINE__) : mb_noop())
-#  define mDebug(cond) mb_debug(cond)
+#  define mDebug(message) mb_debug(message)
+#  define mWarning(cond,message) mb_warning(cond,message)
 #  define M_ASSERT_X(cond, what, where) ((!(cond)) ? mb_assert_xw(L##what,L##where,__FILE__,__LINE__) : mb_noop())
 #  define ENSURE_IN_MAIN_THREAD ensureInMainThread()
 
@@ -51,6 +53,7 @@ METALBONE_EXPORT void dumpMemory(LPCVOID address, SIZE_T size); // dumpMemory() 
 #  define M_ASSERT(cond) mb_noop()
 #  define M_ASSERT_X(cond, what, where) mb_noop()
 #  define mDebug(cond) mb_noop()
+#  define mWarning(cond,m) mb_noop()
 #  define ENSURE_IN_MAIN_THREAD mb_noop()
 #endif // MB_DEBUG
 

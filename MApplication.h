@@ -17,7 +17,7 @@ namespace MetalBone
 	class MApplication
 	{
 		public:
-			MApplication();
+			MApplication(bool hardwareAccelerated = true);
 			virtual ~MApplication();
 			inline static MApplication* instance();
 
@@ -40,6 +40,8 @@ namespace MetalBone
 			void setCustomWindowProc(WinProc);
 
 			const std::set<MWidget*>& topLevelWindows() const;
+
+			bool isHardwareAccerated() const;
 
 			// 设置应用于整个程序的样式表。
 			// 选择器
