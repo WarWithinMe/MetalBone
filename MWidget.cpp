@@ -2,21 +2,66 @@
 #include "MApplication.h"
 #include "MStyleSheet.h"
 #include "MEvent.h"
+#include "MRegion.h"
 
 #include <list>
 #include <set>
 #include <unordered_map>
+#include <algorithm>
 #include <tchar.h>
 #include <WinError.h>
 #include <ObjBase.h>
 
 namespace MetalBone
 {
-	// ========== MApplication ==========
-	wchar_t gMWidgetClassName[] = L"MetalBone Widget";
-	MApplication::WinProc MApplicationData::customWndProc = 0;
-	MApplicationData* MApplicationData::instance = 0;
+	// ========== WindowExtras ==========
+	typedef std::tr1::unordered_map<MWidget*,RECT>   DrawRectHash;
+	typedef std::tr1::unordered_map<MWidget*,MRegion> DrawRegionHash;
+	typedef std::tr1::unordered_map<MWidget*,bool>    DirtyChildrenHash;
+	struct WindowExtras {
+		WindowExtras():m_wndHandle(NULL),m_layeredWndHandle(NULL),m_renderTarget(0),m_rtHook(0){}
+		HWND m_wndHandle;
+		HWND m_layeredWndHandle;
+		ID2D1HwndRenderTarget* m_renderTarget;
+		ID2D1RenderTarget*     m_rtHook;
 
+		std::wstring      m_windowTitle;
+		DrawRectHash      updateWidgets;
+		DrawRegionHash    passiveUpdateWidgets;
+		DirtyChildrenHash childUpdatedHash;
+
+		inline HWND getRealHwnd() const
+		{
+			if(m_layeredWndHandle != NULL)
+				return m_layeredWndHandle;
+			return m_wndHandle;
+		}
+
+		void addToRepaintMap(MWidget* w,int left,int right,int top,int bottom)
+		{
+			DrawRectHash::iterator iter = updateWidgets.find(w);
+			if(iter != updateWidgets.end()) {
+				RECT& updateRect  = iter->second;
+				if(updateRect.left   > left  ) updateRect.left   = left;
+				if(updateRect.top    > top   ) updateRect.top    = top;
+				if(updateRect.right  < right ) updateRect.right  = right;
+				if(updateRect.bottom < bottom) updateRect.bottom = bottom;
+			} else {
+				RECT& updateRect  = updateWidgets[w];
+				updateRect.left   = left;
+				updateRect.right  = right;
+				updateRect.top    = top;
+				updateRect.bottom = bottom;
+			}
+		}
+	};
+
+
+
+
+
+	// ========== MApplicationData ==========
+	wchar_t gMWidgetClassName[] = L"MetalBone Widget";
 	struct MApplicationData
 	{
 		MApplicationData(bool hwAccelerated):
@@ -46,6 +91,8 @@ namespace MetalBone
 		static MApplicationData* instance;
 	};
 
+	MApplication::WinProc MApplicationData::customWndProc = 0;
+	MApplicationData* MApplicationData::instance = 0;
 	MWidget* MApplicationData::findWidgetByHandle(HWND handle) const
 	{
 		std::set<MWidget*>::const_iterator iter = topLevelWindows.begin();
@@ -67,7 +114,9 @@ namespace MetalBone
 		while(iter != iterEnd)
 		{
 			MWidget* w = *iter;
-			if(w->windowHandle() == handle || w->m_layeredWndHandle == handle)
+			M_ASSERT(w->m_windowExtras != 0);
+			if(w->m_windowExtras->m_wndHandle == handle ||
+			   w->m_windowExtras->m_layeredWndHandle == handle)
 				return w;
 			++iter;
 		}
@@ -75,6 +124,12 @@ namespace MetalBone
 	}
 
 
+
+
+
+
+
+	// ========== MApplicationd ==========
 	MApplication* MApplication::s_instance = 0;
 	MApplication::MApplication(bool hwAccelerated):
 		mImpl(new MApplicationData(hwAccelerated))
@@ -193,6 +248,10 @@ namespace MetalBone
 					mDebug(L"[Warning] We can find a widget corresponds to the HWND when processing WM_PAINT.");	
 					break;
 				}
+				RECT updateRect;
+				GetUpdateRect(hwnd,&updateRect,false);
+				if(updateRect.right > 1 && updateRect.bottom > 1)
+					window->addToUpdateList(updateRect);
 				window->drawWindow();
 				ValidateRect(hwnd,0);
 			}
@@ -230,26 +289,6 @@ namespace MetalBone
 		MWS_VISIBLE     = 8
 	};
 	
-	struct WindowExtras {
-		WindowExtras():m_wndHandle(NULL),m_layeredWndHandle(NULL),m_renderTarget(0){}
-		HWND m_wndHandle;
-		HWND m_layeredWndHandle;
-		ID2D1HwndRenderTarget* m_renderTarget;
-
-		std::wstring m_windowTitle;
-		typedef std::tr1::unordered_map<MWidget*,RECT> RepaintHash;
-		RepaintHash repaintWidgets;
-
-		inline HWND getRealHwnd() const
-		{
-			if(m_layeredWndHandle != NULL)
-				return m_layeredWndHandle;
-			return m_wndHandle;
-		}
-
-		void addToRepaintMap(MWidget*,int left,int right,int top,int bottom);
-	};
-
 	MWidget::MWidget(MWidget* parent)
 		: m_parent(parent),
 		m_windowExtras(0),
@@ -257,7 +296,7 @@ namespace MetalBone
 		width(640),height(480),
 		minWidth(0),minHeight(0),
 		maxWidth(0xffffffff),maxHeight(0xffffffff),
-		m_attributes(WA_AutoBG),
+		m_attributes(WA_AutoBG | WA_NonChildOverlap),
 		m_windowFlags(WF_Widget),
 		m_windowState(WindowNoState),
 		m_widgetState(MWS_HIDDEN)
@@ -277,11 +316,11 @@ namespace MetalBone
 		mApp->getStyleSheet()->removeCache(this);
 
 		// Delete children
-		MWidgetList::iterator iter = m_children.begin();
+		MWidgetList::iterator iter    = m_children.begin();
 		MWidgetList::iterator iterEnd = m_children.end();
 		while(iter != iterEnd) {
 			delete (*iter);
-			++iter;
+			iter = m_children.begin();
 		}
 
 		// Destroy window
@@ -335,9 +374,10 @@ namespace MetalBone
 	ID2D1RenderTarget* MWidget::getRenderTarget() 
 	{
 		if(m_topLevelParent == this) {
-			if(m_windowExtras != 0)
-				return m_windowExtras->m_renderTarget;
-			else
+			if(m_windowExtras != 0) {
+				return m_windowExtras->m_rtHook ? 
+					m_windowExtras->m_rtHook : m_windowExtras->m_renderTarget;
+			} else
 				return 0;
 		} else {
 			return m_topLevelParent->getRenderTarget();
@@ -491,14 +531,15 @@ namespace MetalBone
 		if(m_windowExtras == 0)
 			m_windowExtras = new WindowExtras();
 
-		bool isLayered    = m_windowFlags & WF_AllowTransparency;
+		bool isLayered    = (m_windowFlags & WF_AllowTransparency) != 0;
 		DWORD winStyle    = 0;
 		DWORD winExStyle  = 0;
 		HWND parentHandle = NULL;
 		// We don't set parent of layered window.
-		if(!isLayered && m_parent)
+		if(!isLayered && m_parent) {
 			parentHandle = m_parent->windowHandle();
-		m_parent = 0;
+			m_parent = 0;
+		}
 
 		RECT rect = {0,0,width,height};
 		generateStyleFlags(m_windowFlags,&winStyle,&winExStyle);
@@ -723,11 +764,35 @@ namespace MetalBone
 		// before polishing stylesheet
 		if((m_windowFlags & WF_Window) || m_parent == 0)
 			createWnd();
+
+		// In case the stylesheet changed the window's geometry.
+		RECT windowGeo = {x,y,width,height};
 		ensurePolished();
+		RECT newWindowGeo = {x,y,width,height};
 
 		// Mark the widget visible. When polishing stylesheet, this is still 
 		// hidden, so even if this widget's size changed, it won't repaint itself.
 		m_widgetState &= (~MWS_HIDDEN);
+		if(hasWindow()) {
+			HWND hwnd = windowHandle();
+			if(memcmp(&windowGeo,&newWindowGeo,sizeof(RECT))) {
+				RECT currentRect;
+				GetWindowRect(hwnd,&currentRect);
+				int xOffset = newWindowGeo.left - windowGeo.left;
+				int yOffset = newWindowGeo.top - windowGeo.top;
+				int wdelta  = newWindowGeo.right - windowGeo.right;
+				int ydelta  = newWindowGeo.bottom - windowGeo.bottom;
+				currentRect.right  = currentRect.right - currentRect.left + wdelta;
+				currentRect.bottom = currentRect.bottom - currentRect.top + ydelta;
+				currentRect.left  += xOffset;
+				currentRect.top   += yOffset;
+				SetWindowPos(hwnd,HWND_NOTOPMOST,currentRect.left,
+						currentRect.top,currentRect.right,currentRect.bottom, SWP_NOZORDER);
+				if(wdelta != 0 || ydelta != 0)
+					m_windowExtras->m_renderTarget->Resize(D2D1::SizeU(width,height));
+			}
+			ShowWindow(windowHandle(),SW_SHOW);
+		}
 		repaint();
 	}
 
@@ -774,7 +839,7 @@ namespace MetalBone
 			width  = vwidth;
 			height = vheight;
 			// Update the new rect.
-			m_parent->repaint(x,y,width,height);
+			repaint();
 		} else {
 			// It's a window. We change the size of it. And Windows will repaint it automatically.
 			RECT rect = {0,0,width,height};
@@ -805,31 +870,16 @@ namespace MetalBone
 		if(m_attributes & WA_AutoBG)
 			return (m_widgetState & MWS_CSSOpaqueBG) != 0;
 
-		return m_attributes & WA_OpaqueBG == 0;
+		return (m_attributes & WA_OpaqueBG) == 0;
 	}
 
-	void WindowExtras::addToRepaintMap(MWidget* w,int left,int right,int top,int bottom)
+	void MWidget::repaint(int ax, int ay, unsigned int aw, unsigned int ah)
 	{
-		RepaintHash::iterator iter = repaintWidgets.find(w);
-		if(iter != repaintWidgets.end()) {
-			RECT& updateRect  = iter->second;
-			if(updateRect.left   > left  ) updateRect.left   = left;
-			if(updateRect.top    > top   ) updateRect.top    = top;
-			if(updateRect.right  < right ) updateRect.right  = right;
-			if(updateRect.bottom < bottom) updateRect.bottom = bottom;
-		} else {
-			iter = repaintWidgets.insert(w).first;
-			RECT& updateRect  = iter->second;
-			updateRect.left   = left;
-			updateRect.right  = right;
-			updateRect.top    = top;
-			updateRect.bottom = bottom;
-		}
-	}
+		if(windowHandle() == NULL)
+			return;
 
-	void MWidget::repaint(int x, int y, unsigned int width, unsigned int height)
-	{
-		M_ASSERT_X(windowHandle() != NULL, "We don't have a window yet when trying to repaint this widget.", "MWidget::repaint()");
+		M_ASSERT(aw <= width);
+		M_ASSERT(ah <= height);
 
 		if(isHidden())
 			return;
@@ -837,123 +887,324 @@ namespace MetalBone
 		// If the widget needs to draw itself, we marks it invisible at this time,
 		// And if it does draw itself during next redrawing. It's visible.
 		m_widgetState &= (~MWS_VISIBLE);
-		m_topLevelParent->m_windowExtras->addToRepaintMap(this,x,y,width,height);
-
-		// Tells Windows that we need to update, we don't care the clip. We do it
-		// in our own way.
-		UpdateWindow(windowHandle());
-
-		/*MWidget* p = m_parent;
-		bool outsideOfParent = false;
-		int right  = x + width;
-		int bottom = y + height;
-		while(p != 0) {
-			if(0 >= right   ) { outsideOfParent = true; break; }
-			if(0 >= bottom  ) { outsideOfParent = true; break; }
-			if(x > p->width ) { outsideOfParent = true; break; }
-			if(y + p->height) { outsideOfParent = true; break; }
-
-			if(right  > p->width ) right  = p->width;
-			if(bottom > p->height) bottom = p->height;
-			if(x < 0) x=0;
-			if(y < 0) y=0;
-
-			x += p->x;
-			y += p->y;
-			right  += p->x;
-			bottom += p->y;
+		int right = ax + aw;
+		int bottom = ay + ah;
+		if(ax >= (int)width || ay >= (int)height || right <= 0 || bottom <= 0)
+			return;
+		MWidget* parent = m_parent;
+		while(parent != 0)
+		{
+			if(parent->isHidden())
+				return;
+			parent = parent->m_parent;
 		}
-		if(outsideOfParent) return; */
+		m_topLevelParent->m_windowExtras->addToRepaintMap(this, ax, ay, right, bottom);
+
+		// Tells Windows that we need to update, we don't care the clip region.
+		// We do it in our own way.
+		RECT rect = {0,0,1,1};
+		InvalidateRect(windowHandle(),&rect,false);
 	}
 
+	// Windows has told us that we can now repaint the window.
 	void MWidget::drawWindow()
 	{
 		M_ASSERT(isWindow());
 
+		// Calculate which widget needs to be redraw.
+		DirtyChildrenHash& childUpdatedHash  = m_windowExtras->childUpdatedHash;
+		DrawRegionHash& passiveUpdateWidgets = m_windowExtras->passiveUpdateWidgets;
+		DrawRectHash& updateWidgets          = m_windowExtras->updateWidgets;
+		DrawRectHash::iterator drIter        = updateWidgets.begin();
+		DrawRectHash::iterator drIterEnd     = updateWidgets.end();
+		while(drIterEnd != drIter)
+		{
+			MWidget* uTarget = drIter->first;
+			// If we are dealing with the topLevelWindow itself,
+			// we only have to add it the passiaveUpdateWidgets.
+			if(uTarget == this)
+			{
+				passiveUpdateWidgets[this].addRect(drIter->second);
+				++drIter;
+				continue;
+			}
 
+			RECT& uRect = drIter->second;
+			RECT urForNonOpaque = drIter->second;
 
+			MWidget* pc = uTarget;
+			MWidget* pp = pc->m_parent;
+			bool outsideOfParent = false;
+			bool noNeedToUpdateUnderneath = false;
+			DrawRegionHash tempPassiveWidgets;
 
+			// First, map the update rect to the Window's coordinate. If the 
+			// drawing rect is outside of the parent's visible rect, we simply
+			// ingore its update request. 
+			// We also check if there might be overlap, and if there's something
+			// above uTarget, we need to update those things too.
+			while(pp != 0)
+			{
+				OffsetRect(&uRect,pc->x,pc->y);
+				DrawRegionHash::iterator tpwIter = tempPassiveWidgets.begin();
+				DrawRegionHash::iterator tpwIterEnd = tempPassiveWidgets.end();
+				while(tpwIterEnd != tpwIter)
+				{
+					tpwIter->second.offset(pc->x,pc->y);
+					++tpwIter;
+				}
 
+				if(uRect.right  <= 0)            { outsideOfParent = true; break; }
+				if(uRect.bottom <= 0)            { outsideOfParent = true; break; }
+				if(uRect.left > (int)pp->width ) { outsideOfParent = true; break; }
+				if(uRect.top  > (int)pp->height) { outsideOfParent = true; break; } 
 
+				// Clip to parent.
+				if(uRect.right  > (int)pp->width)  { uRect.right  = pp->width;  }
+				if(uRect.bottom > (int)pp->height) { uRect.bottom = pp->height; }
+				if(uRect.left   < 0)               { uRect.left   = 0;          }
+				if(uRect.top    < 0)               { uRect.top    = 0;          }
 
+				// If the parent specifies that its children may overlap each
+				// other. We have to test if the current draw rect intersect its
+				// children. If it does, we have to update those children.
+				if(!pp->testAttributes(WA_NonChildOverlap))
+				{
+					MWidgetList::iterator chIter    = pp->m_children.begin();
+					MWidgetList::iterator chIterEnd = pp->m_children.end();
+					while(chIter != chIterEnd && *chIter != pc)
+						++chIter;
+					while(chIter != chIterEnd)
+					{
+						MWidget* cw = *chIter;
+						RECT childRect = {cw->x,cw->y,cw->x + cw->width, cw->y + cw->height};
+						RECT intersect;
+						if(IntersectRect(&intersect,&uRect,&childRect))
+						{
+							// We found a widget that overlaps uTarget.
+							// If this found widget is large enough to cover
+							// this update rect and it's opaque. Those under it
+							// don't have to be redrawn.
+							if(cw->isOpaqueDrawing() && EqualRect(&intersect,&uRect))
+							{
+								tempPassiveWidgets.clear();
+								noNeedToUpdateUnderneath = true;
+							}
+							tempPassiveWidgets[cw].addRect(intersect);
+						}
+						++chIter;
+					}
+				}
 
+				pc = pp;
+				pp = pp->m_parent;
+			}
+			// The uTarget is not updated, thus, it won't affect anything.
+			if(outsideOfParent) { ++drIter; continue; }
 
+			// Combine the temp with the passiveUpdateWidgets.
+			DrawRegionHash::iterator tempIter    = tempPassiveWidgets.begin();
+			DrawRegionHash::iterator tempIterEnd = tempPassiveWidgets.end();
+			while(tempIter != tempIterEnd)
+			{
+				passiveUpdateWidgets[tempIter->first].combine(tempIter->second);
+				// Mark the parent to be check later.
+				MWidget* updateChild = tempIter->first;
+				MWidget* ucp = updateChild->m_parent;
+				while(ucp != 0) {
+					childUpdatedHash[ucp] = true;
+					ucp = ucp->m_parent;
+				}
+				++tempIter;
+			}
+			
+			// There's a widget large enough that covers the whole uTarget,
+			// the underneath is ignored.
+			if(noNeedToUpdateUnderneath) { ++drIter; continue; }
 
+			// Add the uTarget to the passiaveUpdateWidgets.
+			passiveUpdateWidgets[uTarget].addRect(uRect);
+			MWidget* ucp = uTarget->m_parent;
+			while(ucp != 0) {
+				childUpdatedHash[ucp] = true;
+				ucp = ucp->m_parent;
+			}
+
+			// Second, if this widget is not opaque, and there's widget under it
+			// we have to paint that widget too.
+			if(!uTarget->isOpaqueDrawing())
+			{
+				MWidget* pc = uTarget;
+				MWidget* pp = uTarget->m_parent;
+				tempPassiveWidgets.clear();
+
+				while(pp != 0)
+				{
+					OffsetRect(&urForNonOpaque,pc->x,pc->y);
+					DrawRegionHash::iterator tpwIter    = tempPassiveWidgets.begin();
+					DrawRegionHash::iterator tpwIterEnd = tempPassiveWidgets.end();
+					while(tpwIterEnd != tpwIter) {
+						tpwIter->second.offset(pc->x,pc->y);
+						++tpwIter;
+					}
+
+					// Clip to parent.
+					if(urForNonOpaque.right  > (int)pp->width)  { urForNonOpaque.right  = pp->width;  }
+					if(urForNonOpaque.bottom > (int)pp->height) { urForNonOpaque.bottom = pp->height; }
+					if(urForNonOpaque.left   < 0)               { urForNonOpaque.left   = 0;          }
+					if(urForNonOpaque.top    < 0)               { urForNonOpaque.top    = 0;          }
+
+					MWidgetList::reverse_iterator chrIter = pp->m_children.rbegin();
+					MWidgetList::reverse_iterator chrIterEnd = pp->m_children.rend();
+					while(chrIter != chrIterEnd && *chrIter != pc)
+						++chrIter;
+
+					while(chrIter != chrIterEnd)
+					{
+						MWidget* cw = *chrIter;
+						RECT childRect = {cw->x,cw->y,cw->x + cw->width, cw->y + cw->height};
+						RECT intersect;
+						if(IntersectRect(&intersect,&urForNonOpaque,&childRect))
+						{
+							// We found a widget that is under the current one.
+							// We need to add it to the update map.
+							tempPassiveWidgets[cw].addRect(intersect);
+							MWidget* ucp = pp;
+							while(ucp != 0) {
+								childUpdatedHash[ucp] = true;
+								ucp = ucp->m_parent;
+							}
+							if(cw->isOpaqueDrawing() && EqualRect(&intersect,&urForNonOpaque))
+							{
+								// If the found widget is opaque and it's large enough to cover the
+								// drawRect of the current update widget. We no longer have to check
+								// those under it.
+								break; 
+							}
+						}
+					}
+					pc = pp;
+					pp = pp->m_parent;
+				}
+			} // isOpaqueDrawing
+			++drIter;
+		}
+		updateWidgets.clear();
+
+		HRESULT result;
+// 		ID2D1BitmapRenderTarget* layeredWndRT = 0;
+// 		if(m_windowExtras->m_layeredWndHandle != NULL)
+// 		{
+// 			result = m_windowExtras->m_renderTarget->CreateCompatibleRenderTarget(&layeredWndRT);
+// 			if(FAILED(result)) {
+// 				passiveUpdateWidgets.clear();
+// 				childUpdatedHash.clear();
+// 				return;
+// 			}
+// 			layeredWndRT->QueryInterface(&(m_windowExtras->m_rtHook));
+// 		}
 
 		int retryTimes = 3;
-		HRESULT result;
+		do
+		{
+			getRenderTarget()->BeginDraw();
+			draw(0,0,passiveUpdateWidgets.find(this) != passiveUpdateWidgets.end());
+			result = getRenderTarget()->EndDraw();
 
-		do {
-			RECT boundingRect;
-			GetRgnBox(updateRgn,&boundingRect);
-			m_renderTarget->BeginDraw();
-
-			MWidgetList::reverse_iterator childIter    = m_children.rbegin();
-			MWidgetList::reverse_iterator childIterEnd = m_children.rend();
-			MWidgetList drawLaterList;
-			while(childIter != childIterEnd)
-			{
-				// We start with the topmost child, if we found a child which meets 
-				// demands, we immediately draw it, and exclude it from the updateRegion.
-				MWidget* child = *childIter;
-				if(child->isHidden()) {
-					++childIter;
-					continue;
-				}
-				if(child->isOpaqueDrawing())
-				{
-					RECT drawRect = child->geometry();
-					if(RectVisible(dc,&drawRect))
-					{
-						RECT intersect;
-						IntersectRect(&intersect,&drawRect,&rect);
-						child->draw(intersect);
-						if(ExcludeClipRect(dc, drawRect.left, drawRect.top,
-									drawRect.right,drawRect.bottom) == NULLREGION) { break; }
-						GetClipBox(dc,&rect);
-					}
-				} else {
-					nonOpaqueChildren.push_back(child);
-				}
-				++childIter;
-			}
-
-			// We draw the window itself
-			mApp->getStyleSheet()->draw(this,0,0,rect);
-
-			// Now we draw the non-opaque children.
-			childIter = nonOpaqueChildren.rbegin();
-			childIterEnd = nonOpaqueChildren.rend();
-			while(childIter != childIterEnd)
-			{
-				MWidget* child = *childIter;
-				RECT drawRect = {child->x, child->y, child->width + child->x, child->height + child->y};
-				if(RectVisible(dc,&drawRect))
-				{
-					RECT intersect;
-					IntersectRect(&intersect,&drawRect,&rect);
-					child->draw(intersect);
-					if(ExcludeClipRect(dc, drawRect.left, drawRect.top,
-						drawRect.right,drawRect.bottom) == NULLREGION) { break; }
-				}
-				(*childIter)->draw(drawRect);
-				++childIter;
-			}
-			MPaintEvent p;
-			p.setUpdateRect(&rect);
-			paintEvent(&p);
-
-			result = m_renderTarget->EndDraw();
 			if(result == D2DERR_RECREATE_TARGET)
 			{
-				createRenderTarget();
-				mApp->getStyleSheet()->recreateResources(this);
+// 				createRenderTarget();
+// 				mApp->getStyleSheet()->recreateResources(this);
 			}
-		}while(FAILED(result) && (--retryTimes > 0));
+		} while (FAILED(result) && (--retryTimes >= 0));
+
+
+// 		if(layeredWndRT) {
+// 			ID2D1GdiInteropRenderTarget* gdiRT;
+// 			layeredWndRT->QueryInterface(&gdiRT);
+// 			HDC dc;
+// 			gdiRT->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&dc);
+// 			UpdateLayeredWindow(m_windowExtras->getRealHwnd(),NULL,NULL,NULL,dc,NULL,RGB(0,0,0),NULL,ULW_OPAQUE);
+// 			gdiRT->ReleaseDC(NULL);
+// 			gdiRT->Release();
+// 			layeredWndRT->Release();
+// 			m_windowExtras->m_rtHook->Release();
+// 			m_windowExtras->m_rtHook = NULL;
+// 		}
 	}
 
-	void MWidget::draw(RECT& rect)
+	void MWidget::addToUpdateList(RECT& updateRect)
 	{
+		m_windowExtras->addToRepaintMap(this,updateRect.left,updateRect.right,updateRect.top,updateRect.bottom);
+	}
 
+	void MWidget::draw(int xOffsetInWnd, int yOffsetInWnd, bool drawMySelf)
+	{
+		WindowExtras* tlpWE = m_topLevelParent->m_windowExtras;
+		if(drawMySelf)
+		{
+			ID2D1RenderTarget* rt = getRenderTarget();
+			rt->PushAxisAlignedClip(D2D1::RectF((FLOAT)xOffsetInWnd,(FLOAT)yOffsetInWnd,
+									FLOAT(xOffsetInWnd + width),FLOAT(yOffsetInWnd + height)),
+									D2D1_ANTIALIAS_MODE_ALIASED);
+
+			MRegion& updateRegion = tlpWE->passiveUpdateWidgets[this];
+			MRegion::Iterator iter = updateRegion.begin();
+			while(iter) {
+				// Draw the background with CSS
+				RECT clipRect;
+				iter.getRect(clipRect);
+				RECT widgetRect;
+				widgetRect.left   = xOffsetInWnd;
+				widgetRect.right  = widgetRect.left + width;
+				widgetRect.top    = yOffsetInWnd;
+				widgetRect.bottom = widgetRect.top + height;
+				mApp->getStyleSheet()->draw(this,rt,widgetRect,clipRect);
+				++iter;
+			}
+
+			// Tell the user that their widget should be updated.
+			MPaintEvent pe;
+			pe.setUpdateRegion((MRegion*)&updateRegion);
+			paintEvent(&pe);
+
+			// Process the children.
+			MWidgetList::iterator chIter = m_children.begin();
+			MWidgetList::iterator chIterEnd = m_children.end();
+			RECT childRectInWnd;
+			while(chIter != chIterEnd)
+			{
+				MWidget* child = *chIter;
+				childRectInWnd.left   = xOffsetInWnd + child->x;
+				childRectInWnd.top    = yOffsetInWnd + child->y;
+				childRectInWnd.right  = childRectInWnd.left + child->width;
+				childRectInWnd.bottom = childRectInWnd.top + child->height;
+
+				MRegion childRegion;
+				childRegion.addRect(childRectInWnd);
+				childRegion.intersect(updateRegion);
+				if(childRegion.isEmpty()) {
+					if(tlpWE->passiveUpdateWidgets.find(child) != tlpWE->passiveUpdateWidgets.end())
+						child->draw(childRectInWnd.left,childRectInWnd.right,true);
+				} else {
+					tlpWE->passiveUpdateWidgets[child].combine(childRegion);
+					child->draw(childRectInWnd.left,childRectInWnd.top,true);
+				}
+
+				++chIter;
+			}
+			rt->PopAxisAlignedClip();
+
+		} else {
+			MWidgetList::iterator chIter = m_children.begin();
+			MWidgetList::iterator chIterEnd = m_children.end();
+			while(chIter != chIterEnd) {
+				MWidget* child = *chIter;
+				if(tlpWE->passiveUpdateWidgets.find(child) != tlpWE->passiveUpdateWidgets.end())
+					child->draw(xOffsetInWnd+child->x,yOffsetInWnd+child->y,true);
+				else if(tlpWE->childUpdatedHash.find(child) != tlpWE->childUpdatedHash.end())
+					child->draw(xOffsetInWnd+child->x,yOffsetInWnd+child->y,false);
+			}
+		}
 	}
 }

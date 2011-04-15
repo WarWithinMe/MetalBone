@@ -38,10 +38,14 @@ namespace MetalBone
 		WA_NoStyleSheet      = 0x2,
 		WA_ConstStyleSheet   = 0x4,  // If set, we only polish widget once, so that changing
 								     // parent won't recalc the stylesheet again.
-		WA_AutoBG            = 0x8,  // Default. The widget's opacity is detemined by the CSS.
+		WA_AutoBG            = 0x8,  // Default. The widget's opacity is detemined by the CSS. When a 
+									 // non-opaque widget redraws, it will cause widgets under it to redraw too.
 		WA_OpaqueBG          = 0x10, // The widget is opaque. Clearing WA_AutoBG and WA_OpaqueBG makes it semi-transparent.
+		WA_NonChildOverlap   = 0x20, // Default. The children of this widget are promised not overlapped
+									 // each other. This will optimize a bit when we redraw, since we
+									 // don't have to test if there's a widget overlaps the drawing rect.
 
-		WA_Hover             = 0x30  // Change apperent when hover
+		WA_Hover             = 0x40  // Change apperent when hover
 	};
 
 	enum WindowStates
@@ -55,8 +59,9 @@ namespace MetalBone
 	class MEvent;
 	class MPaintEvent;
 	class MStyleSheetStyle;
-	class MApplicationData;
 	class MWidget;
+	class MRegion;
+	struct MApplicationData;
 	struct WindowExtras;
 	typedef std::list<MWidget*> MWidgetList; 
 	class MWidget
@@ -155,10 +160,6 @@ namespace MetalBone
 
 			// The StyleSheetStyle calls this to determine which RenderRule is needed.
 			virtual unsigned int getCurrentWidgetPseudo() { return 0; }
-			// The rect has been mapped to the topLevel parent.
-			virtual void draw(RECT& clipRect);
-			// MApplcation call this overloaded method when it receives WM_PAINT event.
-			void drawWindow();
 
 
 
@@ -196,7 +197,11 @@ namespace MetalBone
 			void destroyWnd();
 			void createWnd();
 
-		friend class MApplicationData;
+			void drawWindow();
+			void draw(int xOffsetInWnd, int yOffsetInWnd, bool drawMySelf);
+			void addToUpdateList(RECT& updateRect);
+
+		friend struct MApplicationData;
 	};
 
 

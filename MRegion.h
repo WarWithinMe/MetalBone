@@ -14,14 +14,19 @@ namespace MetalBone
 	class MRegion
 	{
 		public:
+			class Iterator;
 			MRegion (){}
 			~MRegion(){}
+			MRegion(const MRegion& r) { copyFrom(r); }
 
 			void addRect   (const RECT&);
 			void combine   (const MRegion&); // RGN_OR
 			void intersect (const MRegion&); // RGN_AND
 			void subtract  (const MRegion&); // RGN_DIFF
 			void subtractEx(const MRegion&, MRegion& intersectOut);
+			void offset    (LONG x, LONG y);
+
+			Iterator begin() const;
 
 			inline void clear();
 			inline void swap(MRegion&);
@@ -83,10 +88,21 @@ namespace MetalBone
 			template <OperationMode mode>
 			void perfOperation(const MRegion&, MRegion* pIntersect);
 
-			MRegion(const MRegion&);
 			const MRegion& operator=(const MRegion&);
-	};
 
+
+		public:
+			class Iterator {
+					const YNode* ynode;
+					const XNode* xnode;
+				public:
+					Iterator():ynode(0),xnode(0){}
+					inline void getRect(RECT& r) const;
+					inline operator bool() const;
+					Iterator& operator++();
+				friend class MRegion;
+			};
+	};
 
 
 
@@ -114,5 +130,14 @@ namespace MetalBone
 		XNode* pxNode = m_xCoorTree.Create(start);
 		pxNode->m_End = end;
 		return pxNode;
+	}
+
+	inline MRegion::Iterator::operator bool() const
+	 { return ynode && xnode; }
+	inline void MRegion::Iterator::getRect(RECT& r) const {
+		r.left   = xnode->m_Key;
+		r.right  = xnode->m_End;
+		r.top    = ynode->m_Key;
+		r.bottom = ynode->m_End;
 	}
 }

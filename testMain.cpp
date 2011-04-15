@@ -4,12 +4,10 @@
 #include "vld.h"
 
 #include <iostream>
+#include <sstream>
+#include <fstream>
 #include <windows.h>
 #include <tchar.h>
-
-// #include "test/test_slot.cpp"
-// #include "test/test_widget.cpp"
-// #include "test/test_stylesheet.cpp"
 
 #ifdef MSVC
 int WINAPI _tWinMain(HINSTANCE,HINSTANCE,PTSTR,int)
@@ -17,21 +15,20 @@ int WINAPI _tWinMain(HINSTANCE,HINSTANCE,PTSTR,int)
 int main(int argc,char** argv)
 #endif
 {
-//	testDisplay();
-//	testWidgetclose();
-//	test_resource();
-//	testCSSBackgroundRenderObject();
-//	
-
-	// std::wstring css = L"#MainWindow{background:url(test.jpg) 30 20 20 30 no-repeat right center padding;padding:150;}";
-	std::wstring css = L"#MainWindow{background:url(testBg.jpg) border;margin:10px;border: 4px solid #000000;border-radius:5 10 0 15;}";
+	std::wifstream cssReader;
+	cssReader.open("theme.css",std::ios_base::in);
+	std::wstring wss((std::istreambuf_iterator<wchar_t>(cssReader)),std::istreambuf_iterator<wchar_t>());
 	MApplication app;
-	app.setStyleSheet(css);
+	app.setStyleSheet(wss);
 	MWidget* mainWindow = new MWidget();
+	MWidget* checkBox = new MWidget();
 	mainWindow->setObjectName(L"MainWindow");
 	mainWindow->resize(400,380);
-	mainWindow->show();
 	mainWindow->setAttributes(WA_DeleteOnClose);
+	checkBox->setObjectName(L"CheckBox");
+	checkBox->setGeometry(30,30,50,30);
+	checkBox->setParent(mainWindow);
+	mainWindow->show();
 	app.exec();
 	return 0;
 }

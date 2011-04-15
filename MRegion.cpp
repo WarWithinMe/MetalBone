@@ -478,4 +478,43 @@ namespace MetalBone
 		}
 #endif
 	}
+
+	void MRegion::offset(LONG x, LONG y)
+	{
+		// Remark: In the original version off this region class,
+		// offsetting a region can cause overflow happens.
+		// But I don't think of a example right now. So here I only
+		// offset the region.
+		for(YNode* yNode = m_yCoorTree.FindMin(); yNode; yNode = m_yCoorTree.FindNext(*yNode))
+		{
+			yNode->m_Key += y;
+			yNode->m_End += y;
+			for(XNode* xNode = yNode->m_xCoorTree.FindMin(); xNode; xNode = yNode->m_xCoorTree.FindNext(*xNode))
+			{
+				xNode->m_Key += x;
+				xNode->m_End += x;
+			}
+		}
+	}
+
+	MRegion::Iterator MRegion::begin() const
+	{
+		Iterator it;
+		it.ynode = m_yCoorTree.FindMin();
+		it.xnode = it.ynode->m_xCoorTree.FindMin();
+		return it;
+	}
+
+	MRegion::Iterator& MRegion::Iterator::operator++()
+	{
+		xnode = ynode->m_xCoorTree.FindNext(*xnode);
+		if(xnode != 0)
+			return *this;
+
+		ynode = ThirdParty::Container::TreeEx<MRegion::CoorTree,MRegion::YNode>::FindNext(*ynode);
+		if(ynode != 0)
+			xnode = ynode->m_xCoorTree.FindMin();
+
+		return *this;
+	}
 }

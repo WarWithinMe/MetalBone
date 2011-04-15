@@ -426,36 +426,48 @@ namespace MetalBone
 		if(geoData == 0)
 			return false;
 
-		D2D_SIZE_U size = w->size();
+		D2D_SIZE_U size  = w->size();
 		D2D_SIZE_U size2 = size;
 		if(geoData->width != -1 && geoData->width != size2.width)
 			size2.width = geoData->width;
 		if(geoData->height != -1 && geoData->height != size2.height)
 			size2.height = geoData->height;
 
-		if((unsigned int)geoData->minWidth > size2.width)
-			size2.width = geoData->minWidth;
-		else if ((unsigned int)geoData->maxWidth < size.width)
-			size2.width = geoData->maxWidth;
-
-		if((unsigned int)geoData->minHeight > size2.height)
-			size2.height = geoData->minHeight;
-		else if((unsigned int)geoData->maxHeight < size2.height)
-			size2.height = geoData->maxHeight;
-
 		D2D_SIZE_U range = w->minSize();
-		if(geoData->minWidth != -1)
+		bool changed = false;
+		if(geoData->minWidth != -1) {
 			range.width = geoData->minWidth;
-		if(geoData->minHeight != -1)
+			changed = true;
+		}
+		if(geoData->minHeight != -1) {
 			range.height = geoData->minHeight;
-		w->setMinimumSize(range.width,range.height);
+			changed = true;
+		}
+		if(changed)
+			w->setMinimumSize(range.width,range.height);
+
+		if(size2.width   < range.width)
+			size2.width  = range.width;
+		if(size2.height  < range.height)
+			size2.height = range.height;
 
 		range = w->maxSize();
-		if(geoData->maxWidth != -1)
+		changed = false;
+		if(geoData->maxWidth != -1) {
 			range.width = geoData->maxWidth;
-		if(geoData->maxHeight != -1)
+			changed = true;
+		}
+		if(geoData->maxHeight != -1) {
 			range.height = geoData->maxHeight;
-		w->setMaximumSize(range.width,range.height);
+			changed = true;
+		}
+		if(changed)
+			w->setMaximumSize(range.width,range.height);
+
+		if(size2.width   > range.width)
+			size2.width  = range.width;
+		if(size2.height  > range.height)
+			size2.height = range.height;
 
 		if(size2.width != size.width || size2.height != size.height)
 		{
@@ -2195,7 +2207,7 @@ namespace MetalBone
 		// Remark: If the declaration have values in wrong order, it might crash the program.
 		// Maybe we should add some logic to avoid this flaw.
 		renderRule.init();
-		workingRenderTarget = w->getDCRenderTarget();
+		workingRenderTarget = w->getRenderTarget();
 		DeclMap::iterator declIter = declarations.begin();
 		DeclMap::iterator declIterEnd = declarations.end();
 
@@ -2346,7 +2358,7 @@ namespace MetalBone
 		if(declIter->first <= PT_MinimumHeight)
 		{
 			GeometryData* geoData = new GeometryData();
-			renderRule->geoData = new GeometryData();
+			renderRule->geoData = geoData;
 			do {
 				int data = declIter->second->values.at(0).data.vint;
 				switch(declIter->first)
@@ -2610,10 +2622,10 @@ namespace MetalBone
 		{
 			case TopCenter:
 				pbmpRect.left   = (FLOAT)leftWidth;
-				pbmpRect.right  = (FLOAT)pbmpSize.width - leftWidth;
+				pbmpRect.right  = (FLOAT)pbmpSize.width - rightWidth;
 				pbmpRect.top    = 0.f; 
 				pbmpRect.bottom = (FLOAT)topWidth;
-				pbmpSize.width  = int(pbmpRect.right - rightWidth);
+				pbmpSize.width  = int(pbmpRect.right - leftWidth);
 				pbmpSize.height = topWidth;
 				break;
 			case CenterLeft:
@@ -2675,148 +2687,145 @@ namespace MetalBone
 
 	void RenderRuleData::drawBorderImage(ID2D1RenderTarget* rt,const RECT& widgetRect, const RECT& clipRect)
 	{
-		if(borderImageRO != 0)
-		{
-			// 0.TopLeft     1.TopCenter     2.TopRight
-			// 3.CenterLeft  4.Center        5.CenterRight
-			// 6.BottomLeft  7.BottomCenter  8.BottomRight
-			bool drawParts[9] = {true,true,true,true,true,true,true,true,true};
-			int x1 = widgetRect.left   + borderImageRO->leftWidth;
-			int x2 = widgetRect.right  - borderImageRO->rightWidth;
-			int y1 = widgetRect.top    + borderImageRO->topWidth;
-			int y2 = widgetRect.bottom - borderImageRO->bottomWidth;
-			D2D1_SIZE_U borderImageSize = borderImageRO->imageSize();
-			FLOAT scaleX = FLOAT(x2 - x1) / (borderImageSize.width - borderImageRO->leftWidth - borderImageRO->rightWidth);
-			FLOAT scaleY = FLOAT(y2 - y1) / (borderImageSize.height - borderImageRO->topWidth - borderImageRO->bottomWidth);
-			if(clipRect.left > x1) {
-				drawParts[0] = drawParts[3] = drawParts[6] = false;
-				if(clipRect.left > x2)
-					drawParts[1] = drawParts[4] = drawParts[7] = false;
-			}
-			if(clipRect.top > y1) {
-				drawParts[0] = drawParts[1] = drawParts[2] = false;
-				if(clipRect.top > y2)
-					drawParts[3] = drawParts[4] = drawParts[5] = false;
-			}
-			if(clipRect.right <= x2) {
-				drawParts[2] = drawParts[5] = drawParts[8] = false;
-				if(clipRect.right <= x1)
-					drawParts[1] = drawParts[4] = drawParts[7] = false;
-			}
-			if(clipRect.bottom <= y2) {
-				drawParts[6] = drawParts[7] = drawParts[8] = false;
-				if(clipRect.bottom <= y1)
-					drawParts[3] = drawParts[4] = drawParts[5] = false;
-			}
+		// 0.TopLeft     1.TopCenter     2.TopRight
+		// 3.CenterLeft  4.Center        5.CenterRight
+		// 6.BottomLeft  7.BottomCenter  8.BottomRight
+		bool drawParts[9] = {true,true,true,true,true,true,true,true,true};
+		int x1 = widgetRect.left   + borderImageRO->leftWidth;
+		int x2 = widgetRect.right  - borderImageRO->rightWidth;
+		int y1 = widgetRect.top    + borderImageRO->topWidth;
+		int y2 = widgetRect.bottom - borderImageRO->bottomWidth;
+		D2D1_SIZE_U borderImageSize = borderImageRO->imageSize();
+		FLOAT scaleX = FLOAT(x2 - x1) / (borderImageSize.width - borderImageRO->leftWidth - borderImageRO->rightWidth);
+		FLOAT scaleY = FLOAT(y2 - y1) / (borderImageSize.height - borderImageRO->topWidth - borderImageRO->bottomWidth);
+		if(clipRect.left > x1) {
+			drawParts[0] = drawParts[3] = drawParts[6] = false;
+			if(clipRect.left > x2)
+				drawParts[1] = drawParts[4] = drawParts[7] = false;
+		}
+		if(clipRect.top > y1) {
+			drawParts[0] = drawParts[1] = drawParts[2] = false;
+			if(clipRect.top > y2)
+				drawParts[3] = drawParts[4] = drawParts[5] = false;
+		}
+		if(clipRect.right <= x2) {
+			drawParts[2] = drawParts[5] = drawParts[8] = false;
+			if(clipRect.right <= x1)
+				drawParts[1] = drawParts[4] = drawParts[7] = false;
+		}
+		if(clipRect.bottom <= y2) {
+			drawParts[6] = drawParts[7] = drawParts[8] = false;
+			if(clipRect.bottom <= y1)
+				drawParts[3] = drawParts[4] = drawParts[5] = false;
+		}
 
-			// Draw!
-			D2D1_SIZE_U imageSize = borderImageRO->imageSize();
-			D2D1_RECT_F drawRect;
-			ID2D1BitmapBrush* brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::Conner);
-			// Assume we can always get a valid brush for Conner.
-			if(drawParts[0]) {
-				drawRect.left   = (FLOAT)widgetRect.left;
-				drawRect.right  = (FLOAT)x1;
-				drawRect.top    = (FLOAT)widgetRect.top;
-				drawRect.bottom = (FLOAT)y1;
-				brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
+		// Draw!
+		D2D1_SIZE_U imageSize = borderImageRO->imageSize();
+		D2D1_RECT_F drawRect;
+		ID2D1BitmapBrush* brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::Conner);
+		// Assume we can always get a valid brush for Conner.
+		if(drawParts[0]) {
+			drawRect.left   = (FLOAT)widgetRect.left;
+			drawRect.right  = (FLOAT)x1;
+			drawRect.top    = (FLOAT)widgetRect.top;
+			drawRect.bottom = (FLOAT)y1;
+			brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
+			rt->FillRectangle(drawRect,brush);
+		}
+		if(drawParts[2]) {
+			drawRect.left   = (FLOAT)x2;
+			drawRect.right  = (FLOAT)widgetRect.right;
+			drawRect.top    = (FLOAT)widgetRect.top;
+			drawRect.bottom = (FLOAT)y1;
+			brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.right - imageSize.width, drawRect.top));
+			rt->FillRectangle(drawRect,brush);
+		}
+		if(drawParts[6]) {
+			drawRect.left   = (FLOAT)widgetRect.left;
+			drawRect.right  = (FLOAT)x1;
+			drawRect.top    = (FLOAT)y2;
+			drawRect.bottom = (FLOAT)widgetRect.bottom;
+			brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.bottom - imageSize.height));
+			rt->FillRectangle(drawRect,brush);
+		}
+		if(drawParts[8]) {
+			drawRect.left   = (FLOAT)x2;
+			drawRect.right  = (FLOAT)widgetRect.right;
+			drawRect.top    = (FLOAT)y2;
+			drawRect.bottom = (FLOAT)widgetRect.bottom;
+			brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.right - imageSize.width, drawRect.bottom - imageSize.height));
+			rt->FillRectangle(drawRect,brush);
+		}
+		if(drawParts[1]) {
+			drawRect.left   = (FLOAT)x1;
+			drawRect.right  = (FLOAT)x2;
+			drawRect.top    = (FLOAT)widgetRect.top;
+			drawRect.bottom = (FLOAT)y1;
+			brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::TopCenter);
+			if(brush) {
+				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
+				if(!borderImageRO->repeatX)
+					matrix = D2D1::Matrix3x2F::Scale(scaleX,1.0f) * matrix;
+				brush->SetTransform(matrix);
 				rt->FillRectangle(drawRect,brush);
 			}
-			if(drawParts[2]) {
-				drawRect.left   = (FLOAT)x2;
-				drawRect.right  = (FLOAT)widgetRect.right;
-				drawRect.top    = (FLOAT)widgetRect.top;
-				drawRect.bottom = (FLOAT)y1;
-				brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.right - imageSize.width, drawRect.top));
+		}
+		if(drawParts[3]) {
+			drawRect.left   = (FLOAT)widgetRect.left;
+			drawRect.right  = (FLOAT)x1;
+			drawRect.top    = (FLOAT)y1;
+			drawRect.bottom = (FLOAT)y2;
+			brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::CenterLeft);
+			if(brush) {
+				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
+				if(!borderImageRO->repeatY)
+					matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
+				brush->SetTransform(matrix);
 				rt->FillRectangle(drawRect,brush);
 			}
-			if(drawParts[6]) {
-				drawRect.left   = (FLOAT)widgetRect.left;
-				drawRect.right  = (FLOAT)x1;
-				drawRect.top    = (FLOAT)y2;
-				drawRect.bottom = (FLOAT)widgetRect.bottom;
-				brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.bottom - imageSize.height));
+		}
+		if(drawParts[4]) {
+			drawRect.left   = (FLOAT)x1;
+			drawRect.right  = (FLOAT)x2;
+			drawRect.top    = (FLOAT)y1;
+			drawRect.bottom = (FLOAT)y2;
+			brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::Center);
+			if(brush) {
+				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
+				if(!borderImageRO->repeatX)
+					matrix = D2D1::Matrix3x2F::Scale(scaleX, borderImageRO->repeatY ? 1.0f : scaleY) * matrix; 
+				else if(!borderImageRO->repeatY)
+					matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
+				brush->SetTransform(matrix);
 				rt->FillRectangle(drawRect,brush);
 			}
-			if(drawParts[8]) {
-				drawRect.left   = (FLOAT)x2;
-				drawRect.right  = (FLOAT)widgetRect.right;
-				drawRect.top    = (FLOAT)y2;
-				drawRect.bottom = (FLOAT)widgetRect.bottom;
-				brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.right - imageSize.width, drawRect.bottom - imageSize.height));
+		}
+		if(drawParts[5]) {
+			drawRect.left   = (FLOAT)x2;
+			drawRect.right  = (FLOAT)widgetRect.right;
+			drawRect.top    = (FLOAT)y1;
+			drawRect.bottom = (FLOAT)y2;
+			brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::CenterRight);
+			if(brush) {
+				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
+				if(!borderImageRO->repeatY)
+					matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
+				brush->SetTransform(matrix);
 				rt->FillRectangle(drawRect,brush);
 			}
-			if(drawParts[1]) {
-				drawRect.left   = (FLOAT)x1;
-				drawRect.right  = (FLOAT)x2;
-				drawRect.top    = (FLOAT)widgetRect.top;
-				drawRect.bottom = (FLOAT)y1;
-				brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::TopCenter);
-				if(brush) {
-					D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-					if(!borderImageRO->repeatX)
-						matrix = D2D1::Matrix3x2F::Scale(scaleX,1.0f) * matrix;
-					brush->SetTransform(matrix);
-					rt->FillRectangle(drawRect,brush);
-				}
-			}
-			if(drawParts[3]) {
-				drawRect.left   = (FLOAT)widgetRect.left;
-				drawRect.right  = (FLOAT)x1;
-				drawRect.top    = (FLOAT)y1;
-				drawRect.bottom = (FLOAT)y2;
-				brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::CenterLeft);
-				if(brush) {
-					D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-					if(!borderImageRO->repeatY)
-						matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
-					brush->SetTransform(matrix);
-					rt->FillRectangle(drawRect,brush);
-				}
-			}
-			if(drawParts[4]) {
-				drawRect.left   = (FLOAT)x1;
-				drawRect.right  = (FLOAT)x2;
-				drawRect.top    = (FLOAT)y1;
-				drawRect.bottom = (FLOAT)y2;
-				brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::Center);
-				if(brush) {
-					D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-					if(!borderImageRO->repeatX)
-						matrix = D2D1::Matrix3x2F::Scale(scaleX, borderImageRO->repeatY ? 1.0f : scaleY) * matrix; 
-					else if(!borderImageRO->repeatY)
-						matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
-					brush->SetTransform(matrix);
-					rt->FillRectangle(drawRect,brush);
-				}
-			}
-			if(drawParts[5]) {
-				drawRect.left   = (FLOAT)x2;
-				drawRect.right  = (FLOAT)widgetRect.right;
-				drawRect.top    = (FLOAT)y1;
-				drawRect.bottom = (FLOAT)y2;
-				brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::CenterRight);
-				if(brush) {
-					D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-					if(!borderImageRO->repeatY)
-						matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
-					brush->SetTransform(matrix);
-					rt->FillRectangle(drawRect,brush);
-				}
-			}
-			if(drawParts[7]) {
-				drawRect.left   = (FLOAT)x1;
-				drawRect.right  = (FLOAT)x2;
-				drawRect.top    = (FLOAT)y2;
-				drawRect.bottom = (FLOAT)widgetRect.bottom;
-				brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::BottomCenter);
-				if(brush) {
-					D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-					if(!borderImageRO->repeatX)
-						matrix = D2D1::Matrix3x2F::Scale(scaleX,1.0f) * matrix;
-					brush->SetTransform(matrix);
-					rt->FillRectangle(drawRect,brush);
-				}
+		}
+		if(drawParts[7]) {
+			drawRect.left   = (FLOAT)x1;
+			drawRect.right  = (FLOAT)x2;
+			drawRect.top    = (FLOAT)y2;
+			drawRect.bottom = (FLOAT)widgetRect.bottom;
+			brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::BottomCenter);
+			if(brush) {
+				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
+				if(!borderImageRO->repeatX)
+					matrix = D2D1::Matrix3x2F::Scale(scaleX,1.0f) * matrix;
+				brush->SetTransform(matrix);
+				rt->FillRectangle(drawRect,brush);
 			}
 		}
 	}

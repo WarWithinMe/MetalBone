@@ -2,6 +2,7 @@
 #define GUI_MSTYLESHEET_H
 
 #include "mb_switch.h"
+#include "MWidget.h"
 
 #include <set>
 #include <vector>
@@ -17,7 +18,6 @@
 
 namespace MetalBone
 {
-	class MWidget;
 	class MStyleSheetStyle;
 	namespace CSS
 	{
@@ -233,7 +233,7 @@ namespace MetalBone
 			// for a widget.
 			void polish(MWidget* w);
 			inline void draw(MWidget* w,ID2D1RenderTarget* rt, const RECT& widgetRectInRT, 
-						    const RECT& clipRectInRT, unsigned int p = CSS::PC_Default); 
+						    const RECT& clipRectInRT); 
 			// Remove every stylesheet resource cached for MWidget w;
 			inline void removeCache(MWidget*);
 
@@ -290,7 +290,7 @@ void recreateResources(MWidget*) {}
 
 			// We save the working renderTarget and declaration here,
 			// so we don't have to pass it around functions.
-			ID2D1DCRenderTarget* workingRenderTarget;
+			ID2D1RenderTarget* workingRenderTarget;
 			CSS::Declaration*    workingDeclaration;
 
 			void removeResources();
@@ -303,9 +303,9 @@ void recreateResources(MWidget*) {}
 
 
 	inline void MStyleSheetStyle::draw(MWidget* w, ID2D1RenderTarget* rt,
-								const RECT& wr, const RECT& cr, unsigned int p)
+								const RECT& wr, const RECT& cr)
 	{
-		CSS::RenderRule rule = getRenderRule(w,p);
+		CSS::RenderRule rule = getRenderRule(w,w->getCurrentWidgetPseudo());
 		if(rule.isValid())
 			rule->draw(rt,wr,cr); 
 	}
