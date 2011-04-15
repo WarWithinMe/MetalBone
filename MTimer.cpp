@@ -55,4 +55,33 @@ namespace MetalBone
 #endif
 		}
 	}
+
+	void MTimer::cleanUp()
+	{
+		TimerIdMap::iterator it = timerIdMap.begin();
+		TimerIdMap::iterator itEnd = timerIdMap.end();
+		while(it != itEnd)
+		{
+			KillTimer(NULL,it->first);
+			++it;
+		}
+		timerIdMap.clear();
+		TimerHash::iterator tit = timerHash.begin();
+		TimerHash::iterator titEnd = timerHash.end();
+		while(tit != titEnd)
+		{
+			tit->second->b_active = false;
+			tit->second->m_id = 0;
+		}
+		timerHash.clear();
+	}
+
+	void MTimer::setInterval(unsigned int msec)
+	{
+		m_interval = msec;
+		if(!b_active)
+			return;
+		stop();
+		start();
+	}
 }

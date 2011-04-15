@@ -15,10 +15,11 @@ namespace MetalBone
 			inline bool isSingleShot()     const;
 			inline unsigned int timerId()  const;
 			inline unsigned int interval() const;
-			inline void setInterval(unsigned int msec);
 			inline void setSingleShot(bool);
+			void setInterval(unsigned int msec);
 
 			inline void start(unsigned int msec);
+			static void cleanUp();
 			void start();
 			void stop();
 
@@ -51,8 +52,6 @@ namespace MetalBone
 		{ return m_interval; }
 	inline unsigned int MTimer::timerId() const
 		{ return m_id; } 
-	inline void MTimer::setInterval(unsigned int msec)
-		{ m_interval = msec; }
 	inline void MTimer::setSingleShot(bool single)
 		{ b_singleshot = single; }
 	inline void MTimer::start(unsigned int msec)
