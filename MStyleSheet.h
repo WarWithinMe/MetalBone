@@ -2,7 +2,6 @@
 #define GUI_MSTYLESHEET_H
 
 #include "mb_switch.h"
-#include "MWidget.h"
 
 #include <set>
 #include <vector>
@@ -10,15 +9,12 @@
 #include <Windows.h>
 #include <d2d1.h>
 #include <map>
-#ifdef MSVC
-#  include <unordered_map>
-#else
-#  include <tr1/unordered_map>
-#endif
+#include <unordered_map>
 
 namespace MetalBone
 {
-	class MStyleSheetStyle;
+	class MSSSPrivate;
+	class MWidget;
 	namespace CSS
 	{
 		enum PseudoClassType {
@@ -114,207 +110,58 @@ namespace MetalBone
 			StyleRuleIdMap			srIdMap;
 		};
 
-		struct BackgroundRenderObject;
-		struct BorderImageRenderObject;
-		// I have removed some interfaces of BorderRenderObject,
-		// because some only works for Simple~
-		// some only works for Complex~
-		// Maybe the BorderRenderObject is a bad design.
-		// But for now, I don't have another idea.
-		struct BorderRenderObject
-		{
-			enum ROType {
-				SimpleBorder,
-				RadiusBorder,
-				ComplexBorder
-			};
-
-			ROType type;
-			virtual ~BorderRenderObject() {}
-			virtual void getBorderWidth(RECT&) = 0;
-			virtual bool isVisible() = 0;
-		};
-		struct SimpleBorderRenderObject;
-		struct ComplexBorderRenderObject;
-
-		struct GeometryData
-		{
-			GeometryData():width(-1),height(-1),
-				minWidth(-1),minHeight(-1),
-				maxWidth(-1),maxHeight(-1){}
-			int width;
-			int height;
-			int minWidth;
-			int minHeight;
-			int maxWidth;
-			int maxHeight;
-		};
-
-		struct RenderRuleData
-		{
-			RenderRuleData():refCount(1),opaqueBackground(false),
-					animated(false),hasMargin(false),
-					hasPadding(false),geoData(0),
-					borderImageRO(0),borderRO(0)
-			{
-				memset(&margin, 0,sizeof(D2D_RECT_U));
-				memset(&padding,0,sizeof(D2D_RECT_U));
-			}
-			~RenderRuleData();
-			int  refCount;
-			bool opaqueBackground;
-			bool animated; // Remark: We need to know whether the background is GIF animated image.
-			bool hasMargin;
-			bool hasPadding;
-
-			std::vector<BackgroundRenderObject*> backgroundROs;
-			BorderImageRenderObject* borderImageRO;
-			BorderRenderObject* borderRO;
-			GeometryData* geoData;
-
-			D2D_RECT_U margin;
-			D2D_RECT_U padding;
-
-			// Return true if we changed the widget's size
-			bool setGeometry(MWidget*);
-			void draw(ID2D1RenderTarget* rt, const RECT& widgetRectInRT, const RECT& clipRectInRT);
-			void drawBackgrounds(ID2D1RenderTarget*,ID2D1Geometry*,const RECT& widgetRectInWnd, const RECT& clipRectInWnd);
-			void drawBorderImage(ID2D1RenderTarget*,const RECT& widgetRectInWnd, const RECT& clipRectInWnd);
-			void drawBorder(ID2D1RenderTarget*,const RECT& widgetRectInWnd, const RECT& clipRectInWnd);
-		};
 		struct RenderRuleCacheKey
 		{
 			std::vector<StyleRule*> styleRules;
 			bool operator<(const RenderRuleCacheKey& rhs) const;
 			RenderRuleCacheKey& operator=(RenderRuleCacheKey& rhs) { styleRules = rhs.styleRules; }
 		};
+		struct RenderRuleData;
 		class RenderRule
 		{
 			// RenderRule is not thread-safe and it haven't to be.
 			// Because all Styling/Drawing stuff should remain on the same thread(Main thread)
 			public:
-				RenderRule():data(0){}
-				RenderRule::RenderRule(RenderRuleData* d):data(d) { if(data) ++data->refCount; }
-				RenderRule::RenderRule(const RenderRule& d):data(d.data) { if(data) ++data->refCount; }
-				~RenderRule() {
-					if(data) {
-						--data->refCount;
-						if(data->refCount == 0)
-							delete data;
-					}
-				}
+				inline RenderRule();
+				RenderRule(RenderRuleData* d);
+				RenderRule(const RenderRule& d);
+				~RenderRule();
 
-				RenderRule& operator=(const RenderRule& other);
-				inline bool isValid() const { return data != 0; }
-				inline bool opaqueBackground() const { return data == 0 ? false : data->opaqueBackground; }
-				inline bool setGeometry(MWidget* w) { return data->setGeometry(w); }
+				const RenderRule& operator=(const RenderRule& other);
+				inline operator bool() const;
+				inline bool isValid() const;
+				bool opaqueBackground() const;
+				bool setGeometry(MWidget* w);
 			private:
-				void init() { data = new RenderRuleData(); }
-				RenderRuleData* operator->() { return data; }
+				void init();
+				inline RenderRuleData* operator->() const;
 				RenderRuleData* data;
-			friend class MStyleSheetStyle;
+
+			friend class MSSSPrivate;
 		};
 	} // namespace CSS
 
 	class MStyleSheetStyle
 	{
 		public:
-			MStyleSheetStyle():appStyleSheet(new CSS::StyleSheet()){}
+			MStyleSheetStyle();
 			~MStyleSheetStyle();
-
-			// Setting an empty css string will remove the existed StyleSheet
-			void setAppSS				(const std::wstring&);
-			void setWidgetSS			(MWidget*, const std::wstring&);
-
-			// polish() calls getRenderRule() to generate RenderRule(default state)
-			// for the widget. Then we set Widget Properties (width, height,
-			// minWidth, hover, etc.) according to the RenderRule.
-			// One should call polish first if there's no StyleRules(cached)
-			// for a widget.
+			void setAppSS(const std::wstring& css);
+			void setWidgetSS(MWidget* w, const std::wstring& css);
 			void polish(MWidget* w);
-			inline void draw(MWidget* w,ID2D1RenderTarget* rt, const RECT& widgetRectInRT, 
-						    const RECT& clipRectInRT); 
-			// Remove every stylesheet resource cached for MWidget w;
-			inline void removeCache(MWidget*);
-
-			CSS::RenderRule getRenderRule(MWidget*, unsigned int pseudo);
-
-// TODO: Implement recreateResource
-void recreateResources(MWidget*) {}
-
-
+			void draw(MWidget* w,ID2D1RenderTarget* rt, const RECT& widgetRectInRT, const RECT& clipRectInRT);
+			void removeCache(MWidget* w);
+			CSS::RenderRule getRenderRule(MWidget* w, unsigned int p = CSS::PC_Default);
 		private:
-			typedef std::tr1::unordered_map<MWidget*, CSS::StyleSheet*> WidgetSSCache;
-			WidgetSSCache    widgetSSCache; // Widget specific StyleSheets
-			CSS::StyleSheet* appStyleSheet; // Application specific StyleSheets
-
-			// Cache for RenderRules. Each RenderRule consists of several D2D resources.
-			// Assume these resources always are sharable (i.e. either created
-			// by hardware RenderTarget or software RenderTarget).
-			// Remark:
-			// **We also keep track of which render target has created the resources,
-			// **so we can deal with D2DERR_RECREATE_TARGET error.
-			// **(Not now, because I don't know if it's necessary to recreate sharable resources)
-			struct PseudoRenderRuleMap {
-				typedef std::tr1::unordered_map<unsigned int, MetalBone::CSS::RenderRule> Element;
-				Element element;
-			};
-			typedef std::map<CSS::RenderRuleCacheKey, PseudoRenderRuleMap> RenderRuleMap;
-			RenderRuleMap renderRuleCollection;
-
-			// Cache for widgets. Provide fast look up for their associated RenderRules.
-			// MatchedStyleRuleVector is ordered by specifity from low to high
-			typedef std::vector<CSS::MatchedStyleRule> MatchedStyleRuleVector;
-			typedef std::tr1::unordered_map<MWidget*, MatchedStyleRuleVector> WidgetStyleRuleMap;
-			typedef std::tr1::unordered_map<MWidget*, PseudoRenderRuleMap*>   WidgetRenderRuleMap;
-			WidgetStyleRuleMap  widgetStyleRuleCache;
-			WidgetRenderRuleMap widgetRenderRuleCache;
-
-			// Each declaration can only declare one brush.
-			typedef std::tr1::unordered_map<unsigned int, ID2D1SolidColorBrush*> D2D1SolidBrushMap;
-			typedef std::tr1::unordered_map<std::wstring, ID2D1Bitmap*>          D2D1BitmapMap;
-			D2D1SolidBrushMap solidBrushCache;
-			D2D1BitmapMap     bitmapCache;
-
-			void getMachedStyleRules(MWidget*, MatchedStyleRuleVector&);
-			void clearRenderRuleCacheRecursively(MWidget*);
-
-			ID2D1Bitmap**                 createD2D1Bitmap     (const std::wstring&, bool& isOpaque);
-			ID2D1SolidColorBrush**        createD2D1SolidBrush (CSS::CssValue&);
-			CSS::BackgroundRenderObject*  createBackgroundRO   (unsigned int& opaqueType);
-			CSS::BorderImageRenderObject* createBorderImageRO  (bool& isOpaqueBG);
-
-			typedef std::multimap<CSS::PropertyType,CSS::Declaration*> DeclMap;
-			void setSimpleBorederRO(CSS::SimpleBorderRenderObject*,  DeclMap::iterator&, DeclMap::iterator);
-			void setComplexBorderRO(CSS::ComplexBorderRenderObject*, DeclMap::iterator&, DeclMap::iterator);
-
-			// We save the working renderTarget and declaration here,
-			// so we don't have to pass it around functions.
-			ID2D1RenderTarget* workingRenderTarget;
-			CSS::Declaration*    workingDeclaration;
-
-			void removeResources();
-#ifdef MB_DEBUG
-		public: void dumpStyleSheet();
-#endif
+			MSSSPrivate* mImpl;
 	};
 
-
-
-
-	inline void MStyleSheetStyle::draw(MWidget* w, ID2D1RenderTarget* rt,
-								const RECT& wr, const RECT& cr)
-	{
-		CSS::RenderRule rule = getRenderRule(w,w->getCurrentWidgetPseudo());
-		if(rule.isValid())
-			rule->draw(rt,wr,cr); 
-	}
-	inline void MStyleSheetStyle::removeCache(MWidget* w)
-	{
-		// We just have to remove from these two cache, without touching
-		// renderRuleCollection, because some of them might be using by others.
-		widgetStyleRuleCache.erase(w);
-		widgetRenderRuleCache.erase(w);
-	}
+	inline CSS::RenderRule::RenderRule():data(0){}
+	inline CSS::RenderRule::operator bool() const
+		{ return data != 0; }
+	inline bool CSS::RenderRule::isValid() const
+		{ return data != 0; }
+	inline CSS::RenderRuleData* CSS::RenderRule::operator->() const
+		{ return data; }
 } // namespace MetalBone
 #endif // MSTYLESHEET_H

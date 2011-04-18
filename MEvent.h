@@ -16,15 +16,14 @@ namespace MetalBone
 	};
 
 	class MRegion;
-	class MWidget;
+	// If MPaintEvent is not accepted, its children won't be painted.
 	class MPaintEvent : public MEvent
 	{
 		public:
-			inline const MRegion& getUpdateRegion() const  { return *region; }
+			explicit MPaintEvent(const MRegion& r):region(r){}
+			inline const MRegion& getUpdateRegion() const { return region; }
 		private:
-			MRegion* region;
-			inline void           setUpdateRegion(MRegion* r) { region = r; }
-			friend class MWidget;
+			const MRegion& region;
 	};
 }
 #endif // MEVENT_H

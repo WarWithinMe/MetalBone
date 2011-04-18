@@ -40,6 +40,9 @@ namespace MetalBone
 								     // parent won't recalc the stylesheet again.
 		WA_AutoBG            = 0x8,  // Default. The widget's opacity is detemined by the CSS. When a 
 									 // non-opaque widget redraws, it will cause widgets under it to redraw too.
+									 // If the background image is png of gif, or if it has a complex
+									 // clipping border. Or whatever so makes a widget that may not be a
+									 // opaque rectangle, it's considered non-opaque.
 		WA_OpaqueBG          = 0x10, // The widget is opaque. Clearing WA_AutoBG and WA_OpaqueBG makes it semi-transparent.
 		WA_NonChildOverlap   = 0x20, // Default. The children of this widget are promised not overlapped
 									 // each other. This will optimize a bit when we redraw, since we
@@ -159,7 +162,7 @@ namespace MetalBone
 
 
 			// The StyleSheetStyle calls this to determine which RenderRule is needed.
-			virtual unsigned int getCurrentWidgetPseudo() { return 0; }
+			virtual unsigned int getCurrentWidgetPseudo() { return 1; /* PC_Default */ }
 
 
 
@@ -199,7 +202,6 @@ namespace MetalBone
 
 			void drawWindow();
 			void draw(int xOffsetInWnd, int yOffsetInWnd, bool drawMySelf);
-			void addToUpdateList(RECT& updateRect);
 
 		friend struct MApplicationData;
 	};

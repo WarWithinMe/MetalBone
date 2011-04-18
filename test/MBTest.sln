@@ -3,6 +3,10 @@ Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestRegion", "region\TestRegion.vcxproj", "{7A408D26-75B8-4DB2-99C1-60AC21486206}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestWidgetDraw", "drawwidget\TestWidgetDraw.vcxproj", "{F84ABFBD-494F-4DCF-A030-13751E15A4B2}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestSignal", "signal\TestSignal.vcxproj", "{E7F2DD63-644C-4D3A-9DC9-B072102F2C2E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -13,6 +17,14 @@ Global
 		{7A408D26-75B8-4DB2-99C1-60AC21486206}.Debug|Win32.Build.0 = Debug|Win32
 		{7A408D26-75B8-4DB2-99C1-60AC21486206}.Release|Win32.ActiveCfg = Release|Win32
 		{7A408D26-75B8-4DB2-99C1-60AC21486206}.Release|Win32.Build.0 = Release|Win32
+		{F84ABFBD-494F-4DCF-A030-13751E15A4B2}.Debug|Win32.ActiveCfg = Debug|Win32
+		{F84ABFBD-494F-4DCF-A030-13751E15A4B2}.Debug|Win32.Build.0 = Debug|Win32
+		{F84ABFBD-494F-4DCF-A030-13751E15A4B2}.Release|Win32.ActiveCfg = Release|Win32
+		{F84ABFBD-494F-4DCF-A030-13751E15A4B2}.Release|Win32.Build.0 = Release|Win32
+		{E7F2DD63-644C-4D3A-9DC9-B072102F2C2E}.Debug|Win32.ActiveCfg = Debug|Win32
+		{E7F2DD63-644C-4D3A-9DC9-B072102F2C2E}.Debug|Win32.Build.0 = Debug|Win32
+		{E7F2DD63-644C-4D3A-9DC9-B072102F2C2E}.Release|Win32.ActiveCfg = Release|Win32
+		{E7F2DD63-644C-4D3A-9DC9-B072102F2C2E}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

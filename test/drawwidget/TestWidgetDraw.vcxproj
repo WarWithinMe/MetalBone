@@ -11,21 +11,20 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{7A408D26-75B8-4DB2-99C1-60AC21486206}</ProjectGuid>
-    <Keyword>Win32Proj</Keyword>
-    <RootNamespace>TestRegion</RootNamespace>
+    <ProjectGuid>{F84ABFBD-494F-4DCF-A030-13751E15A4B2}</ProjectGuid>
+    <RootNamespace>TestWidgetDraw</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <CharacterSet>Unicode</CharacterSet>
+    <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
+    <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -38,58 +37,53 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\Program Files\Visual Leak Detector\include;$(SolutionDir)\..;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Program Files\Visual Leak Detector\lib\Win32;$(SolutionDir)\..;$(LibraryPath)</LibraryPath>
-    <SourcePath>$(SolutionDir)\..;$(SourcePath)</SourcePath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LinkIncremental>false</LinkIncremental>
+    <IncludePath>C:\Program Files\Visual Leak Detector\include;$(SolutionDir)\..;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>UNICODE;_UNICODE;WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions);MSVC</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\MBGlobal.h" />
-    <ClInclude Include="..\..\mb_switch.h" />
-    <ClInclude Include="..\..\MRegion.h" />
-    <ClInclude Include="assert.h" />
-    <ClInclude Include="ContainersInl.h" />
-    <ClInclude Include="GObjBase.h" />
-    <ClInclude Include="GuardObjs.h" />
-    <ClInclude Include="Rgn.h" />
-  </ItemGroup>
-  <ItemGroup>
+    <ClCompile Include="..\..\3rd\XUnzip.cpp" />
     <ClCompile Include="..\..\MBGlobal.cpp" />
     <ClCompile Include="..\..\MRegion.cpp" />
-    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="..\..\MStyleSheet.cpp" />
+    <ClCompile Include="..\..\MTimer.cpp" />
+    <ClCompile Include="..\..\MWidget.cpp" />
+    <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\3rd\ContainersInl.h" />
+    <ClInclude Include="..\..\3rd\XUnzip.h" />
+    <ClInclude Include="..\..\MApplication.h" />
+    <ClInclude Include="..\..\MBGlobal.h" />
+    <ClInclude Include="..\..\mb_switch.h" />
+    <ClInclude Include="..\..\MEvent.h" />
+    <ClInclude Include="..\..\MRegion.h" />
+    <ClInclude Include="..\..\MResource.h" />
+    <ClInclude Include="..\..\MStyleSheet.h" />
+    <ClInclude Include="..\..\MTimer.h" />
+    <ClInclude Include="..\..\MWidget.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

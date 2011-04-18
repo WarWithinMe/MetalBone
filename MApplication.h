@@ -70,7 +70,7 @@ namespace MetalBone
 
 		protected:
 			// MApplication注册窗口类前调用这个函数获取要注册的窗口类
-			virtual void setupRegisterClass(WNDCLASS&);
+			virtual void setupRegisterClass(WNDCLASSW&);
 
 
 		private:

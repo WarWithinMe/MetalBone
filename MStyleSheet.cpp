@@ -157,31 +157,37 @@ namespace MetalBone
 		struct CssValue
 		{
 			enum  Type    { Unknown, Number, Length, Identifier, Uri, Color };
-			union Variant {
-				int vint;
-				unsigned int vuint;
+			union Variant
+			{
+				int           vint;
+				unsigned int  vuint;
 				std::wstring* vstring;
+				ValueType     videntifier;
 			};
 
 			Type    type;
 			Variant data;
 
-			inline CssValue():type(Unknown) { data.vint = 0; }
-			inline CssValue(const CssValue& rhs):type(rhs.type),data(rhs.data){}
+			inline CssValue(const CssValue&);
+			explicit inline CssValue(Type t = Unknown);
 
-			inline D2D_COLOR_F getColor()
-			{
-				M_ASSERT(type == Color);
-				return D2D1::ColorF(data.vint >> 8, float(data.vint & 0xFF) / 256);
-			}
-
-			inline CssValue& operator=(const CssValue& rhs)
-			{
-				type = rhs.type;
-				data = rhs.data;
-				return *this;
-			}
+			inline D2D_COLOR_F getColor();
+			static inline D2D1_COLOR_F getColor(unsigned int);
+			inline const CssValue& operator=(const CssValue&);
 		};
+
+		inline CssValue::CssValue(const CssValue& rhs):type(rhs.type),data(rhs.data){}
+		inline CssValue::CssValue(Type t):type(t)
+			{ data.vint = 0; }
+		inline const CssValue& CssValue::operator=(const CssValue& rhs)
+			{ type = rhs.type; data = rhs.data; return *this; }
+		inline D2D_COLOR_F CssValue::getColor()
+		{
+			M_ASSERT(type == Color);
+			return D2D1::ColorF((data.vint >> 8) & 0xFFFFFF, float(data.vint & 0xFF) / 255);
+		}
+		inline D2D_COLOR_F CssValue::getColor(unsigned int color)
+		{ return D2D1::ColorF((color >> 8) & 0xFFFFFF, float(color & 0xFF) / 255); }
 
 		typedef std::vector<CssValue> CssValueArray;
 
@@ -202,7 +208,7 @@ namespace MetalBone
 			enum Relation { NoRelation, MatchNextIfAncestor, MatchNextIfParent };
 
 			BasicSelector():
-				pseudo(0),pseudoCount(0),
+				pseudo(PC_Default),pseudoCount(0),
 				relationToNext(MatchNextIfAncestor){}
 
 			void addPseudoAndClearInput(std::wstring& p);
@@ -222,6 +228,7 @@ namespace MetalBone
 			std::vector<BasicSelector*> basicSelectors;
 			int  specificity() const;
 			bool matchPseudo(unsigned int) const;
+			inline unsigned int pseudo() const;
 		};
 
 		struct StyleRule
@@ -252,7 +259,7 @@ namespace MetalBone
 
 		struct CSSValuePair {
 			const wchar_t* name;
-			int value;
+			unsigned int   value;
 		};
 	} // namespace CSS
 
@@ -380,103 +387,6 @@ namespace MetalBone
 		{ L"wrap",         Value_Wrap },
 	};
 
-	bool RenderRuleCacheKey::operator<(const RenderRuleCacheKey& rhs) const
-	{
-		if(this == &rhs)
-			return false;
-
-		int size1 = styleRules.size();
-		int size2 = rhs.styleRules.size();
-		if(size1 > size2) {
-			return false;
-		} else if(size1 < size2) {
-			return true;
-		} else {
-			for(int i = 0; i < size1; ++i)
-			{
-				StyleRule* sr1 = styleRules.at(i);
-				StyleRule* sr2 = rhs.styleRules.at(i);
-				if(sr1 > sr2)
-					return false;
-				else if(sr1 < sr2)
-					return true;
-			}
-		}
-		return false;
-	}
-
-	RenderRule& RenderRule::operator=(const RenderRule& other)
-	{
-		if(&other != this)
-		{
-			if(data) {
-				--data->refCount;
-				if(data->refCount == 0)
-					delete data;
-			}
-			data = other.data;
-			if(data)
-				++data->refCount;
-		}
-		return *this;
-	}
-
-	bool RenderRuleData::setGeometry(MWidget* w)
-	{
-		if(geoData == 0)
-			return false;
-
-		D2D_SIZE_U size  = w->size();
-		D2D_SIZE_U size2 = size;
-		if(geoData->width != -1 && geoData->width != size2.width)
-			size2.width = geoData->width;
-		if(geoData->height != -1 && geoData->height != size2.height)
-			size2.height = geoData->height;
-
-		D2D_SIZE_U range = w->minSize();
-		bool changed = false;
-		if(geoData->minWidth != -1) {
-			range.width = geoData->minWidth;
-			changed = true;
-		}
-		if(geoData->minHeight != -1) {
-			range.height = geoData->minHeight;
-			changed = true;
-		}
-		if(changed)
-			w->setMinimumSize(range.width,range.height);
-
-		if(size2.width   < range.width)
-			size2.width  = range.width;
-		if(size2.height  < range.height)
-			size2.height = range.height;
-
-		range = w->maxSize();
-		changed = false;
-		if(geoData->maxWidth != -1) {
-			range.width = geoData->maxWidth;
-			changed = true;
-		}
-		if(geoData->maxHeight != -1) {
-			range.height = geoData->maxHeight;
-			changed = true;
-		}
-		if(changed)
-			w->setMaximumSize(range.width,range.height);
-
-		if(size2.width   > range.width)
-			size2.width  = range.width;
-		if(size2.height  > range.height)
-			size2.height = range.height;
-
-		if(size2.width != size.width || size2.height != size.height)
-		{
-			w->resize(size2.width,size2.height);
-			return true;
-		}
-		return false;
-	}
-
 	const CSSValuePair* findCSSValue(const std::wstring& p, const CSSValuePair values[],int valueCount)
 	{
 		const CSSValuePair* crItem = 0;
@@ -520,9 +430,12 @@ namespace MetalBone
 		if(p == PC_Hover)
 			return bs->pseudo == p;
 
-		return bs->pseudo == 0 ? true :
+		return bs->pseudo == PC_Default ? true :
 				(p != (bs->pseudo & p)) ? false : (p != 0);
 	}
+
+	inline unsigned int Selector::pseudo() const
+		{ return basicSelectors.at(basicSelectors.size() - 1)->pseudo; }
 
 	StyleSheet::~StyleSheet()
 	{
@@ -964,7 +877,7 @@ namespace MetalBone
 								value.data.vuint = 0;
 							} else {
 								value.type = CssValue::Identifier;
-								value.data.vuint = crItem->value;
+								value.data.videntifier = static_cast<ValueType>(crItem->value);
 							}
 							values.push_back(value);
 							buffer.clear();
@@ -1064,1390 +977,781 @@ namespace MetalBone
 		}
 	}
 
-	MStyleSheetStyle::~MStyleSheetStyle()
+
+
+	struct PortionBrushes
 	{
-		delete appStyleSheet;
-		WidgetSSCache::iterator it = widgetSSCache.begin();
-		WidgetSSCache::iterator itEnd = widgetSSCache.end();
-		while(it != itEnd) {
-			delete it->second;
-			++it;
-		}
-
-		removeResources();
+		PortionBrushes() { memset(b,0,sizeof(ID2D1BitmapBrush*) * 5); }
+		~PortionBrushes() { for(int i =0; i<5; ++i) SafeRelease(b[i]); }
+		ID2D1BitmapBrush* b[5];
+	};
+	// ********** MStyleSheetStylePrivate
+	namespace CSS {
+		struct BackgroundRenderObject;
+		struct BorderImageRenderObject;
+		struct SimpleBorderRenderObject;
+		struct ComplexBorderRenderObject;
 	}
-
-	void MStyleSheetStyle::setAppSS(const std::wstring& css)
+	using namespace std;
+	using namespace std::tr1;
+	class MSSSPrivate
 	{
-		delete appStyleSheet;
-		renderRuleCollection.clear();
-		widgetStyleRuleCache.clear();
-		widgetRenderRuleCache.clear();
+		public:
+			inline MSSSPrivate();
+			~MSSSPrivate();
 
-		removeResources();
+			typedef multimap<PropertyType,Declaration*> DeclMap;
 
-		appStyleSheet = new StyleSheet();
-		MCSSParser parser(css);
-		parser.parse(appStyleSheet);
-	}
+		private:
+			void setAppSS    (const wstring&);
+			void setWidgetSS (MWidget*, const wstring&);
+			void clearRRCacheRecursively(MWidget*);
 
-	void MStyleSheetStyle::setWidgetSS(MWidget* w, const std::wstring& css)
-	{
-		// Remove StyleSheet Cache for MWidget w.
-		WidgetSSCache::const_iterator iter = widgetSSCache.find(w);
-		if(iter != widgetSSCache.end())
-		{
-			delete iter->second;
-			widgetSSCache.erase(iter);
-		}
+			void removeResources();
 
-		if(!css.empty())
-		{
-			StyleSheet* ss = new StyleSheet();
-			MCSSParser parser(css);
-			parser.parse(ss);
-			widgetSSCache.insert(WidgetSSCache::value_type(w,ss));
-		}
+			inline void polish(MWidget*);
+			inline void draw(MWidget*,ID2D1RenderTarget*,const RECT&,const RECT&);
+			inline void removeCache(MWidget*);
 
-		// Remove every child widgets' cache, so that they can recalc the StyleRules
-		// next time the StyleRules are needed.
-		clearRenderRuleCacheRecursively(w);
-	}
+			typedef unordered_map<MWidget*, StyleSheet*> WidgetSSCache;
+			WidgetSSCache widgetSSCache; // Widget specific StyleSheets
+			StyleSheet*   appStyleSheet; // Application specific StyleSheets
 
-	void MStyleSheetStyle::clearRenderRuleCacheRecursively(MWidget* w)
-	{
-		widgetStyleRuleCache.erase(w);
-		widgetRenderRuleCache.erase(w);
-		polish(w);
+			// A RenderRule is widget-specific and pseudo-specific.
+			// How to build a RenderRule for MWidget "w" with Pseudo "p"?
+			//
+			// 1. We first find out every StyleRule that affects "w".
+			// 2. We put these StyleRules in a MatchedStyleRuleVector "msrv".
+			// 3. Put this "msrv" into a WidgetStyleRuleMap.
+			//    (After step 3, we don't have to re-search for the StyleRules
+			//     again, if we need to generate another RenderRule for "w")
+			// 4. Now we have the "msrv", we find out those match "p",
+			//    then we make a RenderRule "rr" based on the result.
+			// 5. We put the "rr" in a PseudoRenderRuleMap "prrm" with "p"
+			//    as its key, and put "prrm" into RenderRuleMap with the "msrv"
+			//    as its key.
+			//    (After step 5, we don't need to build a new RenderRule if we
+			//     have the same MatchedStyleRuleVector and Pseudo) 
+			// 6. We also put this prrm into a WidgetRenderRuleMap, so that with
+			//    the same MWidget "w" and Pseudo "p", we could re-use the RenderRule "rr" 
 
-		const std::list<MWidget*>& children = w->children();
-		std::list<MWidget*>::const_iterator it = children.begin();
-		std::list<MWidget*>::const_iterator itEnd = children.end();
-		while(it != itEnd)
-		{
-			clearRenderRuleCacheRecursively(*it);
-			++it;
-		}
-	}
+			// MatchedStyleRuleVector is ordered by specifity from low to high
+			typedef vector<MatchedStyleRule> MatchedStyleRuleVector;
+			struct PseudoRenderRuleMap {
+				typedef unordered_map<unsigned int, RenderRule> Element;
+				Element element;
+			};
+			typedef map<RenderRuleCacheKey, PseudoRenderRuleMap>      RenderRuleMap;
+			typedef unordered_map<MWidget*, MatchedStyleRuleVector>   WidgetStyleRuleMap;
+			typedef unordered_map<MWidget*, PseudoRenderRuleMap*>     WidgetRenderRuleMap;
+			RenderRuleMap       renderRuleCollection;
+			WidgetStyleRuleMap  widgetStyleRuleCache;
+			WidgetRenderRuleMap widgetRenderRuleCache;
 
-	void MStyleSheetStyle::removeResources()
-	{
-		D2D1SolidBrushMap::iterator sIter = solidBrushCache.begin();
-		D2D1SolidBrushMap::iterator sIterEnd = solidBrushCache.end();
-		while(sIter != sIterEnd)
-		{
-			SafeRelease(sIter->second);
-			++sIter;
-		}
+			void getMachedStyleRules(MWidget*, MatchedStyleRuleVector&);
+			RenderRule getRenderRule(MWidget*, unsigned int);
+			void initRenderRule(RenderRule&, DeclMap&);
 
-		D2D1BitmapMap::iterator bIter = bitmapCache.begin();
-		D2D1BitmapMap::iterator bIterEnd = bitmapCache.end();
-		while(bIter != bIterEnd)
-		{
-			SafeRelease(bIter->second);
-			++bIter;
-		}
-		solidBrushCache.clear();
-		bitmapCache.clear();
-	}
 
-	void getWidgetClassName(const MWidget* w,std::wstring& name)
-	{
-		std::wstringstream s;
-		s << typeid(*w).name();
-		name = s.str();
-#ifdef MSVC
-		name.erase(0,6); // Eat the 'class ' generated by msvc.
-#endif
+			BackgroundRenderObject*  createBackgroundRO (CssValueArray&);
+			BorderImageRenderObject* createBorderImageRO(CssValueArray&);
+			void setSimpleBorderRO (SimpleBorderRenderObject*,  DeclMap::iterator&, DeclMap::iterator);
+			void setComplexBorderRO(ComplexBorderRenderObject*, DeclMap::iterator&, DeclMap::iterator);
 
-		int pos = 0;
-		while((pos = name.find(L"::",pos)) != std::wstring::npos)
-		{
-			name.replace(pos,2,L"--");
-			pos += 2;
-		}
-	}
 
-	bool basicSelectorMatches(const BasicSelector* bs, MWidget* w)
-	{
-		if(!bs->id.empty() && w->objectName() != bs->id)
-			return false;
+			typedef unordered_map<unsigned int, ID2D1SolidColorBrush*> D2D1SolidBrushMap;
+			typedef unordered_map<wstring, ID2D1BitmapBrush*>          D2D1BitmapBrushMap;
+			typedef unordered_map<ID2D1BitmapBrush*, PortionBrushes>   BorderImagerPortionMap;
+			D2D1SolidBrushMap      solidBrushCache;
+			D2D1BitmapBrushMap     bitmapBrushCache;
+			BorderImagerPortionMap biPortionCache;
 
-		if(!bs->elementName.empty())
-		{
-			std::wstring ss;
-			getWidgetClassName(w,ss);
-			if(bs->elementName != ss)
-				return false;
-		}
-		return true;
-	}
 
-	bool selectorMatches(const Selector* sel, MWidget* w)
-	{
-		const std::vector<BasicSelector*>& basicSels = sel->basicSelectors;
-		if(basicSels.size() == 1)
-			return basicSelectorMatches(basicSels.at(0),w);
+			static MSSSPrivate* instance;
 
-		// first element must always match!
-		if(!basicSelectorMatches(basicSels.at(basicSels.size() - 1), w))
-			return false;
+		friend class MStyleSheetStyle;
+		friend struct RenderRuleData;
+		friend struct ComplexBorderRenderObject;
+	};
 
-		w = w->parent();
 
-		if(w == 0)
-			return false;
-
-		int i = basicSels.size() - 2;
-		bool matched = true;
-		BasicSelector* bs = 0;/*basicSels.at(i);*/
-		while(i > 0 && (matched || bs->relationToNext == BasicSelector::MatchNextIfAncestor))
-		{
-			bs = basicSels.at(i);
-			matched = basicSelectorMatches(bs,w);
-
-			if(!matched)
-			{
-				if(bs->relationToNext == BasicSelector::MatchNextIfParent)
-					break;
-			}else
-				--i;
-
-			if((w = w->parent()) == 0)
-				return false;
-		}
-
-		return matched;
-	}
-
-	void matchRule(MWidget* w,const StyleRule* rule,int depth,
-				   std::multimap<int, MatchedStyleRule>& weightedRules)
-	{
-		for(unsigned int i = 0; i < rule->selectors.size(); ++i)
-		{
-			const Selector* sel = rule->selectors.at(i);
-			if(selectorMatches(sel, w))
-			{
-				int weight = rule->order + sel->specificity() * 0x100 + depth* 0x100000;
-				MatchedStyleRule msr;
-				msr.matchedSelector = sel;
-				msr.styleRule = rule;
-				weightedRules.insert(std::multimap<int, MatchedStyleRule>::value_type(weight,msr));
-			}
-		}
-	}
-
-	void MStyleSheetStyle::getMachedStyleRules(MWidget* widget, MatchedStyleRuleVector& srs)
-	{
-// 		if(widget->testAttributes(WA_NoStyleSheet))
-// 			return;
-
-		// Get all possible stylesheets
-		std::vector<CSS::StyleSheet*> sheets;
-		for(MWidget* p = widget; p != 0; p = p->parent())
-		{
-			WidgetSSCache::const_iterator wssIter = widgetSSCache.find(p);
-			if(wssIter != widgetSSCache.end())
-				sheets.push_back(wssIter->second);
-		}
-		sheets.push_back(appStyleSheet);
-
-		std::multimap<int, MatchedStyleRule> weightedRules;
-		int sheetCount = sheets.size();
-		for(int sheetIndex = 0; sheetIndex < sheetCount; ++sheetIndex)
-		{
-			int depth = sheetCount - sheetIndex;
-			const CSS::StyleSheet* sheet = sheets.at(sheetIndex);
-			// search for universal rules.
-			for(unsigned int i = 0;i< sheet->universal.size(); ++i) {
-				matchRule(widget,sheet->universal.at(i),depth,weightedRules);
-			}
-
-			// check for Id
-			if(!sheet->srIdMap.empty() && !widget->objectName().empty())
-			{
-				std::pair<StyleSheet::StyleRuleIdMap::const_iterator,
-						StyleSheet::StyleRuleIdMap::const_iterator> result =
-						sheet->srIdMap.equal_range(widget->objectName());
-				while(result.first != result.second)
-				{
-					matchRule(widget,result.first->second,depth,weightedRules);
-					++result.first;
-				}
-			}
-
-			// check for class name
-			if(!sheet->srElementMap.empty())
-			{
-				std::wstring widgetClassName;
-				getWidgetClassName(widget,widgetClassName);
-				std::pair<StyleSheet::StyleRuleElementMap::const_iterator,
-						StyleSheet::StyleRuleElementMap::const_iterator> result =
-						sheet->srElementMap.equal_range(widgetClassName);
-				while(result.first != result.second)
-				{
-					matchRule(widget,result.first->second,depth,weightedRules);
-					++result.first;
-				}
-			}
-		}
-
-		srs.clear();
-		srs.reserve(weightedRules.size());
-		std::multimap<int, MatchedStyleRule>::const_iterator wrIt = weightedRules.begin();
-		std::multimap<int, MatchedStyleRule>::const_iterator wrItEnd = weightedRules.end();
-
-		while(wrIt != wrItEnd)
-		{
-			srs.push_back(wrIt->second);
-			++wrIt;
-		}
-	}
-
+	// ========== XXRenderObject ==========
 	namespace CSS
 	{
-		enum BrushType
-		{
-			SolidBrush,
-			GradiantBrush,
-			BitmapBrush
+		enum ImageRepeat {
+			NoRepeat = 0,
+			RepeatX  = 1,
+			RepeatY  = 2,
+			RepeatXY = RepeatX | RepeatY
 		};
 
-		union D2D1BrushPointer
+		template<class T>
+		inline bool isRepeatX(const T* t) { return (t->repeat & RepeatX) != 0; }
+		template<class T>
+		inline bool isRepeatY(const T* t) { return (t->repeat & RepeatY) != 0; }
+
+		// The RenderObjects are created when the RenderRule is acquired,
+		// but sometimes, the RenderRule is only used to detemine the properties
+		// of a widget, not to draw. The D2D1 resources are only needed when the
+		// draw action performs.
+		// So, every kind of RenderObject must follow the same constraint.
+		// That is, if they use D2D1 resources, they must use the RIIA idiom.
+		// The resources are created when they are first needed.
+		// Its their responsibility to free the resoures when necessary.
+
+		struct GeometryRenderObject
 		{
-			ID2D1SolidColorBrush** solidBrush;
-			ID2D1Bitmap** bitmap;
+			int width   , height;
+			int minWidth, minHeight;
+			int maxWidth, maxHeight;
+
+			inline GeometryRenderObject() : width(-1), height(-1), minWidth(-1),
+				minHeight(-1), maxWidth(-1), maxHeight(-1) {}
 		};
 
-		// Remark: Replace repeatX and repeatY with D2D1 enums,
-		// Remark: Add width and height for background.
-		// so that we don't need to check them when we use them.
+
+
+		// Created by MSSSPrivate::createBackgroundRO()
 		struct BackgroundRenderObject
 		{
-			BackgroundRenderObject():bitmapBrush(0),
-					x(0),y(0),width(0),height(0),
-					clip(Value_Margin),alignmentX(Value_Left),
-					alignmentY(Value_Top),repeatX(false),repeatY(false),
-					lastUsedBitmap(0){}
+			inline BackgroundRenderObject(const CssValue&);
+			~BackgroundRenderObject(){}
 
-			~BackgroundRenderObject() { SafeRelease(bitmapBrush); }
+			unsigned int x, y, width, height;
+			ValueType    clip;
+			ValueType    alignX;
+			ValueType    alignY;
+			ImageRepeat  repeat;
 
-			// Return true if the brush should be deleted when drawing finshes.
-			ID2D1BitmapBrush* getBitmapBrush(ID2D1RenderTarget*);
+			bool checkedSize;
 
-			D2D1BrushPointer brush;
-			ID2D1BitmapBrush* bitmapBrush;
-			BrushType brushType;
-			int x;
-			int y;
-			unsigned int width;
-			unsigned int height;
-			unsigned int clip;
-			unsigned int alignmentX;
-			unsigned int alignmentY;
-			bool repeatX;
-			bool repeatY;
-			private:
-				ID2D1Bitmap* lastUsedBitmap;
+			CssValue     brushCSSValue;
+			ID2D1Brush** brushPosition;
 		};
+		inline BackgroundRenderObject::BackgroundRenderObject(const CssValue& v):
+				x(0),y(0),width(0),height(0),clip(Value_Margin),
+				alignX(Value_Left),alignY(Value_Top),
+				repeat(NoRepeat),checkedSize(false),
+				brushCSSValue(v),brushPosition(0){}
 
-		struct BorderImageRenderObject
+
+
+		// I have removed some interfaces of BorderRenderObject,
+		// because some only works for Simple~
+		// some only works for Complex~
+		// Maybe the BorderRenderObject is a bad design.
+		// But for now, I don't have another idea.
+		struct BorderRenderObject
 		{
-			enum Portion
-			{
-				Conner = 0,
-				TopCenter,
-				CenterLeft,
-				Center,
-				CenterRight,
-				BottomCenter
-			};
-			BorderImageRenderObject():topWidth(0),rightWidth(0),
-						bottomWidth(0),leftWidth(0),
-						repeatX(true),repeatY(true),lastUsedBitmap(0)
-			{ ZeroMemory(portionBrushes,sizeof(ID2D1BitmapBrush*)*6); }
-			~BorderImageRenderObject()
-			{
-				for(int i = 0; i < 6; ++i)
-					SafeRelease(portionBrushes[i]);
-			}
-			ID2D1Bitmap**  borderImage;
-			ID2D1BitmapBrush* portionBrushes[6];
-			int  topWidth;
-			int  rightWidth;
-			int  bottomWidth;
-			int  leftWidth;
-			bool repeatX;
-			bool repeatY;
+			enum BROType { SimpleBorder, RadiusBorder, ComplexBorder };
 
-			ID2D1BitmapBrush* getPortionBrush(ID2D1RenderTarget* renderTarget, Portion p);
-			inline D2D1_SIZE_U imageSize() const { return (*borderImage)->GetPixelSize(); }
-
-			private:
-				ID2D1Bitmap* lastUsedBitmap;
+			BROType type;
+			virtual ~BorderRenderObject() {}
+			virtual void getBorderWidth(RECT&) const = 0;
+			virtual bool isVisible() const = 0;
 		};
-
+		// Set by MSSSPrivate::setSimpleBorderRO()
 		struct SimpleBorderRenderObject : public BorderRenderObject
 		{
-			SimpleBorderRenderObject():width(0),style(Value_Solid),solidBrush(0),rectGeo(0)
-			{ type = SimpleBorder; }
-			int width;
-			unsigned int style;
-			ID2D1SolidColorBrush** solidBrush;
-			ID2D1RectangleGeometry* rectGeo;
+			inline SimpleBorderRenderObject();
 
-			void getBorderWidth(RECT& rect)
-			{ rect.left = rect.right = rect.bottom = rect.top = width; }
+			unsigned int width;
+			unsigned int color;
+			ValueType    style;
+			ID2D1SolidColorBrush**  brushPosition;
 
-			bool isVisible() { return *solidBrush != 0 && width != 0; }
-			ID2D1Brush* getBrush() { return *solidBrush; }
-			int getWidth() { return width; }
+			void getBorderWidth(RECT&) const;
+			bool isVisible() const;
+			int  getWidth()  const;
 		};
+		inline SimpleBorderRenderObject::SimpleBorderRenderObject():
+			width(0),style(Value_Solid),brushPosition(0) { type = SimpleBorder; }
+		void   SimpleBorderRenderObject::getBorderWidth(RECT& rect) const
+			{ rect.left = rect.right = rect.bottom = rect.top = width; }
+		int    SimpleBorderRenderObject::getWidth() const
+			{ return width; }
+		bool   SimpleBorderRenderObject::isVisible() const
+			{ return width != 0 && color != 0; }
+		// Set by MSSSPrivate::setSimpleBorderRO()
 		struct RadiusBorderRenderObject : public SimpleBorderRenderObject
 		{
-			RadiusBorderRenderObject():radius(0){ type = RadiusBorder; }
+			inline RadiusBorderRenderObject();
 			int radius;
 		};
+		inline RadiusBorderRenderObject::RadiusBorderRenderObject():radius(0){ type = RadiusBorder; }
+		// Set by MSSSPrivate::setComplexBorderRO()
 		struct ComplexBorderRenderObject : public BorderRenderObject
 		{
+			ComplexBorderRenderObject();
+
+			bool uniform;
 			D2D1_RECT_U styles;
 			D2D1_RECT_U widths;
-			int radiuses[4]; // TL, TR, BL, BR
-			ID2D1SolidColorBrush** brushes[4]; // T, R, B, L
-			ComplexBorderRenderObject() {
-				type = ComplexBorder;
-				styles.left = styles.top = styles.right = styles.bottom = Value_Solid;
-				memset(&widths  , 0, sizeof(RECT));
-				memset(&radiuses, 0, 4 * sizeof(int));
-				memset(brushes  , 0, 4 * sizeof(ID2D1SolidColorBrush**));
+			unsigned int radiuses[4]; // TL, TR, BL, BR
+			unsigned int colors[4]; // T, R, B, L
+			ID2D1SolidColorBrush** brushPositions[4]; // T, R, B, L
+
+			void getBorderWidth(RECT&) const;
+			bool isVisible() const;
+
+			void checkUniform();
+
+			ID2D1Geometry* createGeometry(const D2D1_RECT_F&);
+			void draw(ID2D1RenderTarget*,ID2D1Geometry*,const D2D1_RECT_F&);
+
+			void setColors(MSSSPrivate*,const CssValueArray&,size_t startIndex,size_t endIndexPlus);
+		};
+		ComplexBorderRenderObject::ComplexBorderRenderObject():uniform(false)
+		{
+			type = ComplexBorder;
+			styles.left = styles.top = styles.right = styles.bottom = Value_Solid;
+			memset(&widths  , 0, sizeof(RECT));
+			memset(&radiuses, 0, 4 * sizeof(int));
+			memset(brushPositions, 0, 4 * sizeof(ID2D1SolidColorBrush**));
+			memset(colors, 0, 4 * sizeof(unsigned int));
+		}
+		void ComplexBorderRenderObject::setColors(MSSSPrivate* sss, const CssValueArray& values,size_t start,size_t end)
+		{
+			int size = end - start;
+			if(size  == 4) {
+				colors[0] = values.at(start  ).data.vuint;
+				colors[1] = values.at(start+1).data.vuint;
+				colors[2] = values.at(start+2).data.vuint;
+				colors[3] = values.at(start+3).data.vuint;
+				ID2D1SolidColorBrush*& brush0 = MSSSPrivate::instance->solidBrushCache[colors[0]];
+				ID2D1SolidColorBrush*& brush1 = MSSSPrivate::instance->solidBrushCache[colors[1]];
+				ID2D1SolidColorBrush*& brush2 = MSSSPrivate::instance->solidBrushCache[colors[2]];
+				ID2D1SolidColorBrush*& brush3 = MSSSPrivate::instance->solidBrushCache[colors[3]];
+				brushPositions[0] = &brush0;
+				brushPositions[1] = &brush1;
+				brushPositions[2] = &brush2;
+				brushPositions[3] = &brush3;
+			} else if(values.size() == 2) {
+				colors[0] = colors[2] = values.at(start  ).data.vuint;
+				colors[1] = colors[3] = values.at(start+1).data.vuint;
+				ID2D1SolidColorBrush*& brush = MSSSPrivate::instance->solidBrushCache[colors[0]];
+				brushPositions[0] = brushPositions[2] = &brush;
+				ID2D1SolidColorBrush*& brush2 = MSSSPrivate::instance->solidBrushCache[colors[1]];
+				brushPositions[1] = brushPositions[3] = &brush2;
+			} else {
+				colors[0] = colors[1] =
+				colors[2] = colors[3] = values.at(start).data.vuint; 
+				ID2D1SolidColorBrush*& brush = MSSSPrivate::instance->solidBrushCache[colors[0]];
+				brushPositions[0] = brushPositions[1] = 
+				brushPositions[2] = brushPositions[3] = &brush;
+			}
+		}
+		void ComplexBorderRenderObject::checkUniform()
+		{
+			if(widths.left == widths.right && widths.right == widths.top && widths.top == widths.bottom &&
+				colors[0] == colors[1] &&  colors[1] == colors[2] &&  colors[2] == colors[3])
+				uniform = true;
+		}
+		void ComplexBorderRenderObject::getBorderWidth(RECT& rect) const
+		{
+			rect.left   = widths.left;
+			rect.right  = widths.right;
+			rect.bottom = widths.bottom;
+			rect.top    = widths.top;
+		}
+		bool ComplexBorderRenderObject::isVisible() const
+		{
+			if(colors[0] == 0 && colors[1] == 0 && colors[2] == 0 && colors[3] == 0)
+				return false;
+			if(widths.left == 0 && widths.right == 0 && widths.top == 0 && widths.bottom == 0)
+				return false;
+			return true;
+		}
+		ID2D1Geometry* ComplexBorderRenderObject::createGeometry(const D2D1_RECT_F& rect)
+		{
+			ID2D1GeometrySink* sink;
+			ID2D1PathGeometry* pathGeo;
+
+			FLOAT ft = rect.top    + widths.top    / 2;
+			FLOAT fr = rect.right  + widths.right  / 2;
+			FLOAT fl = rect.left   + widths.left   / 2;
+			FLOAT fb = rect.bottom + widths.bottom / 2;
+
+			mApp->getD2D1Factory()->CreatePathGeometry(&pathGeo);
+			pathGeo->Open(&sink);
+			sink->BeginFigure(D2D1::Point2F(rect.left + radiuses[0],ft),D2D1_FIGURE_BEGIN_FILLED);
+
+			sink->AddLine(D2D1::Point2F(rect.right - radiuses[1], ft));
+			if(radiuses[1] != 0)
+				sink->AddArc(D2D1::ArcSegment(
+					D2D1::Point2F(fr, ft + radiuses[1]),
+					D2D1::SizeF((FLOAT)radiuses[1],(FLOAT)radiuses[1]),
+					0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+			sink->AddLine(D2D1::Point2F(fr, fb - radiuses[2]));
+			if(radiuses[2] != 0)
+				sink->AddArc(D2D1::ArcSegment(
+					D2D1::Point2F(fr - radiuses[2], fb),
+					D2D1::SizeF((FLOAT)radiuses[2],(FLOAT)radiuses[2]),
+					0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+			sink->AddLine(D2D1::Point2F(fl + radiuses[3], fb));
+			if(radiuses[3] != 0)
+				sink->AddArc(D2D1::ArcSegment(
+					D2D1::Point2F(fl, fb - radiuses[3]),
+					D2D1::SizeF((FLOAT)radiuses[3],(FLOAT)radiuses[3]),
+					0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+			sink->AddLine(D2D1::Point2F(fl, ft + radiuses[0]));
+			if(radiuses[0] != 0)
+				sink->AddArc(D2D1::ArcSegment(
+					D2D1::Point2F(fl + radiuses[0], ft),
+					D2D1::SizeF((FLOAT)radiuses[0],(FLOAT)radiuses[0]),
+					0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+
+			sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+			sink->Close();
+			SafeRelease(sink);
+			return pathGeo; 
+		}
+		void ComplexBorderRenderObject::draw(ID2D1RenderTarget* rt,ID2D1Geometry* geo,const D2D1_RECT_F& rect)
+		{
+			if(uniform) {
+				rt->DrawGeometry(geo,*(brushPositions[0]),(FLOAT)widths.left);
+				return;
 			}
 
-			void getBorderWidth(RECT& rect)
-			{
-				rect.left   = widths.left;
-				rect.right  = widths.right;
-				rect.bottom = widths.bottom;
-				rect.top    = widths.top;
-			}
+			FLOAT fl = rect.left   + widths.left   / 2;
+			FLOAT ft = rect.top    + widths.top    / 2;
+			FLOAT fr = rect.right  + widths.right  / 2;
+			FLOAT fb = rect.bottom + widths.bottom / 2;
 
-			bool isVisible() {
-				if(brushes[0] == 0 || *(brushes[0]) == 0)
-					return false;
-				if(widths.left == 0 && widths.right == 0 && widths.top == 0 && widths.bottom == 0)
-					return false;
-				return true;
-			}
-
-			ID2D1Geometry* createGeometry(const D2D1_RECT_F& rect)
+			if(widths.top > 0)
 			{
-				ID2D1GeometrySink* sink;
-				ID2D1PathGeometry* pathGeo;
-				mApp->getD2D1Factory()->CreatePathGeometry(&pathGeo);
-				pathGeo->Open(&sink);
-				sink->BeginFigure(D2D1::Point2F(rect.left + radiuses[0],rect.top),D2D1_FIGURE_BEGIN_FILLED);
-				sink->AddLine(D2D1::Point2F(rect.right - radiuses[1],rect.top));
-				if(radiuses[1] != 0)
-					sink->AddArc(D2D1::ArcSegment(
-								D2D1::Point2F(rect.right,rect.top + radiuses[1]),
-								D2D1::SizeF((FLOAT)radiuses[1],(FLOAT)radiuses[1]),
-								0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
-				sink->AddLine(D2D1::Point2F(rect.right,rect.bottom - radiuses[2]));
-				if(radiuses[2] != 0)
-					sink->AddArc(D2D1::ArcSegment(
-								D2D1::Point2F(rect.right - radiuses[2],rect.bottom),
-								D2D1::SizeF((FLOAT)radiuses[2],(FLOAT)radiuses[2]),
-								0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
-				sink->AddLine(D2D1::Point2F(rect.left + radiuses[3],rect.bottom));
-				if(radiuses[3] != 0)
-					sink->AddArc(D2D1::ArcSegment(
-								D2D1::Point2F(rect.left,rect.bottom - radiuses[3]),
-								D2D1::SizeF((FLOAT)radiuses[3],(FLOAT)radiuses[3]),
-								0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
-				sink->AddLine(D2D1::Point2F(rect.left, rect.top + radiuses[0]));
-				if(radiuses[0] != 0)
-					sink->AddArc(D2D1::ArcSegment(
-								D2D1::Point2F(rect.left + radiuses[0],rect.top),
-								D2D1::SizeF((FLOAT)radiuses[0],(FLOAT)radiuses[0]),
-								0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
-				sink->EndFigure(D2D1_FIGURE_END_CLOSED);
-				sink->Close();
-				SafeRelease(sink);
-				return pathGeo; 
-			}
-			
-			void draw(ID2D1RenderTarget* rt,ID2D1Geometry* geo,const D2D1_RECT_F& rect)
-			{
-				if(widths.left == widths.right && widths.right == widths.top && widths.top == widths.bottom &&
-					brushes[0] == brushes[1] && brushes[1] == brushes[2] && brushes[2] == brushes[3])
+				FLOAT offset = (FLOAT)widths.top / 2;
+				if(radiuses[0] != 0 || radiuses[1] != 0)
 				{
-					rt->DrawGeometry(geo,*(brushes[0]),(FLOAT)widths.left);
+					ID2D1PathGeometry* pathGeo;
+					ID2D1GeometrySink* sink;
+					mApp->getD2D1Factory()->CreatePathGeometry(&pathGeo);
+					pathGeo->Open(&sink);
+
+					if(radiuses[0] != 0) {
+						sink->BeginFigure(D2D1::Point2F(fl, ft + radiuses[0]),D2D1_FIGURE_BEGIN_FILLED);
+						sink->AddArc(D2D1::ArcSegment(
+							D2D1::Point2F(rect.left + radiuses[0] + offset, ft),
+							D2D1::SizeF((FLOAT)radiuses[0],(FLOAT)radiuses[0]),
+							0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+					} else {
+						sink->BeginFigure(D2D1::Point2F(rect.left,ft),D2D1_FIGURE_BEGIN_FILLED);
+					}
+
+					if(radiuses[1] != 0) {
+						sink->AddLine(D2D1::Point2F(fr - radiuses[1], ft));
+						sink->AddArc(D2D1::ArcSegment(
+							D2D1::Point2F(rect.right - offset, ft + radiuses[1]),
+							D2D1::SizeF((FLOAT)radiuses[1],(FLOAT)radiuses[1]),
+							0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+					} else {
+						sink->AddLine(D2D1::Point2F(rect.right,ft));
+					}
+					sink->EndFigure(D2D1_FIGURE_END_OPEN);
+					sink->Close();
+					rt->DrawGeometry(pathGeo,*(brushPositions[0]),(FLOAT)widths.top);
+					SafeRelease(sink);
+					SafeRelease(pathGeo);
 				} else {
-					if(widths.top > 0) {
-						if(radiuses[0] != 0 || radiuses[1] != 0)
-						{
-							ID2D1PathGeometry* pathGeo;
-							mApp->getD2D1Factory()->CreatePathGeometry(&pathGeo);
-							ID2D1GeometrySink* sink;
-							pathGeo->Open(&sink);
-							if(radiuses[0] != 0) {
-								sink->BeginFigure(D2D1::Point2F(rect.left, rect.top + radiuses[0]),D2D1_FIGURE_BEGIN_FILLED);
-								sink->AddArc(D2D1::ArcSegment(
-									D2D1::Point2F(rect.left + radiuses[0],rect.top),
-									D2D1::SizeF((FLOAT)radiuses[0],(FLOAT)radiuses[0]),
-									0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
-							} else {
-								sink->BeginFigure(D2D1::Point2F(rect.left,rect.top),D2D1_FIGURE_BEGIN_FILLED);
-							}
-
-							if(radiuses[1] != 0) {
-								sink->AddLine(D2D1::Point2F(rect.right - radiuses[1],rect.top));
-								sink->AddArc(D2D1::ArcSegment(
-									D2D1::Point2F(rect.right,rect.top + radiuses[1]),
-									D2D1::SizeF((FLOAT)radiuses[1],(FLOAT)radiuses[1]),
-									0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
-							} else {
-								sink->AddLine(D2D1::Point2F(rect.right,rect.top));
-							}
-							sink->EndFigure(D2D1_FIGURE_END_OPEN);
-							sink->Close();
-							rt->DrawGeometry(pathGeo,*(brushes[0]),(FLOAT)widths.top);
-							SafeRelease(sink);
-							SafeRelease(pathGeo);
-						} else {
-							rt->DrawLine(D2D1::Point2F(rect.left,rect.top),
-								D2D1::Point2F(rect.right,rect.top),*(brushes[0]),(FLOAT)widths.top);
-						}
-					}
-					
-					if(widths.right > 0)
-						rt->DrawLine(D2D1::Point2F(rect.right,rect.top+radiuses[1]),
-									D2D1::Point2F(rect.right,rect.bottom - radiuses[2]),
-									*(brushes[1]),(FLOAT)widths.right);
-
-					if(widths.bottom > 0) {
-						if(radiuses[2] != 0 || radiuses[3] != 0)
-						{
-							ID2D1PathGeometry* pathGeo;
-							mApp->getD2D1Factory()->CreatePathGeometry(&pathGeo);
-							ID2D1GeometrySink* sink;
-							pathGeo->Open(&sink);
-							if(radiuses[2] != 0) {
-								sink->BeginFigure(D2D1::Point2F(rect.right, rect.bottom - radiuses[2]),D2D1_FIGURE_BEGIN_FILLED);
-								sink->AddArc(D2D1::ArcSegment(
-									D2D1::Point2F(rect.right - radiuses[2],rect.bottom),
-									D2D1::SizeF((FLOAT)radiuses[2],(FLOAT)radiuses[2]),
-									0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
-							} else {
-								sink->BeginFigure(D2D1::Point2F(rect.right,rect.bottom),D2D1_FIGURE_BEGIN_FILLED);
-							}
-
-							if(radiuses[3] != 0) {
-								sink->AddLine(D2D1::Point2F(rect.left + radiuses[3],rect.bottom));
-								sink->AddArc(D2D1::ArcSegment(
-									D2D1::Point2F(rect.left,rect.bottom - radiuses[3]),
-									D2D1::SizeF((FLOAT)radiuses[3],(FLOAT)radiuses[3]),
-									0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
-							} else {
-								sink->AddLine(D2D1::Point2F(rect.left,rect.bottom));
-							}
-							sink->EndFigure(D2D1_FIGURE_END_OPEN);
-							sink->Close();
-							rt->DrawGeometry(pathGeo,*(brushes[3]),(FLOAT)widths.bottom);
-							SafeRelease(sink);
-							SafeRelease(pathGeo);
-						} else {
-							rt->DrawLine(D2D1::Point2F(rect.right,rect.bottom),
-								D2D1::Point2F(rect.left,rect.bottom),*(brushes[3]),(FLOAT)widths.bottom);
-						}
-					}
-
-					if(widths.left > 0)
-						rt->DrawLine(D2D1::Point2F(rect.left,rect.bottom-radiuses[3]),
-									D2D1::Point2F(rect.left,rect.top-radiuses[0]),
-									*(brushes[3]),(FLOAT)widths.left);
+					rt->DrawLine(D2D1::Point2F(rect.left,ft), D2D1::Point2F(rect.right,ft),
+							*(brushPositions[0]),(FLOAT)widths.top);
 				}
 			}
+
+			if(widths.right > 0) {
+				rt->DrawLine(D2D1::Point2F(fr, ft + radiuses[1]), D2D1::Point2F(fr,fb - radiuses[2]),
+					*(brushPositions[1]),(FLOAT)widths.right);
+			}
+
+			if(widths.bottom > 0)
+			{
+				FLOAT offset = (FLOAT)widths.bottom / 2;
+				if(radiuses[2] != 0 || radiuses[3] != 0)
+				{
+					ID2D1PathGeometry* pathGeo;
+					ID2D1GeometrySink* sink;
+					mApp->getD2D1Factory()->CreatePathGeometry(&pathGeo);
+					pathGeo->Open(&sink);
+					if(radiuses[2] != 0) {
+						sink->BeginFigure(D2D1::Point2F(fr, fb - radiuses[2]),D2D1_FIGURE_BEGIN_FILLED);
+						sink->AddArc(D2D1::ArcSegment(
+							D2D1::Point2F(rect.right - radiuses[2] - offset,fb),
+							D2D1::SizeF((FLOAT)radiuses[2],(FLOAT)radiuses[2]),
+							0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+					} else {
+						sink->BeginFigure(D2D1::Point2F(rect.right,fb),D2D1_FIGURE_BEGIN_FILLED);
+					}
+
+					if(radiuses[3] != 0) {
+						sink->AddLine(D2D1::Point2F(fl + radiuses[3], fb));
+						sink->AddArc(D2D1::ArcSegment(
+							D2D1::Point2F(rect.left + offset, fb - radiuses[3]),
+							D2D1::SizeF((FLOAT)radiuses[3],(FLOAT)radiuses[3]),
+							0.f,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_SMALL));
+					} else {
+						sink->AddLine(D2D1::Point2F(rect.left, fb));
+					}
+					sink->EndFigure(D2D1_FIGURE_END_OPEN);
+					sink->Close();
+					rt->DrawGeometry(pathGeo,*(brushPositions[3]),(FLOAT)widths.bottom);
+					SafeRelease(sink);
+					SafeRelease(pathGeo);
+				} else {
+					rt->DrawLine(D2D1::Point2F(rect.right,fb), D2D1::Point2F(rect.left,fb),
+						*(brushPositions[3]),(FLOAT)widths.bottom);
+				}
+			}
+
+			if(widths.left > 0) {
+				rt->DrawLine(D2D1::Point2F(fl, fb-radiuses[3]), D2D1::Point2F(fl,ft + radiuses[0]),
+					*(brushPositions[3]),(FLOAT)widths.left);
+			}
+		}
+
+
+		enum Portion
+		{
+			TopCenter = 0,
+			CenterLeft,
+			Center,
+			CenterRight,
+			BottomCenter,
+			Conner
+		};
+		struct BorderImageRenderObject
+		{
+			BorderImageRenderObject();
+			unsigned int topW, rightW, bottomW, leftW;
+			ImageRepeat  repeat;
+			wstring*     imageUri;
+			ID2D1BitmapBrush** brushPosition;
+		};
+		BorderImageRenderObject::BorderImageRenderObject():topW(0),rightW(0),
+			bottomW(0),leftW(0), repeat(NoRepeat),imageUri(0),brushPosition(0){}
+
+
+
+
+
+
+		// ========== RenderRuleData ==========
+		struct RenderRuleData
+		{
+			inline RenderRuleData();
+			~RenderRuleData();
+
+			int  refCount;
+
+			bool opaqueBackground;
+			bool animated; // Remark: We need to know whether the background is GIF animated image.
+			bool hasMargin;
+			bool hasPadding;
+
+			std::vector<BackgroundRenderObject*> backgroundROs;
+			BorderImageRenderObject*             borderImageRO;
+			BorderRenderObject*                  borderRO;
+			GeometryRenderObject*                geoRO;
+
+			D2D_RECT_U margin;
+			D2D_RECT_U padding;
+
+			void createBrush(const CssValue&);
+			void createBrush( unsigned int);
+			ID2D1BitmapBrush* createBrush(const wstring&);
+			void createBorderImagerBrush();
+
+			inline ID2D1SolidColorBrush* getBrush(SimpleBorderRenderObject*);
+			inline ID2D1Brush* getBrush(BackgroundRenderObject*);
+			ID2D1BitmapBrush* getBorderImageBrush(Portion);
+
+			// Return true if we changed the widget's size
+			bool setGeometry    (MWidget*);
+			void draw           (ID2D1RenderTarget*,const RECT& widgetRectInRT, const RECT& clipRectInRT);
+			void drawBackgrounds(const RECT& widgetRectInRT, const RECT& clipRectInRT, ID2D1Geometry*);
+			void drawBorderImage(const RECT& widgetRectInRT, const RECT& clipRectInRT);
+
+			// Since we only deal with GUI in the main thread,
+			// we can safely store the renderTarget in a static member for later use.
+			static ID2D1RenderTarget* workingRT;
 		};
 	} // namespace CSS
 
-	ID2D1SolidColorBrush** MStyleSheetStyle::createD2D1SolidBrush(CssValue& v)
+
+
+	// ********** RenderRuleData Impl
+	ID2D1RenderTarget* RenderRuleData::workingRT = 0;
+	inline RenderRuleData::RenderRuleData():
+		refCount(1), opaqueBackground(false), animated(false),
+		hasMargin(false), hasPadding(false), borderImageRO(0), borderRO(0), geoRO(0)
 	{
-		// Cache the brush with color value.
-		ID2D1SolidColorBrush*& brush = solidBrushCache[v.data.vuint];
-		if(brush == 0)
-			workingRenderTarget->CreateSolidColorBrush(v.getColor(),&brush);
-		return &brush;
+		memset(&margin, 0,sizeof(D2D_RECT_U));
+		memset(&padding,0,sizeof(D2D_RECT_U));
 	}
-
-	bool isImageOpaque(const std::wstring& uri)
-	{
-		std::wstring ex = uri.substr(uri.size() - 3);
-		std::transform(ex.begin(),ex.end(),ex.begin(),::tolower);
-		if(ex.find(L"png") == 0 || ex.find(L"gif") == 0)
-			return false;
-		return true;
-	}
-
-	ID2D1Bitmap** MStyleSheetStyle::createD2D1Bitmap(const std::wstring& uri, bool& isOpaque)
-	{
-		ID2D1Bitmap*& bitmap = bitmapCache[uri];
-		if(bitmap != 0)
-		{
-			// Remark: This may causes error. If we cannot load a opaque image,
-			// we will create a empty image instead, which is transparent.
-			// But imageMustBeOpaque will return true.
-			isOpaque = isImageOpaque(uri);
-		} else {
-
-			IWICImagingFactory*    wicFactory = mApp->getWICImagingFactory();
-			IWICBitmapDecoder*     decoder	  = 0;
-			IWICBitmapFrameDecode* frame	  = 0;
-			IWICFormatConverter*   converter  = 0;
-			IWICStream*            stream     = 0;
-
-			bool hasError = false;
-			HRESULT hr;
-			if(uri.at(0) == L':') {
-				// Lookup image file is inside MResources.
-				MResource res;
-				if(res.open(uri))
-				{
-					wicFactory->CreateStream(&stream);
-					stream->InitializeFromMemory((WICInProcPointer)res.byteBuffer(),res.length());
-					wicFactory->CreateDecoderFromStream(stream,NULL,WICDecodeMetadataCacheOnDemand,&decoder);
-				}else
-					hasError = true;
-			} else {
-				hr = wicFactory->CreateDecoderFromFilename(uri.c_str(),NULL,
-														   GENERIC_READ,
-														   WICDecodeMetadataCacheOnDemand,&decoder);
-				hasError = FAILED(hr);
-			}
-
-			if(hasError)
-			{
-				std::wstring error = L"[MStyleSheetStyle] Cannot open image file: ";
-				error.append(uri);
-				error.append(1,L'\n');
-				mDebug(error.c_str());
-				// create a empty bitmap because we can't find the image.
-				hr = workingRenderTarget->CreateBitmap(
-							D2D1::SizeU(),
-							D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,
-																	 D2D1_ALPHA_MODE_PREMULTIPLIED)),
-							&bitmap);
-
-				isOpaque = false;
-			} else {
-				decoder->GetFrame(0,&frame);
-				wicFactory->CreateFormatConverter(&converter);
-				converter->Initialize(frame,
-									  GUID_WICPixelFormat32bppPBGRA,
-									  WICBitmapDitherTypeNone,NULL,
-									  0.f,WICBitmapPaletteTypeMedianCut);
-				workingRenderTarget->CreateBitmapFromWicBitmap(converter,
-									D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, 
-															D2D1_ALPHA_MODE_PREMULTIPLIED)),
-									&bitmap);
-
-				isOpaque = isImageOpaque(uri);
-			}
-
-			SafeRelease(decoder);
-			SafeRelease(frame);
-			SafeRelease(stream);
-			SafeRelease(converter);
-		}
-
-		return &bitmap;
-	}
-
-	// Return true if the "prop" is AlignmentX value
-	bool setBackgroundRenderObjectProperty(BackgroundRenderObject* object,
-										unsigned int prop,bool alignmentY = false)
-	{
-		switch(prop) {
-			case Value_NoRepeat:object->repeatX = object->repeatY =  false;       break;
-			case Value_RepeatX: object->repeatX = true;  object->repeatY = false; break;
-			case Value_RepeatY: object->repeatX = false; object->repeatY = true;  break;
-			case Value_Repeat:  object->repeatX = object->repeatY = true;         break;
-
-			case Value_Padding:
-			case Value_Content:
-			case Value_Border:
-			case Value_Margin:  object->clip = prop; break;
-
-			// We both set alignment X & Y, because one may only specific a alignment value.
-			case Value_Left:
-			case Value_Right:	 object->alignmentX = prop; return true;
-			case Value_Top:
-			case Value_Bottom: object->alignmentY = prop; return true;
-			case Value_Center:
-				object->alignmentY = prop;
-				if(!alignmentY)
-				{
-					object->alignmentX = prop;
-					return true;
-				}else
-					return false;
-				break;
-		}
-		return false;
-	}
-
-	void setBackgroundRenderObjectsProperty(std::vector<BackgroundRenderObject*>& bgros,
-			 unsigned int prop, bool alignmentY = false)
-	{
-		std::vector<BackgroundRenderObject*>::iterator iter = bgros.begin();
-		std::vector<BackgroundRenderObject*>::iterator iterEnd = bgros.end();
-		while(iter != iterEnd)
-		{
-			setBackgroundRenderObjectProperty(*iter,prop,alignmentY);
-			++iter;
-		}
-	}
-
-	namespace CSS {
-		enum BackgroundOpaqueType {
-			NonOpaque,
-			OpaqueClipMargin,
-			OpaqueClipBorder,
-			OpaqueClipPadding
-		};
-	}
-
-	// Background: { Brush/Image Repeat Clip Alignment pos-x pos-y }*;
-	// Only one brush allowed in a declaration.
-	BackgroundRenderObject* MStyleSheetStyle::createBackgroundRO(unsigned int& opaqueType)
-	{
-		BackgroundRenderObject* newObject = new BackgroundRenderObject();
-
-		bool opaqueBrush = true;
-
-		std::vector<CssValue>& values = workingDeclaration->values;
-		CssValue& brushValue = values.at(0);
-		if(brushValue.type == CssValue::Color)
-		{
-			newObject->brushType = SolidBrush;
-			newObject->brush.solidBrush = createD2D1SolidBrush(brushValue);
-		} else if(brushValue.type == CssValue::Uri) {
-			newObject->brushType = BitmapBrush;
-			newObject->brush.bitmap = createD2D1Bitmap(*(brushValue.data.vstring),opaqueBrush);
-		}
-
-		unsigned int index = 1;
-		while(index < values.size())
-		{
-			if(values.at(index).type == CssValue::Identifier)
-			{
-				if(setBackgroundRenderObjectProperty(newObject,values.at(index).data.vuint))
-				{
-					++index;
-					// Set AlignmentY
-					if(index < values.size() && values.at(index).type == CssValue::Identifier)
-						setBackgroundRenderObjectProperty(newObject,values.at(index).data.vuint,true);
-				}
-			}else
-			{
-				int prop = values.at(index).data.vint;
-				newObject->x = prop;
-				++index;
-				if(index < values.size() && values.at(index).type == CssValue::Number)
-					prop = values.at(index).data.vint;
-				newObject->y = prop;
-				++index;
-				if(index < values.size() && values.at(index).type == CssValue::Number)
-					newObject->width = values.at(index).data.vint;
-				++index;
-				if(index < values.size() && values.at(index).type == CssValue::Number)
-					newObject->height = values.at(index).data.vint;
-			}
-
-			++index;
-		}
-
-		if(!opaqueBrush)
-			opaqueType = NonOpaque;
-		else
-		{
-			if(newObject->clip == Value_Margin)
-				opaqueType = OpaqueClipMargin;
-			else if(newObject->clip == Value_Border)
-				opaqueType = OpaqueClipBorder;
-			else
-				opaqueType = OpaqueClipPadding;
-		}
-
-		if(values.at(0).type != CssValue::Color)
-		{
-			D2D1_SIZE_U size = (*newObject->brush.bitmap)->GetPixelSize();
-			// If the user doesn't specify the width of the background,
-			// we set it. Otherwise, check if the width is valid.
-			if(newObject->width == 0 || newObject->width + newObject->x > size.width)
-				newObject->width = size.width - newObject->x;
-
-			if(newObject->height == 0 || newObject->height + newObject->y > size.height)
-				newObject->height = size.height - newObject->y;
-		}
-
-		return newObject;
-	}
-
-	BorderImageRenderObject* MStyleSheetStyle::createBorderImageRO(bool& isOpaqueBG)
-	{
-		std::vector<CssValue>& values = workingDeclaration->values;
-
-		BorderImageRenderObject* biro = new BorderImageRenderObject();
-		// Cache.
-		biro->borderImage = createD2D1Bitmap(*(values.at(0).data.vstring),isOpaqueBG);
-		int endIndex = values.size() - 1;
-		// Repeat or Stretch
-		if(values.at(endIndex).type == CssValue::Identifier) {
-			if(values.at(endIndex-1).type == CssValue::Identifier) {
-				if(values.at(endIndex).data.vuint == Value_Stretch)
-					biro->repeatY = false;
-				if(values.at(endIndex - 1).data.vuint == Value_Stretch)
-					biro->repeatX = false;
-				endIndex -= 2;
-			} else {
-				if(values.at(endIndex).data.vuint == Value_Stretch) {
-					biro->repeatY = false;
-					biro->repeatX = false;
-				}
-				--endIndex;
-			}
-		}
-		// Border
-		if(endIndex == 4) {
-			biro->topWidth    = values.at(1).data.vint;
-			biro->rightWidth  = values.at(2).data.vint;
-			biro->bottomWidth = values.at(3).data.vint;
-			biro->leftWidth   = values.at(4).data.vint;
-		} else if(endIndex == 2) {
-			biro->bottomWidth = biro->topWidth   = values.at(1).data.vint;
-			biro->leftWidth   = biro->rightWidth = values.at(2).data.vint;
-		} else {
-			biro->leftWidth   = biro->rightWidth =
-			biro->bottomWidth = biro->topWidth   = values.at(1).data.vint;
-		}
-
-		return biro;
-	}
-
-	void MStyleSheetStyle::setSimpleBorederRO(SimpleBorderRenderObject* obj,
-			DeclMap::iterator& iter, DeclMap::iterator iterEnd)
-	{
-		CssValue colorValue;
-		colorValue.data.vuint = 0;
-		colorValue.type = CssValue::Color;
-		while(iter != iterEnd && iter->first <= PT_BorderStyles) {
-			std::vector<CssValue>& values = iter->second->values;
-			switch(iter->first) {
-			case PT_Border: {
-				for(unsigned int i = 0; i < values.size(); ++i) {
-					CssValue& v = values.at(i);
-					switch(v.type) {
-						case CssValue::Identifier:	
-							obj->style = v.data.vuint;
-							break;
-						case CssValue::Color:
-							colorValue = v;
-							break;
-						default:
-							obj->width = v.data.vint;
-							break;
-					}
-				}
-			}
-				break;
-			case PT_BorderWidth:	obj->width = values.at(0).data.vint; break;
-			case PT_BorderColor:	colorValue = values.at(0); break;
-			case PT_BorderStyles:	obj->style = values.at(0).data.vuint; break;
-			}
-
-			++iter;
-		}
-		obj->solidBrush = createD2D1SolidBrush(colorValue);
-	}
-
-	void setGroupIntValue(int (&intArray)[4], std::vector<CssValue>& values,
-		int startValueIndex = 0, int endValueIndex = -1)
-	{
-		int size = (endValueIndex == -1 ? values.size() : endValueIndex + 1) - startValueIndex;
-		if(size == 4) {
-			intArray[0] = values.at(startValueIndex    ).data.vint;
-			intArray[1] = values.at(startValueIndex + 1).data.vint;
-			intArray[2] = values.at(startValueIndex + 2).data.vint;
-			intArray[3] = values.at(startValueIndex + 3).data.vint;
-		} else if(size == 2) {
-			intArray[0] = intArray[2] = values.at(startValueIndex    ).data.vint;
-			intArray[1] = intArray[3] = values.at(startValueIndex + 1).data.vint;
-		}else
-		{
-			intArray[0] = intArray[1] = 
-			intArray[2] = intArray[3] = values.at(startValueIndex).data.vint;
-		}
-	}
-
-	void setGroupUintValue(unsigned int (&intArray)[4], std::vector<CssValue>& values,
-		int startValueIndex = 0, int endValueIndex = -1)
-	{
-		int size = (endValueIndex == -1 ? values.size() : endValueIndex + 1) - startValueIndex;
-		if(size == 4) {
-			intArray[0] = values.at(startValueIndex    ).data.vuint;
-			intArray[1] = values.at(startValueIndex + 1).data.vuint;
-			intArray[2] = values.at(startValueIndex + 2).data.vuint;
-			intArray[3] = values.at(startValueIndex + 3).data.vuint;
-		} else if(size == 2) {
-			intArray[0] = intArray[2] = values.at(startValueIndex    ).data.vuint;
-			intArray[1] = intArray[3] = values.at(startValueIndex + 1).data.vuint;
-		}else
-		{
-			intArray[0] = intArray[1] =
-			intArray[2] = intArray[3] = values.at(startValueIndex).data.vuint;
-		}
-	}
-
-	void setD2DRectValue(D2D_RECT_U& rect, std::vector<CssValue>& values,
-		int startValueIndex = 0, int endValueIndex = -1)
-	{
-		int size = (endValueIndex == -1 ? values.size() : endValueIndex + 1) - startValueIndex;
-		if(size == 4) {
-			rect.top    = values.at(startValueIndex    ).data.vuint;
-			rect.right  = values.at(startValueIndex + 1).data.vuint;
-			rect.bottom = values.at(startValueIndex + 2).data.vuint;
-			rect.left   = values.at(startValueIndex + 3).data.vuint;
-		} else if(size == 2) {
-			rect.top    = rect.bottom = values.at(startValueIndex    ).data.vuint;
-			rect.right  = rect.left   = values.at(startValueIndex + 1).data.vuint;
-		}else
-		{
-			rect.top    = rect.bottom =
-			rect.right  = rect.left   = values.at(startValueIndex).data.vuint;
-		}
-	}
-
-	void setD2DRectValue(D2D_RECT_U& rect, int border, unsigned int value)
-	{
-		if(border == 0)
-			rect.top = value;
-		else if(border == 1)
-			rect.right = value;
-		else if(border == 2)
-			rect.bottom = value;
-		else
-			rect.left = value;
-	}
-
-	void MStyleSheetStyle::setComplexBorderRO(ComplexBorderRenderObject* obj,
-			DeclMap::iterator& declIter, DeclMap::iterator declIterEnd)
-	{
-		while(declIter != declIterEnd && declIter->first <= PT_BorderRadius)
-		{
-			std::vector<CssValue>& values = declIter->second->values;
-			switch(declIter->first)
-			{
-				case PT_Border: {
-					int rangeStartIndex = 0;
-					CssValue::Type valueType = values.at(0).type;
-					unsigned int index = 1;
-					while(index <= values.size())
-					{
-						if(index == values.size() || values.at(index).type != valueType)
-						{
-							switch(valueType) {
-							case CssValue::Identifier:
-								setD2DRectValue(obj->styles,values,rangeStartIndex,index - 1);
-								break;
-							case CssValue::Color: {
-								int size = index - rangeStartIndex;
-								if(size == 4) {
-									obj->brushes[0] = createD2D1SolidBrush(values.at(rangeStartIndex  ));
-									obj->brushes[1] = createD2D1SolidBrush(values.at(rangeStartIndex+1));
-									obj->brushes[2] = createD2D1SolidBrush(values.at(rangeStartIndex+2));
-									obj->brushes[3] = createD2D1SolidBrush(values.at(rangeStartIndex+3));
-								} else if(size == 2) {
-									obj->brushes[0] = 
-									obj->brushes[2] = createD2D1SolidBrush(values.at(rangeStartIndex  ));
-									obj->brushes[1] = 
-									obj->brushes[3] = createD2D1SolidBrush(values.at(rangeStartIndex+1));
-								} else {
-									obj->brushes[0] = obj->brushes[1] = obj->brushes[2] =  
-									obj->brushes[3] = createD2D1SolidBrush(values.at(rangeStartIndex));
-								}
-							}
-								 break;
-							default: setD2DRectValue(obj->widths,values,rangeStartIndex,index-1);
-							}
-							rangeStartIndex = index;
-							if(index < values.size())
-								valueType = values.at(index).type;
-						}
-						++index;
-					}
-				}
-					break;
-				case PT_BorderRadius:	setGroupIntValue(obj->radiuses,values); break;
-				case PT_BorderWidth:	setD2DRectValue (obj->widths  ,values); break;
-				case PT_BorderStyles:	setD2DRectValue (obj->styles  ,values); break;
-				case PT_BorderColor:
-					if(values.size() == 4)
-					{
-						obj->brushes[0] = createD2D1SolidBrush(values.at(0));
-						obj->brushes[1] = createD2D1SolidBrush(values.at(1));
-						obj->brushes[2] = createD2D1SolidBrush(values.at(2));
-						obj->brushes[3] = createD2D1SolidBrush(values.at(3));
-					} else if(values.size() == 2)
-					{
-						obj->brushes[0] = obj->brushes[2] = createD2D1SolidBrush(values.at(0));
-						obj->brushes[1] = obj->brushes[3] = createD2D1SolidBrush(values.at(1));
-					}else
-					{
-						obj->brushes[0] = obj->brushes[2] = 
-						obj->brushes[1] = obj->brushes[3] = createD2D1SolidBrush(values.at(0));
-					}
-					break;
-
-				case PT_BorderTop:
-				case PT_BorderRight:
-				case PT_BorderBottom:
-				case PT_BorderLeft:
-				{
-					int index = declIter->first - PT_BorderTop;
-					for(unsigned int i = 0; i < values.size(); ++i)
-					{
-						if(values.at(i).type == CssValue::Color)
-							obj->brushes[index] = createD2D1SolidBrush(values.at(i));
-						else if(values.at(i).type == CssValue::Identifier) {
-							obj->brushes[index] = createD2D1SolidBrush(values.at(i));
-						}else
-							setD2DRectValue(obj->widths,index,values.at(i).data.vuint);
-					}
-				}
-					break;
-
-				case PT_BorderTopColor:
-				case PT_BorderRightColor:
-				case PT_BorderBottomColor:
-				case PT_BorderLeftColor:
-					obj->brushes[declIter->first - PT_BorderTopColor] = createD2D1SolidBrush(values.at(0));
-					break;
-				case PT_BorderTopWidth:
-				case PT_BorderRightWidth:
-				case PT_BorderBottomWidth:
-				case PT_BorderLeftWidth:
-					setD2DRectValue(obj->widths, declIter->first - PT_BorderTopWidth, values.at(0).data.vint);
-					break;
-				case PT_BorderTopStyle:
-				case PT_BorderRightStyle:
-				case PT_BorderBottomStyle:
-				case PT_BorderLeftStyle:
-					setD2DRectValue(obj->styles, declIter->first - PT_BorderTopStyle, values.at(0).data.vint);
-					break;
-				case PT_BorderTopLeftRadius:
-				case PT_BorderTopRightRadius:
-				case PT_BorderBottomLeftRadius:
-				case PT_BorderBottomRightRadius:
-					obj->radiuses[declIter->first - PT_BorderTopLeftRadius] = values.at(0).data.vint;
-					break;
-			}
-			++declIter;
-		}
-	}
-
-	enum BorderType { BT_Simple, BT_Radius, BT_Complex };
-
-	BorderType testBorderObjectType(std::vector<CssValue>& values,
-		const std::multimap<CSS::PropertyType,CSS::Declaration*>::iterator& declIter,
-		const std::multimap<CSS::PropertyType,CSS::Declaration*>::iterator& declIterEnd)
-	{
-		std::multimap<PropertyType,Declaration*>::iterator seeker = declIter;
-		while(seeker != declIterEnd && seeker->first <= PT_BorderRadius)
-		{
-			switch(seeker->first) {
-				case PT_Border:
-				{
-					std::vector<CssValue>& values = seeker->second->values;
-					// If there're more than 3 values in PT_Border, it must be complex.
-					if(values.size() > 3)
-						return BT_Complex;
-					for(unsigned int i = 1; i < values.size() ; ++i)
-					{ // If there are the same type values, it's complex.
-						if(values.at(i - 1).type == values.at(i).type)
-							return BT_Complex;
-					}
-				}
-					break;
-				case PT_BorderWidth:
-				case PT_BorderColor:
-				case PT_BorderStyles:
-					if(seeker->second->values.size() > 1)
-						return BT_Complex;
-					break;
-				case PT_BorderRadius:	return seeker->second->values.size() > 1 ? BT_Complex : BT_Radius;
-				default:	return BT_Complex;
-			}
-			++seeker;
-		}
-		return BT_Simple;
-	}
-
-	// Why we make such a big monster function...
-	// Remark. We should make gif animation possible.
-	RenderRule MStyleSheetStyle::getRenderRule(MWidget* w, unsigned int pseudo)
-	{
-		// == 1.Find RenderRule for MWidget w from Widget-RenderRule cache.
-		WidgetRenderRuleMap::iterator widgetCacheIter = widgetRenderRuleCache.find(w);
-		PseudoRenderRuleMap* prrMap = 0;
-		if(widgetCacheIter != widgetRenderRuleCache.end())
-		{
-			prrMap = widgetCacheIter->second;
-			PseudoRenderRuleMap::Element::iterator prrIter = prrMap->element.find(pseudo);
-			if(prrIter != prrMap->element.end())
-				return prrIter->second; // Found sth. we are insterested in.
-		}
-
-		// == 2.Find StyleRules for MWidget w from Widget-StyleRule cache.
-		WidgetStyleRuleMap::iterator wsrIter = widgetStyleRuleCache.find(w);
-		MatchedStyleRuleVector* matchedsrv;
-		if(wsrIter != widgetStyleRuleCache.end()) {
-			matchedsrv = &(wsrIter->second);
-		} else {
-			matchedsrv = &(widgetStyleRuleCache.insert(
-							   WidgetStyleRuleMap::value_type(w, MatchedStyleRuleVector())).first->second);
-			getMachedStyleRules(w,*matchedsrv);
-		}
-
-		// == 3.If we don't have a PseudoRenderRuleMap, build one.
-		if(prrMap == 0)
-		{
-			RenderRuleCacheKey cacheKey;
-			int srvSize = matchedsrv->size();
-			cacheKey.styleRules.reserve(srvSize);
-			for(int i = 0; i< srvSize; ++i)
-				cacheKey.styleRules.push_back(const_cast<StyleRule*>(matchedsrv->at(i).styleRule));
-			prrMap = &(renderRuleCollection[cacheKey]);
-			widgetRenderRuleCache.insert(WidgetRenderRuleMap::value_type(w,prrMap));
-		}
-
-		// == 4. Merge the declarations.
-		RenderRule& renderRule = prrMap->element[pseudo]; // Insert a RenderRule even if it's empty.
-		// If there's no StyleRules for MWidget w, then we return a invalid RenderRule.
-		if(matchedsrv->size() == 0)
-			return renderRule;
-
-		MatchedStyleRuleVector::const_iterator msrIter = matchedsrv->begin();
-		MatchedStyleRuleVector::const_iterator msrIterEnd = matchedsrv->end();
-		DeclMap declarations;
-		while(msrIter != msrIterEnd)
-		{
-			const Selector* sel = msrIter->matchedSelector;
-			if(sel->matchPseudo(pseudo))
-			{
-				// This rule is for the widget with pseudo.
-				// Add declarations to map.
-				const StyleRule* sr = msrIter->styleRule;
-				std::vector<Declaration*>::const_iterator declIter = sr->declarations.begin();
-				std::vector<Declaration*>::const_iterator declIterEnd = sr->declarations.end();
-				std::set<PropertyType> tempProps;
-
-				bool inheritBG = false;
-				// Remove duplicate properties
-				while(declIter != declIterEnd)
-				{
-					// Check if user defined "PT_InheritBackground",
-					// If true, we keep any background specified in other declarations.
-					// otherwise, keep every backgrounds
-					PropertyType prop = (*declIter)->property;
-					if(prop == PT_InheritBackground)
-						inheritBG = true;
-					else
-						tempProps.insert(prop);
-					++declIter;
-				}
-				std::set<PropertyType>::iterator tempPropIter = tempProps.begin();
-				std::set<PropertyType>::iterator tempPropIterEnd = tempProps.end();
-				while(tempPropIterEnd != tempPropIter) {
-					if(!(inheritBG && *tempPropIter == PT_Background))
-						declarations.erase(*tempPropIter);
-					++tempPropIter;
-				}
-
-				// Merge declaration
-				declIter = sr->declarations.begin();
-				while(declIter != declIterEnd) {
-					Declaration* d = *declIter;
-					if(d->property != PT_InheritBackground)
-						declarations.insert(DeclMap::value_type(d->property,d));
-					++declIter;
-				}
-			}
-			++msrIter;
-		}
-		// Remove duplicate declarations (except background, because we support multi backgrounds)
-		PropertyType lastType = knownPropertyCount;
-		DeclMap::iterator declRIter = declarations.begin();
-		DeclMap::iterator declRIterEnd = declarations.end();
-		while(declRIter != declRIterEnd) {
-			PropertyType type = declRIter->second->property;
-			if(type != PT_Background) {
-				if(lastType == type) {
-					declRIter = declarations.erase(--declRIter);
-				} else {
-					lastType = type;
-				}
-			}
-			++declRIter;
-		}
-
-		if(declarations.size() == 0)
-			return renderRule;
-
-		// == 5.Create RenderRule
-		// Remark: If the declaration have values in wrong order, it might crash the program.
-		// Maybe we should add some logic to avoid this flaw.
-		renderRule.init();
-		workingRenderTarget = w->getRenderTarget();
-		DeclMap::iterator declIter = declarations.begin();
-		DeclMap::iterator declIterEnd = declarations.end();
-
-		std::vector<unsigned int> bgOpaqueTypes;// 0.NonOpaque,1.Opaque,2.OpauqeClipMargin,3.OpaqueClipBoarder,4.OpaqueClipPadding
-		bool opaqueBorderImage = false;
-		BorderType bt = BT_Simple;
-
-		// --- Backgrounds ---
-		while(declIter->first == PT_Background) {
-			workingDeclaration = declIter->second;
-			unsigned int bgOpaqueType = NonOpaque;
-			renderRule->backgroundROs.push_back(createBackgroundRO(bgOpaqueType));
-			bgOpaqueTypes.push_back(bgOpaqueType);
-			if(++declIter == declIterEnd)
-				goto END;
-		}
-		while(declIter->first < PT_BackgroundPosition) {
-			setBackgroundRenderObjectsProperty(renderRule->backgroundROs,
-							declIter->second->values.at(0).data.vuint);
-			if(++declIter == declIterEnd)
-				goto END;
-		}
-		if(declIter->first == PT_BackgroundPosition) {
-			std::vector<CssValue>& values = declIter->second->values;
-			int propx = values.at(0).data.vint;
-			int propy = propx;
-			if(values.size() == 2)
-				propy = values.at(1).data.vint;
-
-			std::vector<BackgroundRenderObject*>::iterator iter = renderRule->backgroundROs.begin();
-			std::vector<BackgroundRenderObject*>::iterator iterEnd = renderRule->backgroundROs.end();
-			while(iter != iterEnd) {
-				(*iter)->x = propx;
-				(*iter)->y = propy;
-				++iter;
-			}
-			if(++declIter == declIterEnd)
-				goto END;
-		}
-		if(declIter->first == PT_BackgroundSize) {
-			std::vector<CssValue>& values = declIter->second->values;
-			int propw = values.at(0).data.vint;
-			int proph = propw;
-			if(values.size() == 2)
-				proph = values.at(1).data.vint;
-
-			std::vector<BackgroundRenderObject*>::iterator iter = renderRule->backgroundROs.begin();
-			std::vector<BackgroundRenderObject*>::iterator iterEnd = renderRule->backgroundROs.end();
-			while(iter != iterEnd) {
-				(*iter)->width  = propw;
-				(*iter)->height = proph;
-				++iter;
-			}
-			if(++declIter == declIterEnd)
-				goto END;
-		}
-		if(declIter->first == PT_BackgroundAlignment) {
-			std::vector<CssValue>& values = declIter->second->values;
-			setBackgroundRenderObjectsProperty(renderRule->backgroundROs,values.at(0).data.vuint);
-			if(values.size() == 2)
-				setBackgroundRenderObjectsProperty(renderRule->backgroundROs,values.at(1).data.vuint,true);
-			if(++declIter == declIterEnd)
-				goto END;
-		}
-		
-		// --- BorderImage --- 
-		if(declIter->first == PT_BorderImage) {
-			workingDeclaration = declIter->second;
-			renderRule->borderImageRO = createBorderImageRO(opaqueBorderImage);
-			if(++declIter == declIterEnd)
-				goto END;
-		}
-
-		// --- Border ---
-		if(declIter->first == PT_Border) {
-			workingDeclaration = declIter->second;
-			std::vector<CssValue>& values = workingDeclaration->values;
-
-			if(values.at(0).type == CssValue::Identifier 
-				&& values.at(0).data.vuint == Value_None) { // User specifies no border. Skip everything related to border.
-				do {
-					if(++declIter == declIterEnd)
-						goto END;
-				} while (declIter->first <= PT_BorderRadius);
-			}
-		}
-
-		if(declIter->first <= PT_BorderRadius)
-		{
-			workingDeclaration = declIter->second;
-			std::vector<CssValue>& values = workingDeclaration->values;
-			bt = testBorderObjectType(values,declIter,declIterEnd);
-			if(bt == BT_Simple)
-			{
-				SimpleBorderRenderObject* obj = new RadiusBorderRenderObject();
-				renderRule->borderRO = obj;
-				setSimpleBorederRO(obj,declIter,declIterEnd);
-			}else if(bt == BT_Radius)
-			{
-				RadiusBorderRenderObject* obj = new RadiusBorderRenderObject();
-				renderRule->borderRO = obj;
-				setSimpleBorederRO(obj,declIter,declIterEnd);
-				obj->radius = declIter->second->values.at(0).data.vint;
-			}else {
-				ComplexBorderRenderObject* obj = new ComplexBorderRenderObject();
-				renderRule->borderRO = obj;
-				setComplexBorderRO(obj, declIter, declIterEnd);
-			}
-
-			if(declIter == declIterEnd)
-				goto END;
-		}
-
-		// --- Margin & Padding --- 
-		while(declIter->first <= PT_PaddingLeft)
-		{
-			std::vector<CssValue>& values = declIter->second->values;
-			switch(declIter->first)
-			{
-				case PT_Margin:
-					setD2DRectValue(renderRule->margin,values);
-					renderRule->hasMargin = true;
-					break;
-				case PT_MarginTop:
-				case PT_MarginRight:
-				case PT_MarginBottom:
-				case PT_MarginLeft:
-					setD2DRectValue(renderRule->margin,declIter->first - PT_MarginTop, values.at(0).data.vuint);
-					renderRule->hasMargin = true;
-					break;
-				case PT_Padding:
-					setD2DRectValue(renderRule->padding,values);
-					renderRule->hasPadding = true;
-					break;
-				case PT_PaddingTop:
-				case PT_PaddingRight:
-				case PT_PaddingBottom:
-				case PT_PaddingLeft:
-					setD2DRectValue(renderRule->padding,declIter->first - PT_PaddingTop, values.at(0).data.vuint);
-					renderRule->hasPadding = true;
-					break;
-			}
-			if(++declIter == declIterEnd)
-				goto END;
-		}
-
-		// --- Geometry ---
-		if(declIter->first <= PT_MinimumHeight)
-		{
-			GeometryData* geoData = new GeometryData();
-			renderRule->geoData = geoData;
-			do {
-				int data = declIter->second->values.at(0).data.vint;
-				switch(declIter->first)
-				{
-					case PT_Width:        geoData->width     = data; break;
-					case PT_Height:       geoData->height    = data; break;
-					case PT_MinimumWidth: geoData->minWidth  = data; break;
-					case PT_MinimumHeight:geoData->minHeight = data; break;
-					case PT_MaximumWidth: geoData->maxWidth  = data; break;
-					case PT_MaximumHeight:geoData->maxHeight = data; break;
-				}
-			}while(++declIter != declIterEnd);
-		}
-
-		// TODO: Create TextRenderObject
-
-		END:
-		// Check if this RenderRule is opaque.
-		bool opaqueBorder = (!renderRule->hasMargin && bt == BT_Simple);
-		for(int i = bgOpaqueTypes.size() - 1; i >= 0; --i) {
-			switch(bgOpaqueTypes.at(i)) {
-			case OpaqueClipMargin:
-				renderRule->opaqueBackground = true;
-				i = -1;
-				break;
-			case OpaqueClipBorder:
-				if(opaqueBorder) {
-					renderRule->opaqueBackground = true;
-					i = -1;
-				}
-				break;
-			case OpaqueClipPadding:
-				if(opaqueBorder && !renderRule->hasPadding) {
-					renderRule->opaqueBackground = true;
-					i = -1;
-				}
-				break;
-			}
-		}
-		if(opaqueBorderImage)
-			renderRule->opaqueBackground = true;
-
-		workingRenderTarget = 0;
-		workingDeclaration = 0;
-		return renderRule;
-	}
-
-	void MStyleSheetStyle::polish(MWidget* w)
-	{
-		RenderRule rule = getRenderRule(w,PC_Default);
-		if(rule.isValid())
-			rule.setGeometry(w);
-
-		if(getRenderRule(w, PC_Hover).isValid())
-			w->setAttributes(WA_Hover);
-	}
-
 	RenderRuleData::~RenderRuleData()
 	{
 		for(int i = backgroundROs.size() -1; i >=0; --i)
 			delete backgroundROs.at(i);
 		delete borderImageRO;
 		delete borderRO;
-		delete geoData;
+		delete geoRO;
 	}
-
-	ID2D1BitmapBrush* BackgroundRenderObject::getBitmapBrush(ID2D1RenderTarget* renderTarget)
+	bool RenderRuleData::setGeometry(MWidget* w)
 	{
-		M_ASSERT_X(brushType == BitmapBrush, "This BackgroundRenderObject doesn't have a BitmapBrush.","BackgroundRenderObject::getBitmapBrush()");
+		if(geoRO == 0)
+			return false;
 
-		// The bitmapBrush is still valid.
-		if(lastUsedBitmap == *(brush.bitmap))
-			return bitmapBrush;
+		D2D_SIZE_U size  = w->size();
+		D2D_SIZE_U size2 = size;
+		if(geoRO->width  != -1 && geoRO->width  != size2.width)  size2.width   = geoRO->width;
+		if(geoRO->height != -1 && geoRO->height != size2.height) size2.height  = geoRO->height;
 
-		// Create the brush.
-		lastUsedBitmap = *(brush.bitmap);
-		// For some reason, the bitmap have been recreated.
-		// We need to recreated the bitmapBrush.
-		SafeRelease(bitmapBrush);
-		renderTarget->CreateBitmapBrush(lastUsedBitmap,
-							D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_WRAP,D2D1_EXTEND_MODE_WRAP),
-							D2D1::BrushProperties(), &bitmapBrush);
+		D2D_SIZE_U range = w->minSize();
+		bool changed     = false;
+		if(geoRO->minWidth  != -1) { range.width  = geoRO->minWidth;  changed = true; }
+		if(geoRO->minHeight != -1) { range.height = geoRO->minHeight; changed = true; }
+		if(changed) w->setMinimumSize(range.width,range.height);
 
-		return bitmapBrush;
+		if(size2.width  < range.width)  size2.width  = range.width;
+		if(size2.height < range.height) size2.height = range.height;
+
+		range   = w->maxSize();
+		changed = false;
+		if(geoRO->maxWidth  != -1) { range.width  = geoRO->maxWidth;  changed = true; }
+		if(geoRO->maxHeight != -1) { range.height = geoRO->maxHeight; changed = true; }
+		if(changed) w->setMaximumSize(range.width,range.height);
+
+		if(size2.width  > range.width)  size2.width  = range.width;
+		if(size2.height > range.height) size2.height = range.height;
+
+		if(size2.width == size.width && size2.height == size.height)
+			return false;
+
+		w->resize(size2.width,size2.height);
+		return true;
 	}
 
+	void RenderRuleData::createBrush(const CssValue& v)
+	{
+		if(v.type == CssValue::Uri)
+			createBrush(*v.data.vstring);
+		else
+			createBrush(v.data.vuint);
+	}
+	void RenderRuleData::createBrush(unsigned int color)
+	{
+		ID2D1SolidColorBrush* brush = MSSSPrivate::instance->solidBrushCache[color];
+		if(brush == 0) {
+			workingRT->CreateSolidColorBrush(CssValue::getColor(color),&brush);
+			MSSSPrivate::instance->solidBrushCache[color] = brush;
+		}
+	}
+	ID2D1BitmapBrush* RenderRuleData::createBrush(const wstring& uri)
+	{
+		ID2D1BitmapBrush* brush = MSSSPrivate::instance->bitmapBrushCache[uri];
+		M_ASSERT(brush == 0);
+
+		IWICImagingFactory*    wicFactory = mApp->getWICImagingFactory();
+		IWICBitmapDecoder*     decoder	  = 0;
+		IWICBitmapFrameDecode* frame	  = 0;
+		IWICFormatConverter*   converter  = 0;
+		IWICStream*            stream     = 0;
+		ID2D1Bitmap*           bitmap     = 0;
+
+		bool hasError = false;
+		HRESULT hr;
+		if(uri.at(0) == L':') {
+			// Image file is inside MResources.
+			MResource res;
+			if(res.open(uri))
+			{
+				wicFactory->CreateStream(&stream);
+				stream->InitializeFromMemory((WICInProcPointer)res.byteBuffer(),res.length());
+				wicFactory->CreateDecoderFromStream(stream,NULL,WICDecodeMetadataCacheOnDemand,&decoder);
+			}else
+				hasError = true;
+		} else {
+			hr = wicFactory->CreateDecoderFromFilename(uri.c_str(),NULL,
+				GENERIC_READ, WICDecodeMetadataCacheOnDemand,&decoder);
+			hasError = FAILED(hr);
+		}
+
+		if(hasError)
+		{
+			std::wstring error = L"[MStyleSheetStyle] Cannot open image file: ";
+			error.append(uri);
+			error.append(1,L'\n');
+			mWarning(true,error.c_str());
+			// create a empty bitmap because we can't find the image.
+			hr = workingRT->CreateBitmap( D2D1::SizeU(),
+				D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,
+				D2D1_ALPHA_MODE_PREMULTIPLIED)), &bitmap);
+		} else {
+			decoder->GetFrame(0,&frame);
+			wicFactory->CreateFormatConverter(&converter);
+			converter->Initialize(frame,
+				GUID_WICPixelFormat32bppPBGRA,
+				WICBitmapDitherTypeNone,NULL,
+				0.f,WICBitmapPaletteTypeMedianCut);
+			workingRT->CreateBitmapFromWicBitmap(converter,
+				D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, 
+				D2D1_ALPHA_MODE_PREMULTIPLIED)), &bitmap);
+		}
+
+		workingRT->CreateBitmapBrush(bitmap,
+			D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_WRAP,D2D1_EXTEND_MODE_WRAP),
+			D2D1::BrushProperties(), &brush);
+
+		MSSSPrivate::instance->bitmapBrushCache[uri] = brush;
+
+		SafeRelease(decoder);
+		SafeRelease(frame);
+		SafeRelease(stream);
+		SafeRelease(converter);
+		SafeRelease(bitmap);
+
+		return brush;
+	}
+	void RenderRuleData::createBorderImagerBrush()
+	{
+		wstring& uri = *borderImageRO->imageUri;
+		ID2D1BitmapBrush* brush = brush = createBrush(uri);
+		// Create Portion.
+		PortionBrushes& pbs = MSSSPrivate::instance->biPortionCache[brush];
+		ID2D1Bitmap* bitmap;
+		brush->GetBitmap(&bitmap);
+
+		D2D1_SIZE_U imageSize = bitmap->GetPixelSize();
+
+		const unsigned int& leftWidth   = borderImageRO->leftW;
+		const unsigned int& rightWidth  = borderImageRO->rightW;
+		const unsigned int& topWidth    = borderImageRO->topW;
+		const unsigned int& bottomWidth = borderImageRO->bottomW;
+
+		D2D1_RECT_F pbmpRect;
+		for(int i = 0; i < 5; ++i)
+		{
+			D2D1_SIZE_U pbmpSize;
+			switch(i)
+			{
+				case TopCenter:
+					pbmpRect.left   = (FLOAT)leftWidth;
+					pbmpRect.right  = (FLOAT)imageSize.width - rightWidth;
+					pbmpRect.top    = 0.f; 
+					pbmpRect.bottom = (FLOAT)topWidth;
+					pbmpSize.width  = int(pbmpRect.right - leftWidth);
+					pbmpSize.height = topWidth;
+					break;
+				case CenterLeft:
+					pbmpRect.left   = 0.f;
+					pbmpRect.right  = (FLOAT)leftWidth;
+					pbmpRect.top    = (FLOAT)topWidth;
+					pbmpRect.bottom = (FLOAT)imageSize.height - bottomWidth;
+					pbmpSize.width  = leftWidth;
+					pbmpSize.height = int(pbmpRect.bottom - topWidth);
+					break;
+				case Center:
+					pbmpRect.left   = (FLOAT)leftWidth;
+					pbmpRect.right  = (FLOAT)imageSize.width  - rightWidth;
+					pbmpRect.top    = (FLOAT)topWidth;
+					pbmpRect.bottom = (FLOAT)imageSize.height - bottomWidth;
+					pbmpSize.width  = int(pbmpRect.right  - leftWidth);
+					pbmpSize.height = int(pbmpRect.bottom - topWidth);
+					break;
+				case CenterRight:
+					pbmpRect.left   = (FLOAT)imageSize.width  - rightWidth;
+					pbmpRect.right  = (FLOAT)imageSize.width;
+					pbmpRect.top    = (FLOAT)topWidth;
+					pbmpRect.bottom = (FLOAT)imageSize.height - bottomWidth;
+					pbmpSize.width  = rightWidth;
+					pbmpSize.height = int(pbmpRect.bottom - topWidth);
+					break;
+				case BottomCenter:
+					pbmpRect.left   = (FLOAT)leftWidth;
+					pbmpRect.right  = (FLOAT)imageSize.width  - rightWidth;
+					pbmpRect.top    = (FLOAT)imageSize.height - bottomWidth;
+					pbmpRect.bottom = (FLOAT)imageSize.height;
+					pbmpSize.width  = int(pbmpRect.right  - leftWidth);
+					pbmpSize.height = bottomWidth;
+					break;
+			}
+
+			// There is a bug in ID2D1Bitmap::CopyFromBitmap(), we need to avoid this.
+			ID2D1Bitmap* portionBmp;
+			ID2D1BitmapBrush* pb;
+
+			ID2D1BitmapRenderTarget* intermediateRT;
+			HRESULT hr = workingRT->CreateCompatibleRenderTarget(D2D1::SizeF((FLOAT)pbmpSize.width,
+				(FLOAT)pbmpSize.height),&intermediateRT);
+
+			if(FAILED(hr)) break;
+
+			intermediateRT->BeginDraw();
+			intermediateRT->DrawBitmap(bitmap,D2D1::RectF(0.f,0.f,(FLOAT)pbmpSize.width,(FLOAT)pbmpSize.height),
+				1.0f,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, pbmpRect);
+			intermediateRT->EndDraw();
+			intermediateRT->GetBitmap(&portionBmp);
+			workingRT->CreateBitmapBrush(portionBmp,
+				D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_CLAMP,D2D1_EXTEND_MODE_CLAMP),
+				D2D1::BrushProperties(), &pb);
+
+			SafeRelease(portionBmp);
+			SafeRelease(intermediateRT);
+			pbs.b[i] = pb;
+		}
+
+		SafeRelease(bitmap);
+	}
+	inline ID2D1SolidColorBrush* RenderRuleData::getBrush(SimpleBorderRenderObject* sbro)
+	{
+		if(*(sbro->brushPosition) == 0)
+			createBrush(sbro->color);
+		return *(sbro->brushPosition);
+	}
+	inline ID2D1Brush* RenderRuleData::getBrush(BackgroundRenderObject* bgro)
+	{
+		ID2D1Brush** bp = bgro->brushPosition;
+		if(*bp == 0)
+			createBrush(bgro->brushCSSValue);
+
+		if(!bgro->checkedSize)
+		{
+			bgro->checkedSize = true;
+			if(bgro->brushCSSValue.type == CssValue::Uri) {
+				// A bitmap brush
+				ID2D1BitmapBrush* bb = (ID2D1BitmapBrush*) *bp;
+				ID2D1Bitmap* bmp;
+				bb->GetBitmap(&bmp);
+				D2D1_SIZE_F size = bmp->GetSize();
+				unsigned int& w = bgro->width;
+				unsigned int& h = bgro->height;
+				// If the user doesn't specify the size of the background,
+				// we need to make sure the size is valid.
+				if(w == 0 || w + bgro->x > (unsigned int)size.width )
+					w = (unsigned int)size.width  - bgro->x;
+				if(h == 0 || h + bgro->y > (unsigned int)size.height)
+					h = (unsigned int)size.height - bgro->y;
+			}
+		}
+		return *bp;
+	}
+	ID2D1BitmapBrush* RenderRuleData::getBorderImageBrush(Portion p)
+	{
+		M_ASSERT(borderImageRO);
+		if(*(borderImageRO->brushPosition) == 0)
+			createBorderImagerBrush();
+
+		ID2D1BitmapBrush* b = *(borderImageRO->brushPosition);
+		if(Conner == p)
+			return b;
+		else {
+			PortionBrushes& pbs = MSSSPrivate::instance->biPortionCache[b];
+			return pbs.b[p];
+		}
+	} 
 	void RenderRuleData::draw(ID2D1RenderTarget* rt, const RECT& widgetRectInRT, const RECT& clipRectInRT)
 	{
 		M_ASSERT(rt != 0);
+		workingRT = rt;
 		// We have to get the border geometry first if there's any.
 		// Because drawing the background may depends on the border geometry.
 		ID2D1Geometry* borderGeo = 0;
@@ -2464,39 +1768,58 @@ namespace MetalBone
 			if(borderRO->type == BorderRenderObject::ComplexBorder)
 				borderGeo = reinterpret_cast<ComplexBorderRenderObject*>(borderRO)->createGeometry(borderRect);
 		}
-		// === Draw Backgrounds ===
+		// === Backgrounds ===
 		if(backgroundROs.size() > 0)
-			drawBackgrounds(rt, borderGeo, widgetRectInRT, clipRectInRT);
+			drawBackgrounds(widgetRectInRT, clipRectInRT,borderGeo);
 
-		// === Draw BorderImage ===
+		// === BorderImage ===
 		if(borderImageRO != 0)
-			drawBorderImage(rt, widgetRectInRT, clipRectInRT);
+			drawBorderImage(widgetRectInRT, clipRectInRT);
 
-		// === Draw Border ===
+		// === Border ===
 		if(borderRO != 0 && borderRO->isVisible())
 		{
-			if(borderRO->type == BorderRenderObject::SimpleBorder) {
-				SimpleBorderRenderObject* sbro = reinterpret_cast<SimpleBorderRenderObject*>(borderRO);
-				rt->DrawRectangle(borderRect,sbro->getBrush(),(FLOAT)sbro->width);
-			} else if(borderRO->type == BorderRenderObject::RadiusBorder) {
-				RadiusBorderRenderObject* rbro = reinterpret_cast<RadiusBorderRenderObject*>(borderRO);
-				D2D1_ROUNDED_RECT rrect;
-				rrect.rect = borderRect;
-				rrect.radiusX = rrect.radiusY = (FLOAT)rbro->radius;
-				rt->DrawRoundedRectangle(rrect,rbro->getBrush(),(FLOAT)rbro->width);
+			if(borderRO->type == BorderRenderObject::ComplexBorder)
+			{
+				// Check the ComplexBorderRO's brushes here, so that it don't depend on
+				// RenderRuleData.
+				ComplexBorderRenderObject* cbro = reinterpret_cast<ComplexBorderRenderObject*>(borderRO);
+				if(*(cbro->brushPositions[0]) == 0) createBrush(cbro->colors[0]);
+				if(*(cbro->brushPositions[1]) == 0) createBrush(cbro->colors[1]);
+				if(*(cbro->brushPositions[2]) == 0) createBrush(cbro->colors[2]);
+				if(*(cbro->brushPositions[3]) == 0) createBrush(cbro->colors[3]);
+				cbro->draw(rt, borderGeo, borderRect);
 			} else {
-				reinterpret_cast<ComplexBorderRenderObject*>(borderRO)->draw(rt, borderGeo, borderRect);
+				SimpleBorderRenderObject* sbro = reinterpret_cast<SimpleBorderRenderObject*>(borderRO);
+				ID2D1SolidColorBrush* b = getBrush(sbro);
+				FLOAT w = (FLOAT)sbro->width;
+				// MS said that the rectangle stroke is centered on the outline. So we
+				// need to shrink a half of the borderWidth.
+				FLOAT shrink = w / 2;
+				borderRect.left   += shrink;
+				borderRect.top    += shrink;
+				borderRect.right  -= shrink;
+				borderRect.bottom -=shrink;
+				if(borderRO->type == BorderRenderObject::SimpleBorder)
+					rt->DrawRectangle(borderRect,b,w);
+				else {
+					RadiusBorderRenderObject* rbro = reinterpret_cast<RadiusBorderRenderObject*>(borderRO);
+					D2D1_ROUNDED_RECT rr;
+					rr.rect = borderRect;
+					rr.radiusX = rr.radiusY = (FLOAT)rbro->radius;
+					rt->DrawRoundedRectangle(rr,b,w);
+				}
 			}
 		}
 		SafeRelease(borderGeo);
+		workingRT = 0;
 	}
 
-	void RenderRuleData::drawBackgrounds(ID2D1RenderTarget* rt,ID2D1Geometry* borderGeo,
-						const RECT& widgetRect, const RECT& clipRect)
+	void RenderRuleData::drawBackgrounds(const RECT& wr, const RECT& cr,ID2D1Geometry* borderGeo)
 	{
 		for(unsigned int i = 0; i < backgroundROs.size(); ++i)
 		{
-			RECT contentRect = widgetRect;
+			RECT contentRect = wr;
 
 			ID2D1Geometry*          bgGeo = 0;
 			BackgroundRenderObject* bgro  = backgroundROs.at(i);
@@ -2528,35 +1851,37 @@ namespace MetalBone
 				}
 			}
 
-			int dx = -bgro->x;
-			int dy = -bgro->y;
-			ID2D1Brush* brush;
-			if(bgro->brushType == BitmapBrush)
-				brush = bgro->getBitmapBrush(rt);
-			else
-				brush = *(bgro->brush.solidBrush);
+			int dx = 0 - bgro->x;
+			int dy = 0 - bgro->y;
+			ID2D1Brush* brush = getBrush(bgro);
 
-			if(bgro->alignmentX != Value_Left) {
-				if(bgro->alignmentX == Value_Center)
-					contentRect.left = (contentRect.left + contentRect.right - bgro->width) / 2;
-				else
-					contentRect.left = contentRect.right - bgro->width;
+			if(bgro->width != 0)
+			{
+				if(bgro->alignX != Value_Left) {
+					if(bgro->alignX == Value_Center)
+						contentRect.left = (contentRect.left + contentRect.right - bgro->width) / 2;
+					else
+						contentRect.left = contentRect.right - bgro->width;
+				}
+				if(!isRepeatX(bgro)) {
+					int r = contentRect.left + bgro->width;
+					if(contentRect.right > r)
+						contentRect.right  = r;
+				}
 			}
-			if(bgro->alignmentY != Value_Top) {
-				if(bgro->alignmentY == Value_Center)
-					contentRect.top = (contentRect.top + contentRect.bottom - bgro->height) / 2;
-				else
-					contentRect.top = contentRect.bottom - bgro->height;
-			}
-			if(!bgro->repeatX) {
-				int r = contentRect.left + bgro->width;
-				if(contentRect.right > r)
-					contentRect.right  = r;
-			}
-			if(!bgro->repeatY) {
-				int b = contentRect.top + bgro->height;
-				if(contentRect.bottom > b)
-					contentRect.bottom = b;
+			if(bgro->height != 0)
+			{
+				if(bgro->alignY != Value_Top) {
+					if(bgro->alignY == Value_Center)
+						contentRect.top = (contentRect.top + contentRect.bottom - bgro->height) / 2;
+					else
+						contentRect.top = contentRect.bottom - bgro->height;
+				}
+				if(!isRepeatY(bgro)) {
+					int b = contentRect.top + bgro->height;
+					if(contentRect.bottom > b)
+						contentRect.bottom = b;
+				}
 			}
 
 			dx += (int)contentRect.left;
@@ -2564,140 +1889,52 @@ namespace MetalBone
 			if(dx != 0 || dy != 0)
 				brush->SetTransform(D2D1::Matrix3x2F::Translation((FLOAT)dx,(FLOAT)dy));
 
-			D2D1_RECT_F cr;
-			cr.left   = (FLOAT)contentRect.left;
-			cr.top    = (FLOAT)contentRect.top;
-			cr.right  = (FLOAT)contentRect.right;
-			cr.bottom = (FLOAT)contentRect.bottom;
+			D2D1_RECT_F clip;
+			clip.left   = (FLOAT) max(contentRect.left  ,cr.left);
+			clip.top    = (FLOAT) max(contentRect.top   ,cr.top);
+			clip.right  = (FLOAT) min(contentRect.right ,cr.right);
+			clip.bottom = (FLOAT) min(contentRect.bottom,cr.bottom);
 
-			if(bgro->clip == Value_Border && borderRO != 0) {
+			if(bgro->clip != Value_Border || borderRO == 0)
+				workingRT->FillRectangle(clip,brush);
+			else
+			{
 				if(borderRO->type == BorderRenderObject::SimpleBorder) {
-					rt->FillRectangle(cr,brush);
+					workingRT->FillRectangle(clip,brush);
 				} else if(borderRO->type == BorderRenderObject::RadiusBorder) {
 					D2D1_ROUNDED_RECT rrect;
-					rrect.rect = cr;
-					rrect.radiusX = 
-					rrect.radiusY = FLOAT(reinterpret_cast<RadiusBorderRenderObject*>(borderRO)->radius);
-					rt->FillRoundedRectangle(rrect,brush);
+					rrect.rect = clip;
+					rrect.radiusX = rrect.radiusY = FLOAT(reinterpret_cast<RadiusBorderRenderObject*>(borderRO)->radius);
+					workingRT->FillRoundedRectangle(rrect,brush);
 				} else {
-					rt->FillGeometry(borderGeo,brush);
+					workingRT->FillGeometry(borderGeo,brush);
 				}
-			} else 
-				rt->FillRectangle(cr,brush);
+			}
 
-			if(dx != 0 || dy != 0)
-				brush->SetTransform(D2D1::Matrix3x2F::Identity());
+// 			if(dx != 0 || dy != 0)
+// 				brush->SetTransform(D2D1::Matrix3x2F::Identity());
 		}
 	}
 
-	ID2D1BitmapBrush* BorderImageRenderObject::getPortionBrush(ID2D1RenderTarget* rt, Portion p)
-	{
-		if(lastUsedBitmap != *borderImage)
-		{
-			// If the borderImage has been recreated, we must recreate all
-			// the portion brushes.
-			for(int i = 0; i < 6; ++i)
-				SafeRelease(portionBrushes[i]);
-
-			ZeroMemory(portionBrushes, sizeof(ID2D1BitmapBrush*)*6);
-			lastUsedBitmap = *borderImage;
-		} else if(portionBrushes[p] != 0) {
-			// The cache is still valid, so we just return the cahced brush.
-			return portionBrushes[p];
-		}
-
-		ID2D1BitmapBrush* pb = 0;
-		if(p == Conner)
-		{
-			rt->CreateBitmapBrush(lastUsedBitmap,
-								  D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_WRAP,D2D1_EXTEND_MODE_WRAP),
-								  D2D1::BrushProperties(), &pb);
-			portionBrushes[Conner] = pb;
-			return pb;
-		}
-
-		D2D1_RECT_F pbmpRect;
-		D2D1_SIZE_U pbmpSize(imageSize());
-		switch(p)
-		{
-			case TopCenter:
-				pbmpRect.left   = (FLOAT)leftWidth;
-				pbmpRect.right  = (FLOAT)pbmpSize.width - rightWidth;
-				pbmpRect.top    = 0.f; 
-				pbmpRect.bottom = (FLOAT)topWidth;
-				pbmpSize.width  = int(pbmpRect.right - leftWidth);
-				pbmpSize.height = topWidth;
-				break;
-			case CenterLeft:
-				pbmpRect.left   = 0.f;
-				pbmpRect.right  = (FLOAT)leftWidth;
-				pbmpRect.top    = (FLOAT)topWidth;
-				pbmpRect.bottom = (FLOAT)pbmpSize.height - bottomWidth;
-				pbmpSize.width  = leftWidth;
-				pbmpSize.height = int(pbmpRect.bottom - topWidth);
-				break;
-			case Center:
-				pbmpRect.left   = (FLOAT)leftWidth;
-				pbmpRect.right  = (FLOAT)pbmpSize.width  - rightWidth;
-				pbmpRect.top    = (FLOAT)topWidth;
-				pbmpRect.bottom = (FLOAT)pbmpSize.height - bottomWidth;
-				pbmpSize.width  = int(pbmpRect.right  - leftWidth);
-				pbmpSize.height = int(pbmpRect.bottom - topWidth);
-				break;
-			case CenterRight:
-				pbmpRect.left   = (FLOAT)pbmpSize.width  - rightWidth;
-				pbmpRect.right  = (FLOAT)pbmpSize.width;
-				pbmpRect.top    = (FLOAT)topWidth;
-				pbmpRect.bottom = (FLOAT)pbmpSize.height - bottomWidth;
-				pbmpSize.width  = rightWidth;
-				pbmpSize.height = int(pbmpRect.bottom - topWidth);
-				break;
-			case BottomCenter:
-				pbmpRect.left   = (FLOAT)leftWidth;
-				pbmpRect.right  = (FLOAT)pbmpSize.width  - rightWidth;
-				pbmpRect.top    = (FLOAT)pbmpSize.height - bottomWidth;
-				pbmpRect.bottom = (FLOAT)pbmpSize.height;
-				pbmpSize.width  = int(pbmpRect.right  - leftWidth);
-				pbmpSize.height = bottomWidth;
-				break;
-		}
-		// There is a bug in ID2D1Bitmap::CopyFromBitmap(), we need to avoid this.
-		ID2D1BitmapRenderTarget* intermediateRT;
-		ID2D1Bitmap* portionBmp;
-		D2D1_RECT_F intermediateRect = {pbmpRect.left,pbmpRect.top,pbmpRect.right,pbmpRect.bottom};
-		HRESULT hr = rt->CreateCompatibleRenderTarget(D2D1::SizeF((FLOAT)pbmpSize.width,(FLOAT)pbmpSize.height),&intermediateRT);
-		if(SUCCEEDED(hr))
-		{
-			intermediateRT->BeginDraw();
-			intermediateRT->DrawBitmap(lastUsedBitmap,D2D1::RectF(0.f,0.f,(FLOAT)pbmpSize.width,(FLOAT)pbmpSize.height),
-										1.0f,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,
-										pbmpRect);
-			intermediateRT->EndDraw();
-			intermediateRT->GetBitmap(&portionBmp);
-			rt->CreateBitmapBrush(portionBmp,
-								  D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_CLAMP,D2D1_EXTEND_MODE_CLAMP),
-								  D2D1::BrushProperties(), &pb);
-
-			SafeRelease(portionBmp);
-			SafeRelease(intermediateRT);
-		}
-		portionBrushes[p] = pb;
-		return pb;
-	}
-
-	void RenderRuleData::drawBorderImage(ID2D1RenderTarget* rt,const RECT& widgetRect, const RECT& clipRect)
+	void RenderRuleData::drawBorderImage(const RECT& widgetRect, const RECT& clipRect)
 	{
 		// 0.TopLeft     1.TopCenter     2.TopRight
 		// 3.CenterLeft  4.Center        5.CenterRight
 		// 6.BottomLeft  7.BottomCenter  8.BottomRight
 		bool drawParts[9] = {true,true,true,true,true,true,true,true,true};
-		int x1 = widgetRect.left   + borderImageRO->leftWidth;
-		int x2 = widgetRect.right  - borderImageRO->rightWidth;
-		int y1 = widgetRect.top    + borderImageRO->topWidth;
-		int y2 = widgetRect.bottom - borderImageRO->bottomWidth;
-		D2D1_SIZE_U borderImageSize = borderImageRO->imageSize();
-		FLOAT scaleX = FLOAT(x2 - x1) / (borderImageSize.width - borderImageRO->leftWidth - borderImageRO->rightWidth);
-		FLOAT scaleY = FLOAT(y2 - y1) / (borderImageSize.height - borderImageRO->topWidth - borderImageRO->bottomWidth);
+		int x1 = widgetRect.left   + borderImageRO->leftW;
+		int x2 = widgetRect.right  - borderImageRO->rightW;
+		int y1 = widgetRect.top    + borderImageRO->topW;
+		int y2 = widgetRect.bottom - borderImageRO->bottomW;
+
+		ID2D1BitmapBrush* brush = getBorderImageBrush(Conner);
+		ID2D1Bitmap* bitmap;
+		brush->GetBitmap(&bitmap);
+		D2D1_SIZE_U imageSize = bitmap->GetPixelSize();
+		bitmap->Release();
+
+		FLOAT scaleX = FLOAT(x2 - x1) / (imageSize.width - borderImageRO->leftW- borderImageRO->rightW);
+		FLOAT scaleY = FLOAT(y2 - y1) / (imageSize.height - borderImageRO->topW- borderImageRO->bottomW);
 		if(clipRect.left > x1) {
 			drawParts[0] = drawParts[3] = drawParts[6] = false;
 			if(clipRect.left > x2)
@@ -2720,9 +1957,7 @@ namespace MetalBone
 		}
 
 		// Draw!
-		D2D1_SIZE_U imageSize = borderImageRO->imageSize();
 		D2D1_RECT_F drawRect;
-		ID2D1BitmapBrush* brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::Conner);
 		// Assume we can always get a valid brush for Conner.
 		if(drawParts[0]) {
 			drawRect.left   = (FLOAT)widgetRect.left;
@@ -2730,7 +1965,7 @@ namespace MetalBone
 			drawRect.top    = (FLOAT)widgetRect.top;
 			drawRect.bottom = (FLOAT)y1;
 			brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-			rt->FillRectangle(drawRect,brush);
+			workingRT->FillRectangle(drawRect,brush);
 		}
 		if(drawParts[2]) {
 			drawRect.left   = (FLOAT)x2;
@@ -2738,7 +1973,7 @@ namespace MetalBone
 			drawRect.top    = (FLOAT)widgetRect.top;
 			drawRect.bottom = (FLOAT)y1;
 			brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.right - imageSize.width, drawRect.top));
-			rt->FillRectangle(drawRect,brush);
+			workingRT->FillRectangle(drawRect,brush);
 		}
 		if(drawParts[6]) {
 			drawRect.left   = (FLOAT)widgetRect.left;
@@ -2746,7 +1981,7 @@ namespace MetalBone
 			drawRect.top    = (FLOAT)y2;
 			drawRect.bottom = (FLOAT)widgetRect.bottom;
 			brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.bottom - imageSize.height));
-			rt->FillRectangle(drawRect,brush);
+			workingRT->FillRectangle(drawRect,brush);
 		}
 		if(drawParts[8]) {
 			drawRect.left   = (FLOAT)x2;
@@ -2754,20 +1989,20 @@ namespace MetalBone
 			drawRect.top    = (FLOAT)y2;
 			drawRect.bottom = (FLOAT)widgetRect.bottom;
 			brush->SetTransform(D2D1::Matrix3x2F::Translation(drawRect.right - imageSize.width, drawRect.bottom - imageSize.height));
-			rt->FillRectangle(drawRect,brush);
+			workingRT->FillRectangle(drawRect,brush);
 		}
 		if(drawParts[1]) {
 			drawRect.left   = (FLOAT)x1;
 			drawRect.right  = (FLOAT)x2;
 			drawRect.top    = (FLOAT)widgetRect.top;
 			drawRect.bottom = (FLOAT)y1;
-			brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::TopCenter);
+			brush = getBorderImageBrush(TopCenter);
 			if(brush) {
 				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-				if(!borderImageRO->repeatX)
+				if(!isRepeatX(borderImageRO))
 					matrix = D2D1::Matrix3x2F::Scale(scaleX,1.0f) * matrix;
 				brush->SetTransform(matrix);
-				rt->FillRectangle(drawRect,brush);
+				workingRT->FillRectangle(drawRect,brush);
 			}
 		}
 		if(drawParts[3]) {
@@ -2775,13 +2010,13 @@ namespace MetalBone
 			drawRect.right  = (FLOAT)x1;
 			drawRect.top    = (FLOAT)y1;
 			drawRect.bottom = (FLOAT)y2;
-			brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::CenterLeft);
+			brush = getBorderImageBrush(CenterLeft);
 			if(brush) {
 				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-				if(!borderImageRO->repeatY)
+				if(!isRepeatY(borderImageRO))
 					matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
 				brush->SetTransform(matrix);
-				rt->FillRectangle(drawRect,brush);
+				workingRT->FillRectangle(drawRect,brush);
 			}
 		}
 		if(drawParts[4]) {
@@ -2789,15 +2024,15 @@ namespace MetalBone
 			drawRect.right  = (FLOAT)x2;
 			drawRect.top    = (FLOAT)y1;
 			drawRect.bottom = (FLOAT)y2;
-			brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::Center);
+			brush = getBorderImageBrush(Center);
 			if(brush) {
 				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-				if(!borderImageRO->repeatX)
-					matrix = D2D1::Matrix3x2F::Scale(scaleX, borderImageRO->repeatY ? 1.0f : scaleY) * matrix; 
-				else if(!borderImageRO->repeatY)
+				if(!isRepeatX(borderImageRO))
+					matrix = D2D1::Matrix3x2F::Scale(scaleX, isRepeatY(borderImageRO) ? 1.0f : scaleY) * matrix; 
+				else if(!isRepeatY(borderImageRO))
 					matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
 				brush->SetTransform(matrix);
-				rt->FillRectangle(drawRect,brush);
+				workingRT->FillRectangle(drawRect,brush);
 			}
 		}
 		if(drawParts[5]) {
@@ -2805,13 +2040,13 @@ namespace MetalBone
 			drawRect.right  = (FLOAT)widgetRect.right;
 			drawRect.top    = (FLOAT)y1;
 			drawRect.bottom = (FLOAT)y2;
-			brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::CenterRight);
+			brush = getBorderImageBrush(CenterRight);
 			if(brush) {
 				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-				if(!borderImageRO->repeatY)
+				if(!isRepeatY(borderImageRO))
 					matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
 				brush->SetTransform(matrix);
-				rt->FillRectangle(drawRect,brush);
+				workingRT->FillRectangle(drawRect,brush);
 			}
 		}
 		if(drawParts[7]) {
@@ -2819,16 +2054,1060 @@ namespace MetalBone
 			drawRect.right  = (FLOAT)x2;
 			drawRect.top    = (FLOAT)y2;
 			drawRect.bottom = (FLOAT)widgetRect.bottom;
-			brush = borderImageRO->getPortionBrush(rt,BorderImageRenderObject::BottomCenter);
+			brush = getBorderImageBrush(BottomCenter);
 			if(brush) {
 				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-				if(!borderImageRO->repeatX)
+				if(!isRepeatX(borderImageRO))
 					matrix = D2D1::Matrix3x2F::Scale(scaleX,1.0f) * matrix;
 				brush->SetTransform(matrix);
-				rt->FillRectangle(drawRect,brush);
+				workingRT->FillRectangle(drawRect,brush);
 			}
 		}
 	}
+
+	// ********** RenderRule Impl
+	RenderRule::RenderRule(RenderRuleData* d):data(d)
+		{ if(data) ++data->refCount; }
+	RenderRule::RenderRule(const RenderRule& d):data(d.data)
+		{ if(data) ++data->refCount; }
+	bool RenderRule::opaqueBackground() const
+		{ return data == 0 ? false : data->opaqueBackground; }
+	void RenderRule::init()
+		{ M_ASSERT(data==0); data = new RenderRuleData(); }
+	RenderRule::~RenderRule()
+	{
+		if(data) {
+			if(--data->refCount == 0)
+				delete data;
+		}
+	}
+	const RenderRule& RenderRule::operator=(const RenderRule& rhs)
+	{
+		if(&rhs != this)
+		{
+			if(data) {
+				if(--data->refCount == 0)
+					delete data;
+			}
+			if((data = rhs.data) != 0)
+				++data->refCount;
+		}
+		return *this;
+	}
+
+	// ********** RenderRuleCacheKey Impl 
+	bool RenderRuleCacheKey::operator<(const RenderRuleCacheKey& rhs) const
+	{
+		if(this == &rhs)
+			return false;
+
+		int size1 = styleRules.size();
+		int size2 = rhs.styleRules.size();
+		if(size1 > size2) {
+			return false;
+		} else if(size1 < size2) {
+			return true;
+		} else {
+			for(int i = 0; i < size1; ++i)
+			{
+				StyleRule* sr1 = styleRules.at(i);
+				StyleRule* sr2 = rhs.styleRules.at(i);
+				if(sr1 > sr2)
+					return false;
+				else if(sr1 < sr2)
+					return true;
+			}
+		}
+		return false;
+	}
+
+
+	// ********** MStyleSheetStyle Impl
+	MStyleSheetStyle::MStyleSheetStyle():mImpl(new MSSSPrivate()) {}
+	MStyleSheetStyle::~MStyleSheetStyle()
+		{ delete mImpl; }
+	void MStyleSheetStyle::setAppSS(const wstring& css)
+		{ mImpl->setAppSS(css); }
+	void MStyleSheetStyle::setWidgetSS(MWidget* w, const wstring& css)
+		{ mImpl->setWidgetSS(w,css); }
+	void MStyleSheetStyle::polish(MWidget* w)
+		{ mImpl->polish(w); }
+	void MStyleSheetStyle::draw(MWidget* w,ID2D1RenderTarget* rt, const RECT& wr, const RECT& cr)
+		{ mImpl->draw(w,rt,wr,cr); } 
+	void MStyleSheetStyle::removeCache(MWidget* w)
+		{ mImpl->removeCache(w); }
+	RenderRule MStyleSheetStyle::getRenderRule(MWidget* w, unsigned int p)
+		{return mImpl->getRenderRule(w,p); }
+
+	// ********** MSSSPrivate Implementation
+	MSSSPrivate* MSSSPrivate::instance = 0;
+	void getWidgetClassName(const MWidget* w,wstring& name)
+	{
+		wstringstream s;
+		s << typeid(*w).name();
+		name = s.str();
+		name.erase(0,6); // Eat the 'class ' generated by msvc.
+
+		int pos = 0;
+		while((pos = name.find(L"::",pos)) != wstring::npos)
+		{
+			name.replace(pos,2,L"--");
+			pos += 2;
+		}
+	}
+
+	bool basicSelectorMatches(const BasicSelector* bs, MWidget* w)
+	{
+		if(!bs->id.empty() && w->objectName() != bs->id)
+			return false;
+
+		if(!bs->elementName.empty()) {
+			wstring ss;
+			getWidgetClassName(w,ss);
+			if(bs->elementName != ss)
+				return false;
+		}
+		return true;
+	}
+
+	bool selectorMatches(const Selector* sel, MWidget* w)
+	{
+		const vector<BasicSelector*>& basicSels = sel->basicSelectors;
+		if(basicSels.size() == 1)
+			return basicSelectorMatches(basicSels.at(0),w);
+
+		// first element must always match!
+		if(!basicSelectorMatches(basicSels.at(basicSels.size() - 1), w))
+			return false;
+
+		w = w->parent();
+
+		if(w == 0)
+			return false;
+
+		int i = basicSels.size() - 2;
+		bool matched = true;
+		BasicSelector* bs = 0;/*basicSels.at(i);*/
+		while(i > 0 && (matched || bs->relationToNext == BasicSelector::MatchNextIfAncestor))
+		{
+			bs = basicSels.at(i);
+			matched = basicSelectorMatches(bs,w);
+
+			if(!matched)
+			{
+				if(bs->relationToNext == BasicSelector::MatchNextIfParent)
+					break;
+			} else
+				--i;
+
+			if((w = w->parent()) == 0)
+				return false;
+		}
+
+		return matched;
+	}
+
+	void matchRule(MWidget* w,const StyleRule* rule,int depth,
+		multimap<int, MatchedStyleRule>& weightedRules)
+	{
+		for(unsigned int i = 0; i < rule->selectors.size(); ++i)
+		{
+			const Selector* sel = rule->selectors.at(i);
+			if(selectorMatches(sel, w))
+			{
+				int weight = rule->order + sel->specificity() * 0x100 + depth* 0x100000;
+				MatchedStyleRule msr;
+				msr.matchedSelector = sel;
+				msr.styleRule = rule;
+				weightedRules.insert(multimap<int, MatchedStyleRule>::value_type(weight,msr));
+			}
+		}
+	}
+
+	void MSSSPrivate::getMachedStyleRules(MWidget* widget, MatchedStyleRuleVector& srs)
+	{
+		// Get all possible stylesheets
+		vector<CSS::StyleSheet*> sheets;
+		for(MWidget* p = widget; p != 0; p = p->parent())
+		{
+			WidgetSSCache::const_iterator wssIter = widgetSSCache.find(p);
+			if(wssIter != widgetSSCache.end())
+				sheets.push_back(wssIter->second);
+		}
+		sheets.push_back(appStyleSheet);
+
+		multimap<int, MatchedStyleRule> weightedRules;
+		int sheetCount = sheets.size();
+		for(int sheetIndex = 0; sheetIndex < sheetCount; ++sheetIndex)
+		{
+			int depth = sheetCount - sheetIndex;
+			const StyleSheet* sheet = sheets.at(sheetIndex);
+			// search for universal rules.
+			for(unsigned int i = 0;i< sheet->universal.size(); ++i) {
+				matchRule(widget,sheet->universal.at(i),depth,weightedRules);
+			}
+
+			// check for Id
+			if(!sheet->srIdMap.empty() && !widget->objectName().empty())
+			{
+				pair<StyleSheet::StyleRuleIdMap::const_iterator,
+					StyleSheet::StyleRuleIdMap::const_iterator> result =
+					sheet->srIdMap.equal_range(widget->objectName());
+				while(result.first != result.second)
+				{
+					matchRule(widget,result.first->second,depth,weightedRules);
+					++result.first;
+				}
+			}
+
+			// check for class name
+			if(!sheet->srElementMap.empty())
+			{
+				wstring widgetClassName;
+				getWidgetClassName(widget,widgetClassName);
+				pair<StyleSheet::StyleRuleElementMap::const_iterator,
+					StyleSheet::StyleRuleElementMap::const_iterator> result =
+					sheet->srElementMap.equal_range(widgetClassName);
+				while(result.first != result.second)
+				{
+					matchRule(widget,result.first->second,depth,weightedRules);
+					++result.first;
+				}
+			}
+		}
+
+		srs.clear();
+		srs.reserve(weightedRules.size());
+		multimap<int, MatchedStyleRule>::const_iterator wrIt    = weightedRules.begin();
+		multimap<int, MatchedStyleRule>::const_iterator wrItEnd = weightedRules.end();
+
+		while(wrIt != wrItEnd) {
+			srs.push_back(wrIt->second);
+			++wrIt;
+		}
+	}
+
+	// Remark. We should make gif animation possible.
+	RenderRule MSSSPrivate::getRenderRule(MWidget* w, unsigned int pseudo)
+	{
+		// == 1.Find RenderRule for MWidget w from Widget-RenderRule cache.
+		WidgetRenderRuleMap::iterator widgetCacheIter = widgetRenderRuleCache.find(w);
+		PseudoRenderRuleMap* prrMap = 0;
+		if(widgetCacheIter != widgetRenderRuleCache.end())
+		{
+			prrMap = widgetCacheIter->second;
+			PseudoRenderRuleMap::Element::iterator prrIter = prrMap->element.find(pseudo);
+			if(prrIter != prrMap->element.end())
+				return prrIter->second; // Found sth. we are insterested in.
+		}
+
+		// == 2.Find StyleRules for MWidget w from Widget-StyleRule cache.
+		WidgetStyleRuleMap::iterator wsrIter = widgetStyleRuleCache.find(w);
+		MatchedStyleRuleVector* matchedsrv;
+		if(wsrIter != widgetStyleRuleCache.end()) {
+			matchedsrv = &(wsrIter->second);
+		} else {
+			matchedsrv = &(widgetStyleRuleCache.insert(
+				WidgetStyleRuleMap::value_type(w, MatchedStyleRuleVector())).first->second);
+			getMachedStyleRules(w,*matchedsrv);
+		}
+
+		// == 3.If we don't have a PseudoRenderRuleMap, build one.
+		if(prrMap == 0)
+		{
+			RenderRuleCacheKey cacheKey;
+			int srvSize = matchedsrv->size();
+			cacheKey.styleRules.reserve(srvSize);
+			for(int i = 0; i< srvSize; ++i)
+				cacheKey.styleRules.push_back(const_cast<StyleRule*>(matchedsrv->at(i).styleRule));
+			prrMap = &(renderRuleCollection[cacheKey]);
+			widgetRenderRuleCache.insert(WidgetRenderRuleMap::value_type(w,prrMap));
+		}
+
+		// == 4. Merge the declarations.
+		PseudoRenderRuleMap::Element::iterator hasRRIter = prrMap->element.find(pseudo);
+		if(hasRRIter != prrMap->element.end())
+		{
+			// There's a RenderRule can be used for this widget. Although this
+			// renderRule may still be invalid.
+			return hasRRIter->second;
+		}
+		RenderRule& renderRule = prrMap->element[pseudo]; // Insert a RenderRule even if it's empty.
+		// If there's no StyleRules for MWidget w, then we return a invalid RenderRule.
+		if(matchedsrv->size() == 0)
+			return renderRule;
+
+		MatchedStyleRuleVector::const_iterator msrIter = matchedsrv->begin();
+		MatchedStyleRuleVector::const_iterator msrIterEnd = matchedsrv->end();
+		DeclMap declarations;
+		unsigned int realPseudo = 0;
+		while(msrIter != msrIterEnd)
+		{
+			const Selector* sel = msrIter->matchedSelector;
+			if(sel->matchPseudo(pseudo))
+			{
+				realPseudo |= sel->pseudo();
+				// This rule is for the widget with pseudo.
+				// Add declarations to map.
+				const StyleRule* sr = msrIter->styleRule;
+				vector<Declaration*>::const_iterator declIter = sr->declarations.begin();
+				vector<Declaration*>::const_iterator declIterEnd = sr->declarations.end();
+				set<PropertyType> tempProps;
+
+				bool inheritBG = false;
+				// Remove duplicate properties
+				while(declIter != declIterEnd)
+				{
+					// Check if user defined "PT_InheritBackground",
+					// If true, we keep any background specified in other declarations.
+					// otherwise, keep every backgrounds
+					PropertyType prop = (*declIter)->property;
+					if(prop == PT_InheritBackground)
+						inheritBG = true;
+					else
+						tempProps.insert(prop);
+					++declIter;
+				}
+				set<PropertyType>::iterator tempPropIter = tempProps.begin();
+				set<PropertyType>::iterator tempPropIterEnd = tempProps.end();
+				while(tempPropIterEnd != tempPropIter) {
+					if(!(inheritBG && *tempPropIter == PT_Background))
+						declarations.erase(*tempPropIter);
+					++tempPropIter;
+				}
+
+				// Merge declaration
+				declIter = sr->declarations.begin();
+				while(declIter != declIterEnd) {
+					Declaration* d = *declIter;
+					if(d->property != PT_InheritBackground)
+						declarations.insert(DeclMap::value_type(d->property,d));
+					++declIter;
+				}
+			}
+			++msrIter;
+		}
+
+		// Sometimes, if our code wants a RenderRule for pseudo Hover|Checked|FirstChild|...,
+		// but the user only defines pseudo "Checked" for the widget, so we end up with a
+		// RenderRule that is the same as the RenderRule for "Checked", in this case, we can
+		// share them.
+		if(realPseudo != pseudo)
+		{
+			hasRRIter = prrMap->element.find(realPseudo);
+			if(hasRRIter != prrMap->element.end())
+			{
+				renderRule = hasRRIter->second;
+				return renderRule;
+			}
+		}
+		
+
+		// Remove duplicate declarations (except background, because we support multi backgrounds)
+		PropertyType lastType = knownPropertyCount;
+		DeclMap::iterator declRIter = declarations.begin();
+		DeclMap::iterator declRIterEnd = declarations.end();
+		while(declRIter != declRIterEnd) {
+			PropertyType type = declRIter->second->property;
+			if(type != PT_Background) {
+				if(lastType == type) {
+					declRIter = declarations.erase(--declRIter);
+				} else {
+					lastType = type;
+				}
+			}
+			++declRIter;
+		}
+
+		if(declarations.size() == 0)
+			return renderRule;
+
+		// == 5.Create RenderRule
+		initRenderRule(renderRule,declarations);
+		return renderRule;
+	}
+
+	inline void MSSSPrivate::polish(MWidget* w)
+	{
+		RenderRule rule = getRenderRule(w,PC_Default);
+		if(rule.isValid())
+			rule->setGeometry(w);
+
+		if(getRenderRule(w, PC_Hover))
+			w->setAttributes(WA_Hover);
+	}
+
+	inline void MSSSPrivate::draw(MWidget* w, ID2D1RenderTarget* rt,
+		const RECT& wr, const RECT& cr)
+	{
+		CSS::RenderRule rule = getRenderRule(w,w->getCurrentWidgetPseudo());
+		if(rule.isValid())
+			rule->draw(rt,wr,cr);
+	}
+
+	inline void MSSSPrivate::removeCache(MWidget* w)
+	{
+		// We just have to remove from these two cache, without touching
+		// renderRuleCollection, because some of them might be using by others.
+		widgetStyleRuleCache.erase(w);
+		widgetRenderRuleCache.erase(w);
+	}
+
+	inline MSSSPrivate::MSSSPrivate():appStyleSheet(new StyleSheet())
+		{ instance = this; }
+	MSSSPrivate::~MSSSPrivate()
+	{
+		instance = 0;
+		delete appStyleSheet;
+		WidgetSSCache::iterator it    = widgetSSCache.begin();
+		WidgetSSCache::iterator itEnd = widgetSSCache.end();
+		while(it != itEnd) {
+			delete it->second;
+			++it;
+		}
+
+		removeResources();
+	}
+
+	void MSSSPrivate::setAppSS(const wstring& css)
+	{
+		delete appStyleSheet;
+		renderRuleCollection.clear();
+		widgetStyleRuleCache.clear();
+		widgetRenderRuleCache.clear();
+
+		removeResources();
+
+		appStyleSheet = new StyleSheet();
+		MCSSParser parser(css);
+		parser.parse(appStyleSheet);
+	}
+
+	void MSSSPrivate::setWidgetSS(MWidget* w, const wstring& css)
+	{
+		// Remove StyleSheet Cache for MWidget w.
+		WidgetSSCache::const_iterator iter = widgetSSCache.find(w);
+		if(iter != widgetSSCache.end())
+		{
+			delete iter->second;
+			widgetSSCache.erase(iter);
+		}
+
+		if(!css.empty())
+		{
+			StyleSheet* ss = new StyleSheet();
+			MCSSParser parser(css);
+			parser.parse(ss);
+			widgetSSCache.insert(WidgetSSCache::value_type(w,ss));
+		}
+
+		// Remove every child widgets' cache, so that they can recalc the StyleRules
+		// next time the StyleRules are needed.
+		clearRRCacheRecursively(w);
+	}
+
+	void MSSSPrivate::clearRRCacheRecursively(MWidget* w)
+	{
+		widgetStyleRuleCache.erase(w);
+		widgetRenderRuleCache.erase(w);
+
+		const MWidgetList& children = w->children();
+		MWidgetList::const_iterator it = children.begin();
+		MWidgetList::const_iterator itEnd = children.end();
+		while(it != itEnd)
+		{
+			clearRRCacheRecursively(*it);
+			++it;
+		}
+	}
+
+	void MSSSPrivate::removeResources()
+	{
+		D2D1SolidBrushMap::iterator sit = solidBrushCache.begin();
+		D2D1SolidBrushMap::iterator sitEnd = solidBrushCache.end();
+		while(sit != sitEnd)
+		{
+			SafeRelease(sit->second);
+			// Keep the brush position inside the map, because
+			// the RenderRule use the BrushPosition to find the
+			// resources.
+			solidBrushCache[sit->first] = 0;
+			++sit;
+		}
+
+		D2D1BitmapBrushMap::iterator bit = bitmapBrushCache.begin();
+		D2D1BitmapBrushMap::iterator bitEnd = bitmapBrushCache.end();
+		while(bit != bitEnd)
+		{
+			SafeRelease(bit->second);
+			bitmapBrushCache[bit->first] = 0;
+			++bit;
+		}
+
+		biPortionCache.clear();
+	}
+
+	enum BorderType { BT_Simple, BT_Radius, BT_Complex };
+	enum BackgroundOpaqueType {
+		NonOpaque,
+		OpaqueClipMargin,
+		OpaqueClipBorder,
+		OpaqueClipPadding
+	};
+	BorderType testBorderObjectType(CssValueArray& values,
+		const MSSSPrivate::DeclMap::iterator& declIter,
+		const MSSSPrivate::DeclMap::iterator& declIterEnd)
+	{
+		MSSSPrivate::DeclMap::iterator seeker = declIter;
+		while(seeker != declIterEnd && seeker->first <= PT_BorderRadius)
+		{
+			switch(seeker->first) {
+			case PT_Border:
+				{
+					CssValueArray& values = seeker->second->values;
+					// If there're more than 3 values in PT_Border, it must be complex.
+					if(values.size() > 3)
+						return BT_Complex;
+					for(unsigned int i = 1; i < values.size() ; ++i)
+					{ // If there are the same type values, it's complex.
+						if(values.at(i - 1).type == values.at(i).type)
+							return BT_Complex;
+					}
+				}
+				break;
+			case PT_BorderWidth:
+			case PT_BorderColor:
+			case PT_BorderStyles:
+				if(seeker->second->values.size() > 1)
+					return BT_Complex;
+				break;
+			case PT_BorderRadius:	return seeker->second->values.size() > 1 ? BT_Complex : BT_Radius;
+			default: return BT_Complex;
+			}
+			++seeker;
+		}
+		return BT_Simple;
+	}
+
+	// ********** Create The BackgroundRO
+
+	bool isBrushValueOpaque(const CssValue& value)
+	{
+		if(value.type == CssValue::Color)
+			return true;
+
+		M_ASSERT_X(value.type == CssValue::Uri,"The brush value must be neither Color or Uri(for now)","isBrushValueOpaque()");
+		const std::wstring* uri = value.data.vstring;
+		std::wstring ex = uri->substr(uri->size() - 3);
+		std::transform(ex.begin(),ex.end(),ex.begin(),::tolower);
+		if(ex.find(L"png") == 0 || ex.find(L"gif") == 0)
+			return false;
+		return true;
+	}
+	// Return true if the "prop" affects alignX
+	bool setBGROProperty(BackgroundRenderObject* object, ValueType prop, bool isPrevPropAlignX)
+	{
+		switch(prop) {
+
+		case Value_NoRepeat: object->repeat = CSS::NoRepeat; break;
+		case Value_RepeatX:  object->repeat = CSS::RepeatX;  break;
+		case Value_RepeatY:  object->repeat = CSS::RepeatY;  break;
+		case Value_Repeat:   object->repeat = CSS::RepeatXY; break;
+
+		case Value_Padding:
+		case Value_Content:
+		case Value_Border:
+		case Value_Margin:   object->clip = prop; break;
+
+		case Value_Left:
+		case Value_Right:	 object->alignX = prop; return true;
+		case Value_Top:
+		case Value_Bottom:   object->alignY = prop; break;
+		// We both set alignment X & Y, because one may only specific a alignment value.
+		case Value_Center:
+			object->alignY = prop;
+			if(!isPrevPropAlignX) { object->alignX= prop; return true; }
+		}
+		return false;
+	}
+	void batchSetBGROProps(std::vector<BackgroundRenderObject*>& bgros, ValueType prop, bool isPrevPropAlignX = false)
+	{
+		std::vector<BackgroundRenderObject*>::iterator iter = bgros.begin();
+		std::vector<BackgroundRenderObject*>::iterator iterEnd = bgros.end();
+		while(iter != iterEnd) { setBGROProperty(*iter,prop,isPrevPropAlignX); ++iter; }
+	}
+	// Background: { Brush/Image Repeat Clip Alignment pos-x pos-y }*;
+	// If we want to make it more like CSS3 syntax,
+	// we can parse a CSS3 syntax background into multiple Background Declarations.
+	BackgroundRenderObject* MSSSPrivate::createBackgroundRO(CssValueArray& values)
+	{
+		const CssValue& brushValue = values.at(0);
+		BackgroundRenderObject* newObject = new BackgroundRenderObject(brushValue);
+		// We tell the BGRO that the position of the brush. We don't care if the brush
+		// is created right now.
+		if(brushValue.type == CssValue::Uri)
+		{
+			ID2D1BitmapBrush*& brush = bitmapBrushCache[*brushValue.data.vstring];
+			newObject->brushPosition = (ID2D1Brush**) &brush; 
+		} else {
+			ID2D1SolidColorBrush*& brush = solidBrushCache[brushValue.data.vuint];
+			newObject->brushPosition = (ID2D1Brush**) &brush;
+		}
+
+		size_t index = 1;
+		size_t valueCount = values.size();
+		bool isPropAlignX = false;
+		while(index < valueCount)
+		{
+			const CssValue& v = values.at(index);
+			if(v.type == CssValue::Identifier) {
+				isPropAlignX = setBGROProperty(newObject, static_cast<ValueType>(v.data.vuint), isPropAlignX);
+			} else {
+				mWarning(v.type == CssValue::Length || v.type == CssValue::Number, L"The rest of background css value should be of type 'length' or 'number'");
+
+				newObject->x = v.data.vuint;
+
+				if(++index >= values.size()) { break; }
+				if(values.at(index).type == CssValue::Identifier) { continue; }
+				newObject->y = v.data.vuint;
+
+				if(++index >= values.size()) { break; }
+				if(values.at(index).type == CssValue::Identifier) { continue; }
+				newObject->width = v.data.vuint;
+
+				if(++index >= values.size()) { break; }
+				if(values.at(index).type == CssValue::Identifier) { continue; }
+				newObject->height = v.data.vuint;
+			}
+			++index;
+		}
+
+		return newObject;
+	}
+
+	// ********** Set the SimpleBorderRO
+	void MSSSPrivate::setSimpleBorderRO(SimpleBorderRenderObject* obj,
+		DeclMap::iterator& iter, DeclMap::iterator iterEnd)
+	{
+		CssValue colorValue(CssValue::Color);
+		while(iter != iterEnd)
+		{
+			vector<CssValue>& values = iter->second->values;
+			switch(iter->first) {
+				case PT_Border:
+					for(unsigned int i = 0; i < values.size(); ++i) {
+						CssValue& v = values.at(i);
+						switch(v.type) {
+							case CssValue::Identifier: obj->style = v.data.videntifier; break;
+							case CssValue::Color:      colorValue = v;                  break;
+							default:                   obj->width = v.data.vuint;       break;
+						}
+					}
+					break;
+				case PT_BorderWidth:  obj->width = values.at(0).data.vuint;       break;
+				case PT_BorderStyles: obj->style = values.at(0).data.videntifier; break;
+				case PT_BorderColor:  colorValue = values.at(0);                  break;
+			}
+
+			++iter;
+		}
+		obj->color = colorValue.data.vuint;
+		ID2D1SolidColorBrush*& brush = solidBrushCache[obj->color];
+		obj->brushPosition = &brush;
+	}
+
+	// ********** Create the ComplexBorderRO
+	void setGroupUintValue(unsigned int (&intArray)[4], std::vector<CssValue>& values,
+		int startValueIndex = 0, int endValueIndex = -1)
+	{
+		int size = (endValueIndex == -1 ? values.size() : endValueIndex + 1) - startValueIndex;
+		if(size == 4) {
+			intArray[0] = values.at(startValueIndex    ).data.vuint;
+			intArray[1] = values.at(startValueIndex + 1).data.vuint;
+			intArray[2] = values.at(startValueIndex + 2).data.vuint;
+			intArray[3] = values.at(startValueIndex + 3).data.vuint;
+		} else if(size == 2) {
+			intArray[0] = intArray[2] = values.at(startValueIndex    ).data.vuint;
+			intArray[1] = intArray[3] = values.at(startValueIndex + 1).data.vuint;
+		} else {
+			intArray[0] = intArray[1] =
+			intArray[2] = intArray[3] = values.at(startValueIndex).data.vuint;
+		}
+	}
+	void setD2DRectValue(D2D_RECT_U& rect, std::vector<CssValue>& values,
+		int startValueIndex = 0, int endValueIndex = -1)
+	{
+		int size = (endValueIndex == -1 ? values.size() : endValueIndex + 1) - startValueIndex;
+		if(size == 4) {
+			rect.top    = values.at(startValueIndex    ).data.vuint;
+			rect.right  = values.at(startValueIndex + 1).data.vuint;
+			rect.bottom = values.at(startValueIndex + 2).data.vuint;
+			rect.left   = values.at(startValueIndex + 3).data.vuint;
+		} else if(size == 2) {
+			rect.top    = rect.bottom = values.at(startValueIndex    ).data.vuint;
+			rect.right  = rect.left   = values.at(startValueIndex + 1).data.vuint;
+		} else {
+			rect.top    = rect.bottom =
+			rect.right  = rect.left   = values.at(startValueIndex).data.vuint;
+		}
+	}
+	void setD2DRectValue(D2D_RECT_U& rect, int border, unsigned int value)
+	{
+		if(border == 0) { rect.top    = value; return; }
+		if(border == 1) { rect.right  = value; return; }
+		if(border == 2) { rect.bottom = value; return; }
+		rect.left = value;
+	}
+	void MSSSPrivate::setComplexBorderRO(ComplexBorderRenderObject* obj,
+		DeclMap::iterator& declIter, DeclMap::iterator declIterEnd)
+	{
+		while(declIter != declIterEnd)
+		{
+			vector<CssValue>& values = declIter->second->values;
+			switch(declIter->first)
+			{
+			case PT_Border:
+				{
+					int rangeStartIndex = 0;
+					CssValue::Type valueType = values.at(0).type;
+					unsigned int index = 1;
+					while(index <= values.size())
+					{
+						if(index == values.size() || values.at(index).type != valueType)
+						{
+							switch(valueType) {
+								case CssValue::Identifier:
+									setD2DRectValue(obj->styles,values,rangeStartIndex,index - 1);
+									break;
+								case CssValue::Color:
+									obj->setColors(this,values,rangeStartIndex,index);
+									break;
+								default:
+									setD2DRectValue(obj->widths,values,rangeStartIndex,index-1);
+							}
+							rangeStartIndex = index;
+							if(index < values.size())
+								valueType = values.at(index).type;
+						}
+						++index;
+					}
+				}
+				break;
+
+			case PT_BorderRadius:  setGroupUintValue(obj->radiuses, values);    break;
+			case PT_BorderWidth:   setD2DRectValue(obj->widths, values);        break;
+			case PT_BorderStyles:  setD2DRectValue(obj->styles, values);        break;
+			case PT_BorderColor:   obj->setColors(this,values,0,values.size()); break;
+
+			case PT_BorderTop:
+			case PT_BorderRight:
+			case PT_BorderBottom:
+			case PT_BorderLeft:
+				{
+					int index = declIter->first - PT_BorderTop;
+					for(unsigned int i = 0; i < values.size(); ++i)
+					{
+						if(values.at(i).type == CssValue::Color) {
+							obj->colors[index] = values.at(0).data.vuint;
+							ID2D1SolidColorBrush*& brush = solidBrushCache[obj->colors[index]];
+							obj->brushPositions[index] = &brush;
+						} else if(values.at(i).type == CssValue::Identifier) {
+							ValueType vi = values.at(0).data.videntifier;
+							if(index == 0)      obj->styles.top = vi;
+							else if(index == 1) obj->styles.right = vi;
+							else if(index == 2) obj->styles.bottom = vi;
+							else obj->styles.left = vi;
+						} else
+							setD2DRectValue(obj->widths,index,values.at(i).data.vuint);
+					}
+				}
+				break;
+			case PT_BorderTopColor:
+			case PT_BorderRightColor:
+			case PT_BorderBottomColor:
+			case PT_BorderLeftColor: 
+				{
+					int index = declIter->first - PT_BorderTopColor;
+					obj->colors[index] = values.at(0).data.vuint;
+					ID2D1SolidColorBrush*& brush = solidBrushCache[obj->colors[index]];
+					obj->brushPositions[index] = &brush;
+				}
+				break;
+			case PT_BorderTopWidth:
+			case PT_BorderRightWidth:
+			case PT_BorderBottomWidth:
+			case PT_BorderLeftWidth:
+				setD2DRectValue(obj->widths, declIter->first - PT_BorderTopWidth, values.at(0).data.vuint);
+				break;
+			case PT_BorderTopStyle:
+			case PT_BorderRightStyle:
+			case PT_BorderBottomStyle:
+			case PT_BorderLeftStyle:
+				setD2DRectValue(obj->styles, declIter->first - PT_BorderTopStyle, values.at(0).data.videntifier);
+				break;
+			case PT_BorderTopLeftRadius:
+			case PT_BorderTopRightRadius:
+			case PT_BorderBottomLeftRadius:
+			case PT_BorderBottomRightRadius:
+				obj->radiuses[declIter->first - PT_BorderTopLeftRadius] = values.at(0).data.vuint;
+				break;
+			}
+			++declIter;
+		}
+		obj->checkUniform();
+	}
+
+
+	// ********** Create the BorderImageRO
+	BorderImageRenderObject* MSSSPrivate::createBorderImageRO(CssValueArray& values)
+	{
+		BorderImageRenderObject* biro = new BorderImageRenderObject();
+
+		biro->imageUri = values.at(0).data.vstring;
+		ID2D1BitmapBrush*& brush = bitmapBrushCache[*biro->imageUri];
+		biro->brushPosition = &brush;
+
+		int endIndex = values.size() - 1;
+		// Repeat or Stretch
+		if(values.at(endIndex).type == CssValue::Identifier)
+		{
+			if(values.at(endIndex-1).type == CssValue::Identifier) {
+				if(values.at(endIndex).data.vuint != Value_Stretch)
+					biro->repeat = RepeatY;
+				if(values.at(endIndex-1).data.vuint != Value_Stretch)
+					biro->repeat = (biro->repeat == RepeatY) ? RepeatXY : RepeatY;
+				endIndex -= 2;
+			} else {
+				if(values.at(endIndex).data.vuint != Value_Stretch)
+					biro->repeat = RepeatXY;
+				--endIndex;
+			}
+		}
+		// Border
+		if(endIndex == 4) {
+			biro->topW = values.at(1).data.vuint;
+			biro->rightW = values.at(2).data.vuint;
+			biro->bottomW = values.at(3).data.vuint;
+			biro->leftW = values.at(4).data.vuint;
+		} else if(endIndex == 2) {
+			biro->bottomW = biro->topW   = values.at(1).data.vuint;
+			biro->leftW   = biro->rightW = values.at(2).data.vuint;
+		} else {
+			biro->leftW   = biro->rightW =
+			biro->bottomW = biro->topW   = values.at(1).data.vuint;
+		}
+
+		return biro;
+	}
+
+	void MSSSPrivate::initRenderRule(RenderRule& renderRule, DeclMap& declarations)
+	{
+		// Remark: If the declaration have values in wrong order, it might crash the program.
+		// Maybe we should add some logic to avoid this flaw.
+		renderRule.init();
+		DeclMap::iterator declIter    = declarations.begin();
+		DeclMap::iterator declIterEnd = declarations.end();
+
+		vector<BackgroundOpaqueType> bgOpaqueTypes;
+		bool opaqueBorderImage = false;
+		BorderType bt = BT_Simple;
+
+		// --- Backgrounds ---
+		while(declIter->first == PT_Background)
+		{
+			BackgroundOpaqueType bgOpaqueType = NonOpaque;
+			CssValueArray& values = declIter->second->values;
+			BackgroundRenderObject* o = createBackgroundRO(values);
+			if(isBrushValueOpaque(values.at(0)))
+			{
+				if(o->clip == Value_Margin)
+					bgOpaqueType = OpaqueClipMargin;
+				else if(o->clip == Value_Border)
+					bgOpaqueType = OpaqueClipBorder;
+				else
+					bgOpaqueType = OpaqueClipPadding;
+			}
+
+			renderRule->backgroundROs.push_back(o);
+			bgOpaqueTypes.push_back(bgOpaqueType);
+
+			if(++declIter == declIterEnd) goto END;
+		}
+		while(declIter->first < PT_BackgroundPosition)
+		{
+			batchSetBGROProps(renderRule->backgroundROs, declIter->second->values.at(0).data.videntifier);
+
+			if(++declIter == declIterEnd) goto END;
+		}
+		if(declIter->first == PT_BackgroundPosition)
+		{
+			vector<CssValue>& values = declIter->second->values;
+			int propx = values.at(0).data.vint;
+			int propy = values.size() == 1 ? propx : values.at(1).data.vint;
+
+			vector<BackgroundRenderObject*>::iterator it    = renderRule->backgroundROs.begin();
+			vector<BackgroundRenderObject*>::iterator itEnd = renderRule->backgroundROs.end();
+			while(it != itEnd) {
+				(*it)->x = propx;
+				(*it)->y = propy;
+				++it;
+			}
+			if(++declIter == declIterEnd) goto END;
+		}
+		if(declIter->first == PT_BackgroundSize)
+		{
+			vector<CssValue>& values = declIter->second->values;
+			int propw = values.at(0).data.vuint;
+			int proph = values.size() == 1 ? propw : values.at(1).data.vuint;
+
+			vector<BackgroundRenderObject*>::iterator it    = renderRule->backgroundROs.begin();
+			vector<BackgroundRenderObject*>::iterator itEnd = renderRule->backgroundROs.end();
+			while(it != itEnd) {
+				(*it)->width  = propw;
+				(*it)->height = proph;
+				++it;
+			}
+			if(++declIter == declIterEnd) goto END;
+		}
+		if(declIter->first == PT_BackgroundAlignment)
+		{
+			vector<CssValue>& values = declIter->second->values;
+			batchSetBGROProps(renderRule->backgroundROs,values.at(0).data.videntifier);
+			if(values.size() == 2)
+				batchSetBGROProps(renderRule->backgroundROs,values.at(1).data.videntifier,true);
+
+			if(++declIter == declIterEnd) goto END;
+		}
+
+		// --- BorderImage --- 
+		if(declIter->first == PT_BorderImage)
+		{
+			CssValueArray& values = declIter->second->values;
+			opaqueBorderImage = isBrushValueOpaque(values.at(0));
+			renderRule->borderImageRO = createBorderImageRO(declIter->second->values);
+			if(++declIter == declIterEnd) goto END;
+		}
+
+		// --- Border ---
+		if(declIter->first == PT_Border)
+		{
+			CssValue& v = declIter->second->values.at(0);
+			if(v.type == CssValue::Identifier  && v.data.vuint == Value_None)
+			{ // User specifies no border. Skip everything related to border.
+				do {
+					if(++declIter == declIterEnd) goto END;
+				} while (declIter->first <= PT_BorderRadius);
+			}
+		}
+
+		if(declIter->first <= PT_BorderRadius)
+		{
+			bt = testBorderObjectType(declIter->second->values,declIter,declIterEnd);
+
+			DeclMap::iterator declIter2 = declIter;
+			if(bt == BT_Simple)
+			{
+				while(declIter2 != declIterEnd && declIter2->first <= PT_BorderStyles)
+					++declIter2;
+				SimpleBorderRenderObject* obj = new SimpleBorderRenderObject();
+				renderRule->borderRO = obj;
+				setSimpleBorderRO(obj,declIter,declIter2);
+			} else if(bt == BT_Radius)
+			{
+				while(declIter2 != declIterEnd && declIter2->first <= PT_BorderStyles)
+					++declIter2;
+				RadiusBorderRenderObject* obj = new RadiusBorderRenderObject();
+				renderRule->borderRO = obj;
+				setSimpleBorderRO(obj,declIter,declIter2);
+				obj->radius = declIter->second->values.at(0).data.vuint;
+			} else {
+				while(declIter2 != declIterEnd && declIter2->first <= PT_BorderRadius)
+					++declIter2;
+				ComplexBorderRenderObject* obj = new ComplexBorderRenderObject();
+				renderRule->borderRO = obj;
+				setComplexBorderRO(obj, declIter, declIterEnd);
+			}
+
+			if(declIter == declIterEnd) goto END;
+		}
+
+		// --- Margin & Padding --- 
+		while(declIter->first <= PT_PaddingLeft)
+		{
+			std::vector<CssValue>& values = declIter->second->values;
+			switch(declIter->first)
+			{
+			case PT_Margin:
+				setD2DRectValue(renderRule->margin,values);
+				renderRule->hasMargin = true;
+				break;
+			case PT_MarginTop:
+			case PT_MarginRight:
+			case PT_MarginBottom:
+			case PT_MarginLeft:
+				setD2DRectValue(renderRule->margin,declIter->first - PT_MarginTop, values.at(0).data.vuint);
+				renderRule->hasMargin = true;
+				break;
+			case PT_Padding:
+				setD2DRectValue(renderRule->padding,values);
+				renderRule->hasPadding = true;
+				break;
+			case PT_PaddingTop:
+			case PT_PaddingRight:
+			case PT_PaddingBottom:
+			case PT_PaddingLeft:
+				setD2DRectValue(renderRule->padding,declIter->first - PT_PaddingTop, values.at(0).data.vuint);
+				renderRule->hasPadding = true;
+				break;
+			}
+
+			if(++declIter == declIterEnd) goto END;
+		}
+
+		// --- Geometry ---
+		if(declIter->first <= PT_MinimumHeight)
+		{
+			GeometryRenderObject* geoData = new GeometryRenderObject();
+			renderRule->geoRO = geoData;
+			do {
+				int data = declIter->second->values.at(0).data.vint;
+				switch(declIter->first)
+				{
+				case PT_Width:        geoData->width     = data; break;
+				case PT_Height:       geoData->height    = data; break;
+				case PT_MinimumWidth: geoData->minWidth  = data; break;
+				case PT_MinimumHeight:geoData->minHeight = data; break;
+				case PT_MaximumWidth: geoData->maxWidth  = data; break;
+				case PT_MaximumHeight:geoData->maxHeight = data; break;
+				}
+			}while(++declIter != declIterEnd);
+		}
+
+		// TODO: Create TextRenderObject
+
+		END:// Check if this RenderRule is opaque.
+		int opaqueCount = 0;
+		bool opaqueBorder = (!renderRule->hasMargin && bt == BT_Simple);
+		for(int i = bgOpaqueTypes.size() - 1; i >= 0 && opaqueCount == 0; --i)
+		{
+			switch(bgOpaqueTypes.at(i)) {
+				case OpaqueClipMargin:
+					++opaqueCount;
+					break;
+				case OpaqueClipBorder:
+					if(opaqueBorder)
+						++opaqueCount;
+					break;
+				case OpaqueClipPadding:
+					if(opaqueBorder && !renderRule->hasPadding)
+						++opaqueCount;
+					break;
+			}
+		}
+		if(opaqueBorderImage) ++opaqueCount;
+		renderRule->opaqueBackground = opaqueCount > 0;
+	}
+	
 } // namespace MetalBone
 
 
@@ -2869,6 +3148,7 @@ namespace MetalBone
 
 
 
+/*
 #ifdef MB_DEBUG
 #include <string>
 #include <sstream>
@@ -3144,3 +3424,4 @@ void MStyleSheetStyle::dumpStyleSheet()
 	OutputDebugStringA("\n|***************** Widget StyleObject Cache *****************|\n\n\n");
 }
 #endif
+*/

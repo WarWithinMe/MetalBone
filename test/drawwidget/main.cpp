@@ -1,0 +1,117 @@
+#include "MBGlobal.h"
+#include "MApplication.h"
+#include "MWidget.h"
+#include "MTimer.h"
+
+#include "vld.h"
+
+#include <iostream>
+#include <sstream>
+#include <fstream>
+#include <windows.h>
+#include <vector>
+
+class ChildWidget : public MWidget {};
+class CheckBox    : public MWidget {};
+class Button      : public MWidget {};
+
+struct TestWidgetController : public has_slots
+{
+	std::vector<MWidget*> allWidgets;
+
+	TestWidgetController() {}
+	~TestWidgetController(){}
+	void createWidgets();
+
+	void updateC10();
+
+	enum WidgetIndex
+	{
+		MainWindow = 0,
+		C0,                     C1,             C2,          C3,         C4,
+		              C10,      C11,C12,C13,C14,     C30,C31,C32,C33,C34,
+			C100,C101,C102,C103,C104,
+
+	};
+};
+
+int WINAPI wWinMain(HINSTANCE,HINSTANCE,PTSTR,int)
+{
+	std::wifstream cssReader;
+	cssReader.open("theme.css",std::ios_base::in);
+	std::wstring wss((std::istreambuf_iterator<wchar_t>(cssReader)),std::istreambuf_iterator<wchar_t>());
+	MApplication app;
+	app.setStyleSheet(wss);
+
+
+	TestWidgetController controller;
+	controller.createWidgets();
+
+	MTimer timer;
+	timer.timeout.connect(&controller,&TestWidgetController::updateC10);
+	timer.start(5000);
+
+
+	app.exec();
+	return 0;
+}
+
+void TestWidgetController::updateC10()
+{
+	allWidgets.at(C10)->repaint(10,10,60,20);
+}
+
+void TestWidgetController::createWidgets()
+{
+	MWidget* mainWindow = new MWidget();
+	mainWindow->setObjectName(L"mainWindow");
+	mainWindow->setGeometry(100,100,500,500);
+	mainWindow->setAttributes(WA_DeleteOnClose);
+	mainWindow->setAttributes(WA_NonChildOverlap,false);
+	allWidgets.push_back(mainWindow);
+
+	MWidget* c0 = new ChildWidget; 
+	c0->setObjectName(L"child0");
+	c0->setGeometry(50,0,100,200);
+	c0->setParent(mainWindow);
+	allWidgets.push_back(c0);
+
+	MWidget* c1 = new ChildWidget; 
+	c1->setObjectName(L"child1");
+	c1->setGeometry(50,100,300,300);
+	c1->setParent(mainWindow);
+	allWidgets.push_back(c1);
+
+	MWidget* c2 = new ChildWidget; 
+	c2->setObjectName(L"child2");
+	c2->setGeometry(50,0,100,200);
+	c2->setParent(mainWindow);
+	allWidgets.push_back(c2);
+
+	MWidget* c3 = new ChildWidget; 
+	c3->setObjectName(L"child3");
+	c3->setGeometry(100,0,50,50);
+	c3->setParent(mainWindow);
+	allWidgets.push_back(c3);
+
+	MWidget* c4 = new ChildWidget;
+	c4->setObjectName(L"child4");
+	c4->setGeometry(355,150,200,200);
+	c4->setParent(mainWindow);
+	allWidgets.push_back(c4);
+
+	c0->show();
+	c1->show();
+	c2->show();
+	c3->show();
+	c4->show();
+
+	Button* c10 = new Button;
+	c10->setObjectName(L"button10");
+	c10->setGeometry(50,50,80,30);
+	c10->setParent(c1);
+	c10->show();
+	allWidgets.push_back(c10);
+
+	mainWindow->show();
+}

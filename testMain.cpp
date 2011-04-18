@@ -9,11 +9,7 @@
 #include <windows.h>
 #include <tchar.h>
 
-#ifdef MSVC
 int WINAPI _tWinMain(HINSTANCE,HINSTANCE,PTSTR,int)
-#else
-int main(int argc,char** argv)
-#endif
 {
 	std::wifstream cssReader;
 	cssReader.open("theme.css",std::ios_base::in);

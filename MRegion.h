@@ -17,6 +17,7 @@ namespace MetalBone
 			class Iterator;
 			MRegion (){}
 			~MRegion(){}
+			explicit MRegion(const RECT& r) { addRect(r); }
 			MRegion(const MRegion& r) { copyFrom(r); }
 
 			void addRect   (const RECT&);
@@ -25,6 +26,7 @@ namespace MetalBone
 			void subtract  (const MRegion&); // RGN_DIFF
 			void subtractEx(const MRegion&, MRegion& intersectOut);
 			void offset    (LONG x, LONG y);
+
 
 			Iterator begin() const;
 

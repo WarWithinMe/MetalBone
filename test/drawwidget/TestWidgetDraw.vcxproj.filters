@@ -1,0 +1,81 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source">
+      <UniqueIdentifier>{35aa0d2f-fded-4fab-a165-6fb1012b16eb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ExternMB">
+      <UniqueIdentifier>{423a0070-b99b-4d38-927a-398e0f1e5b46}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ExternMB\Header">
+      <UniqueIdentifier>{050cfb89-180c-4f4c-ab42-37177d2b3a8d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ExternMB\Source">
+      <UniqueIdentifier>{f41fdfaa-4aec-401e-b2e0-9dbff6542bae}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ExternMB\Header\3rd">
+      <UniqueIdentifier>{25829401-dbdc-4e40-b96b-6dbf2d8e9453}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ExternMB\Source\3rd">
+      <UniqueIdentifier>{aad52356-b9e6-4dfe-af2d-aa25cf5901c5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\MBGlobal.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MRegion.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MTimer.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MStyleSheet.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MWidget.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rd\XUnzip.cpp">
+      <Filter>ExternMB\Source\3rd</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\MBGlobal.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\mb_switch.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MRegion.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MApplication.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MEvent.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MResource.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MStyleSheet.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MTimer.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MWidget.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rd\XUnzip.h">
+      <Filter>ExternMB\Header\3rd</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rd\ContainersInl.h">
+      <Filter>ExternMB\Header\3rd</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
