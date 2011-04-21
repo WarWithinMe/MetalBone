@@ -1,8 +1,10 @@
 #include "MWidget.h"
 #include "MApplication.h"
 #include "MStyleSheet.h"
+#include "MResource.h"
 #include "MEvent.h"
 #include "MRegion.h"
+#include "MToolTip.h"
 
 #include <list>
 #include <set>
@@ -10,20 +12,38 @@
 #include <algorithm>
 #include <tchar.h>
 #include <WinError.h>
+#include <WindowsX.h>
 #include <ObjBase.h>
 
 namespace MetalBone
 {
 	// ========== WindowExtras ==========
+	enum WidgetState
+	{
+		MWS_Polished    = 0x1,
+		MWS_Hidden      = 0x2,
+		MWS_CSSOpaqueBG = 0x4,
+		MWS_Visible     = 0x8,
+		MWS_UnderMouse  = 0x10,
+		MWS_Focused     = 0x20,
+		MWS_Pressed     = 0x40
+	};
 	typedef std::tr1::unordered_map<MWidget*,RECT>   DrawRectHash;
 	typedef std::tr1::unordered_map<MWidget*,MRegion> DrawRegionHash;
 	typedef std::tr1::unordered_map<MWidget*,bool>    DirtyChildrenHash;
 	struct WindowExtras {
-		WindowExtras():m_wndHandle(NULL),m_layeredWndHandle(NULL),m_renderTarget(0),m_rtHook(0){}
+		WindowExtras():m_wndHandle(NULL),m_layeredWndHandle(NULL),
+			m_renderTarget(0),m_rtHook(0),bTrackingMouse(false),
+			widgetUnderMouse(0),lastMouseX(0),lastMouseY(0){}
 		HWND m_wndHandle;
 		HWND m_layeredWndHandle;
 		ID2D1HwndRenderTarget* m_renderTarget;
 		ID2D1RenderTarget*     m_rtHook;
+
+		bool bTrackingMouse;
+		MWidget* widgetUnderMouse;
+		int lastMouseX;
+		int lastMouseY;
 
 		std::wstring      m_windowTitle;
 		DrawRectHash      updateWidgets;
@@ -69,11 +89,13 @@ namespace MetalBone
 
 	// ========== MApplicationData ==========
 	wchar_t gMWidgetClassName[] = L"MetalBone Widget";
+	extern MCursor gArrowCursor = MCursor(MCursor::ArrowCursor);
 	struct MApplicationData
 	{
 		MApplicationData(bool hwAccelerated):
 				quitOnLastWindowClosed(true),
-				hardwareAccelerated(hwAccelerated)
+				hardwareAccelerated(hwAccelerated),
+				currentToolTip(0),focusedWidget(0)
 		{ instance = this; }
 		// Window procedure
 		static LRESULT CALLBACK windowProc(HWND, UINT, WPARAM, LPARAM);
@@ -96,6 +118,12 @@ namespace MetalBone
 
 		static MApplication::WinProc customWndProc;
 		static MApplicationData* instance;
+		static void setFocusWidget(MWidget*);
+		static void showToolTip(MToolTip*, int xInDesktop, int yInDesktop);
+		static void hideToolTip(MToolTip* tooltip = 0);
+		
+		MToolTip* currentToolTip;
+		MWidget* focusedWidget;
 	};
 
 	MApplication::WinProc MApplicationData::customWndProc = 0;
@@ -114,6 +142,27 @@ namespace MetalBone
 		return 0;
 	}
 
+	void MApplicationData::showToolTip(MToolTip* tip, int xInDesktop, int yInDesktop)
+	{
+		if(instance->currentToolTip != 0)
+			instance->currentToolTip->hide();
+
+		instance->currentToolTip = tip;
+		tip->show(xInDesktop,yInDesktop);
+	}
+
+	void MApplicationData::hideToolTip(MToolTip* tooltip)
+	{
+		if(!instance->currentToolTip)
+			return;
+
+		if(tooltip != 0 && instance->currentToolTip != tooltip)
+			return;
+
+		instance->currentToolTip->hide();
+		instance->currentToolTip = 0;
+	}
+
 	MWidget* MApplicationData::findWidgetWithLayeredHandle(HWND handle) const
 	{
 		std::set<MWidget*>::const_iterator iter = topLevelWindows.begin();
@@ -127,6 +176,307 @@ namespace MetalBone
 				return w;
 			++iter;
 		}
+		return 0;
+	}
+
+	void MApplicationData::setFocusWidget(MWidget* w)
+	{
+		MWidget* oldFocus = instance->focusedWidget;
+		if(oldFocus == w)
+			return;
+		instance->focusedWidget = w;
+
+		if(oldFocus != 0) {
+			oldFocus->setWidgetState(MWS_Focused,false);
+			instance->ssstyle.updateWidgetAppearance(oldFocus);
+		}
+
+		if(w != 0) {
+			w->setWidgetState(MWS_Focused,true);
+			instance->ssstyle.updateWidgetAppearance(w);
+			w->focusEvent();
+		}
+	}
+	
+	LRESULT MApplicationData::windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+	{
+		if(customWndProc)
+		{
+			LRESULT result;
+			if(customWndProc(hwnd,msg,wparam,lparam,&result))
+				return result;
+		}
+
+		switch(msg)
+		{
+			case WM_DESTROY:
+				// Check if the user wants to quit when the last window is closed.
+				if(instance->topLevelWindows.size() == 0 && instance->quitOnLastWindowClosed)
+					mApp->exit(0);
+				return 0;
+		}
+
+		MWidget* window = instance->findWidgetByHandle(hwnd);
+		if(window == 0) return DefWindowProcW(hwnd,msg,wparam,lparam);
+		switch(msg) {
+
+		case WM_CLOSE:
+			{
+				MEvent closeEvent;
+				window->closeEvent(&closeEvent);
+				if(closeEvent.isAccepted()) {
+					if(window->testAttributes(WA_DeleteOnClose))
+						delete window;
+					else
+						window->destroyWnd();
+				}
+			}
+			break;
+		case WM_PAINT:
+			{
+				RECT updateRect;
+				GetUpdateRect(hwnd,&updateRect,false);
+				if(updateRect.right > 1 && updateRect.bottom > 1)
+				{
+					RECT clientRect;
+					GetClientRect(hwnd,&clientRect);
+					// If we have to update the whole window,
+					// we should ignore the update request make by the child widgets.
+					if(memcmp(&updateRect,&clientRect,sizeof(updateRect)) == 0)
+						window->m_windowExtras->clearUpdateQueue();
+
+					window->m_windowExtras->addToRepaintMap(window,
+						updateRect.left,updateRect.right,updateRect.top,updateRect.bottom);
+
+				}
+				window->drawWindow();
+				ValidateRect(hwnd,0);
+			}
+			break;
+		case WM_SETCURSOR:
+			return (LOWORD(lparam) == HTCLIENT) ? TRUE : DefWindowProcW(hwnd,msg,wparam,lparam);
+		case WM_MOUSEHOVER:
+			{
+				WindowExtras* xtr = window->m_windowExtras;
+				if(xtr->widgetUnderMouse != 0)
+				{
+					MToolTip* tip = xtr->widgetUnderMouse->getToolTip();
+					if(tip && tip != instance->currentToolTip)
+					{
+						RECT rect;
+						GetWindowRect(hwnd,&rect);
+						showToolTip(tip, rect.left + xtr->lastMouseX, rect.right + xtr->lastMouseY);
+					}
+				}
+				xtr->bTrackingMouse = false;
+			}
+			break;
+		case WM_MOUSELEAVE:
+			if(window->m_windowExtras->bTrackingMouse)
+				SendMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(-1,-1));
+			window->m_windowExtras->bTrackingMouse = false;
+			break;
+		case WM_MOUSEMOVE:
+			{
+				if(!window->m_windowExtras->bTrackingMouse)
+				{
+					TRACKMOUSEEVENT tme = {0};
+					tme.cbSize = sizeof(TRACKMOUSEEVENT);
+					tme.dwFlags = TME_HOVER | TME_LEAVE;
+					tme.hwndTrack = hwnd;
+					tme.dwHoverTime = 400; // Remark: Set this value to a proper one.
+					TrackMouseEvent(&tme);
+					window->m_windowExtras->bTrackingMouse = true;
+				}
+
+				WindowExtras* xtr = window->m_windowExtras;
+				int xpos = xtr->lastMouseX = GET_X_LPARAM(lparam);
+				int ypos = xtr->lastMouseY = GET_Y_LPARAM(lparam);
+
+				// We could first check if the mouse is still over the last widget.
+				MWidget* cw = 0;
+				if(xpos >= 0 && ypos >= 0 && 
+					(unsigned int)xpos <= window->width && 
+					(unsigned int)ypos <= window->height)
+				{ cw = window->findWidget(xpos, ypos); }
+
+				MWidget* lastWidget = xtr->widgetUnderMouse;
+				bool mouseMove = true;
+				if(lastWidget != cw)
+				{
+					if(lastWidget != 0)
+					{
+						lastWidget->leaveEvent();
+						lastWidget->setWidgetState(MWS_Pressed | MWS_UnderMouse, false);
+						instance->ssstyle.updateWidgetAppearance(lastWidget);
+					} else {
+						// The mouse moves into the window, we set it to the default.
+						gArrowCursor.show(true);
+					}
+
+					if(cw != 0) {
+						MEvent enter(false);
+						cw->enterEvent(&enter);
+						mouseMove = !enter.isAccepted();
+						if(cw->testAttributes(WA_Hover))
+							cw->setWidgetState(MWS_UnderMouse,true);
+						instance->ssstyle.updateWidgetAppearance(cw);
+					}
+				}
+				if(cw != 0) {
+					if(cw->focusPolicy() == MoveOverFocus)
+						cw->setFocus();
+
+					if(mouseMove && cw->testAttributes(WA_TrackMouseMove))
+					{
+						RECT rect;
+						GetWindowRect(hwnd,&rect);
+						MMouseEvent me(xpos, ypos, rect.left + xtr->lastMouseX,
+							rect.top + xtr->lastMouseY, NoButton);
+						do 
+						{
+							cw->mouseMoveEvent(&me);
+							me.offsetPos(cw->x,cw->y);
+							cw = cw->m_parent;
+						} while (cw && !me.isAccepted() &&
+								cw->testAttributes(WA_NoMousePropagation));
+					}
+				}
+				xtr->widgetUnderMouse = cw;
+				// Hide tooltip.
+				MToolTip* thisTT = cw == 0 ? 0 : cw->getToolTip();
+				if(instance->currentToolTip != thisTT)
+					hideToolTip();
+				else if(thisTT != 0 && thisTT->hidePolicy() == MToolTip::WhenMove)
+					hideToolTip();
+			}
+			break;
+		case WM_LBUTTONDOWN:
+		case WM_RBUTTONDOWN:
+		case WM_MBUTTONDOWN:
+			{
+				SetFocus(hwnd);
+				int xpos = GET_X_LPARAM(lparam);
+				int ypos = GET_Y_LPARAM(lparam);
+				MWidget* cw = 0;
+				WindowExtras* xtr = window->m_windowExtras;
+				if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
+					SendMessage(hwnd,WM_MOUSEMOVE,wparam,lparam);
+				
+				cw = xtr->widgetUnderMouse;
+				if(cw != 0)
+				{
+					MouseButton btn = (msg == WM_LBUTTONDOWN ? LeftButton :
+						(msg == WM_RBUTTONDOWN ? RightButton : MiddleButton));
+					if(btn == LeftButton)
+					{
+						// Only change the state if the user press left button
+						cw->setWidgetState(MWS_Pressed,true);
+						instance->ssstyle.updateWidgetAppearance(cw);
+					}
+					RECT rect;
+					GetWindowRect(hwnd,&rect);
+					MWidget* pc = cw;
+					MWidget* pp = cw->m_parent;
+					while(pp != 0)
+					{
+						xpos -= pc->x;
+						ypos -= pc->y;
+						pc = pp; pp = pc->m_parent;
+					}
+					MMouseEvent me(xpos, ypos, rect.left + xtr->lastMouseX,
+						rect.top + xtr->lastMouseY, btn);
+					me.ignore();
+					do 
+					{
+						cw->mousePressEvent(&me);
+						me.offsetPos(cw->x,cw->y);
+						cw = cw->m_parent;
+					} while (cw && !me.isAccepted() &&
+						cw->testAttributes(WA_NoMousePropagation));
+
+					SetCapture(hwnd);
+				}
+				hideToolTip();
+			}
+			break;
+		case WM_LBUTTONUP:
+		case WM_RBUTTONUP:
+		case WM_MBUTTONUP:
+			{
+				int xpos = GET_X_LPARAM(lparam);
+				int ypos = GET_Y_LPARAM(lparam);
+				MWidget* cw = 0;
+				WindowExtras* xtr = window->m_windowExtras;
+				if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
+					SendMessage(hwnd,WM_MOUSEMOVE,wparam,lparam);
+
+				cw = xtr->widgetUnderMouse;
+				if(cw != 0)
+				{
+					MouseButton btn = (msg == WM_LBUTTONUP ? LeftButton :
+						(msg == WM_RBUTTONUP ? RightButton : MiddleButton));
+					if(btn == LeftButton) {
+						cw->setWidgetState(MWS_Pressed, false);
+						instance->ssstyle.updateWidgetAppearance(cw);
+					}
+					RECT rect;
+					GetWindowRect(hwnd,&rect);
+					MMouseEvent me(xpos, ypos, rect.left + xtr->lastMouseX,
+						rect.top + xtr->lastMouseY, btn);
+					me.ignore();
+					do 
+					{
+						cw->mouseReleaseEvent(&me);
+						me.offsetPos(cw->x,cw->y);
+						cw = cw->m_parent;
+					} while (cw && !me.isAccepted() &&
+						cw->testAttributes(WA_NoMousePropagation));
+
+					ReleaseCapture();
+				}
+				hideToolTip();
+			}
+			break;
+		case WM_LBUTTONDBLCLK:
+		case WM_RBUTTONDBLCLK:
+		case WM_MBUTTONDBLCLK:
+			{
+				int xpos = GET_X_LPARAM(lparam);
+				int ypos = GET_Y_LPARAM(lparam);
+				MWidget* cw = 0;
+				WindowExtras* xtr = window->m_windowExtras;
+				if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
+					SendMessage(hwnd,WM_MOUSEMOVE,wparam,lparam);
+
+				cw = xtr->widgetUnderMouse;
+				if(cw != 0)
+				{
+					MouseButton btn = (msg == WM_LBUTTONDBLCLK ? LeftButton :
+						(msg == WM_RBUTTONDBLCLK ? RightButton : MiddleButton));
+					if(btn == LeftButton) {
+						cw->setWidgetState(MWS_Pressed,true);
+						instance->ssstyle.updateWidgetAppearance(cw);
+					}
+					RECT rect;
+					GetWindowRect(hwnd,&rect);
+					MMouseEvent me(xpos, ypos, rect.left + xtr->lastMouseX,
+						rect.top + xtr->lastMouseY, btn);
+					me.ignore();
+					do 
+					{
+						cw->mouseDClickEvent(&me);
+						me.offsetPos(cw->x,cw->y);
+						cw = cw->m_parent;
+					} while (cw && !me.isAccepted() &&
+						cw->testAttributes(WA_NoMousePropagation));
+				}
+			}
+			break;
+
+		default: return DefWindowProcW(hwnd,msg,wparam,lparam);
+		}
+
 		return 0;
 	}
 
@@ -171,10 +521,10 @@ namespace MetalBone
 
 	MApplication::~MApplication()
 	{
-		 s_instance = 0;
 		 delete mImpl;
 		 MApplicationData::instance = 0;
 		 CoUninitialize();
+		 s_instance = 0;
 	}
 
 	const std::set<MWidget*>& MApplication::topLevelWindows() const { return mImpl->topLevelWindows; }
@@ -194,8 +544,8 @@ namespace MetalBone
 		wc.cbWndExtra = 0;
 		wc.hInstance = mImpl->appHandle;
 		wc.hIcon = 0;
-		wc.hCursor = LoadCursorW(0,IDC_ARROW);
-		wc.hbrBackground = (HBRUSH)GetStockObject(LTGRAY_BRUSH);
+		wc.hCursor = gArrowCursor.getHandle();
+		wc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
 		wc.lpszMenuName = 0;
 		wc.lpszClassName = gMWidgetClassName;
 	}
@@ -222,70 +572,6 @@ namespace MetalBone
 		return result;
 	}
 
-	LRESULT MApplicationData::windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
-	{
-		if(customWndProc)
-		{
-			LRESULT result;
-			if(customWndProc(hwnd,msg,wparam,lparam,&result))
-				return result;
-		}
-
-		switch(msg)
-		{
-			case WM_CLOSE:
-			{
-				MWidget* window = instance->findWidgetByHandle(hwnd);
-				if(window == 0)
-					break;
-				MEvent closeEvent;
-				window->closeEvent(&closeEvent);
-				if(closeEvent.isAccepted()) {
-					if(window->testAttributes(WA_DeleteOnClose))
-						delete window;
-					else
-						window->destroyWnd();
-				}
-			}
-				break;
-			case WM_PAINT:
-			{
-				MWidget* window = instance->findWidgetByHandle(hwnd);
-				if(window == 0) {
-					mDebug(L"[Warning] We can find a widget corresponds to the HWND when processing WM_PAINT.");	
-					break;
-				}
-				RECT updateRect;
-				GetUpdateRect(hwnd,&updateRect,false);
-				if(updateRect.right > 1 && updateRect.bottom > 1)
-				{
-					RECT clientRect;
-					GetClientRect(hwnd,&clientRect);
-					// If we have to update the whole window,
-					// we should ignore the update request make by the child widgets.
-					if(memcmp(&updateRect,&clientRect,sizeof(updateRect)) == 0)
-						window->m_windowExtras->clearUpdateQueue();
-
-					window->m_windowExtras->addToRepaintMap(window,
-						updateRect.left,updateRect.right,updateRect.top,updateRect.bottom);
-
-				}
-				window->drawWindow();
-				ValidateRect(hwnd,0);
-			}
-				break;
-			case WM_DESTROY:
-				// Check if the user wants to quit when the last window is closed.
-				if(instance->topLevelWindows.size() == 0 && instance->quitOnLastWindowClosed)
-					mApp->exit(0);
-				break;
-			default:
-				return DefWindowProcW(hwnd,msg,wparam,lparam);
-		}
-
-		return 0;
-	}
-
 
 
 
@@ -299,14 +585,6 @@ namespace MetalBone
 
 
 	// ========== MWidget ==========
-	enum WidgetState
-	{
-		MWS_POLISHED    = 1,
-		MWS_HIDDEN      = 2,
-		MWS_CSSOpaqueBG = 4,
-		MWS_VISIBLE     = 8
-	};
-	
 	MWidget::MWidget(MWidget* parent)
 		: m_parent(parent),
 		m_windowExtras(0),
@@ -317,7 +595,8 @@ namespace MetalBone
 		m_attributes(WA_AutoBG | WA_NonChildOverlap),
 		m_windowFlags(WF_Widget),
 		m_windowState(WindowNoState),
-		m_widgetState(MWS_HIDDEN)
+		m_widgetState(MWS_Hidden),lastPseudo(0),
+		fp(NoFocus),m_toolTip(0),m_cursor(0)
 	{
 		M_ASSERT_X(mApp!=0, "MApplication must be created first.", "MWidget constructor");
 		ENSURE_IN_MAIN_THREAD;
@@ -325,10 +604,72 @@ namespace MetalBone
 		m_topLevelParent = (parent != 0) ? parent->m_topLevelParent : this;
 	}
 
+	MWidget* MWidget::findWidget(int& px, int& py, bool ignoreMouse)
+	{
+		MWidgetList::reverse_iterator it = m_children.rbegin();
+		MWidgetList::reverse_iterator itEnd = m_children.rend();
+		MWidget* result = this;
+		while(it != itEnd)
+		{
+			MWidget* child = *(it++);
+			if(child->isHidden() || (ignoreMouse && child->testAttributes(WA_MouseThrough)))
+				continue;
+
+			if(px >= child->x && py >= child->y &&
+				(unsigned int)px <= child->x + child->width &&
+				(unsigned int)py <= child->y + child->height)
+			{
+				px -= child->x;
+				py -= child->y;
+				result = child->findWidget(px,py,ignoreMouse);
+				break;
+			}
+		}
+		return result;
+	}
+	void MWidget::setCursor(MCursor* c)
+		{ delete m_cursor; m_cursor = c; }
+	void MWidget::setFocus()
+		{ MApplicationData::setFocusWidget(this); }
+	void MWidget::setToolTip(MToolTip* tip)
+		{ delete m_toolTip; m_toolTip = tip; }
+	void MWidget::setToolTip(const std::wstring& tip)
+	{ 
+		if(m_toolTip)
+			m_toolTip->setText(tip);
+		else
+			m_toolTip = new MToolTip(tip);
+	}
+
+	unsigned int MWidget::getWidgetPseudo(bool mark)
+	{
+		unsigned int pseudo = CSS::PC_Default;
+		// Only set pseudo to hover if it's not pressed.
+		if(testWidgetState(MWS_Pressed))
+			pseudo |= CSS::PC_Pressed;
+		else if(testWidgetState(MWS_UnderMouse))
+			pseudo |= CSS::PC_Hover;
+
+		if(testWidgetState(MWS_Focused))
+			pseudo |= CSS::PC_Focus;
+
+		if(mark) lastPseudo = pseudo;
+		return pseudo;
+	}
+
 	MWidget::~MWidget()
 	{
 		if(m_parent != 0)
 			setParent(0);
+
+		if(m_toolTip)
+		{
+			MApplicationData::hideToolTip(m_toolTip);
+			delete m_toolTip;
+		}
+		delete m_cursor;
+		if(MApplicationData::instance->focusedWidget == this)
+			MApplicationData::instance->focusedWidget = 0;
 
 		mApp->getStyleSheet()->setWidgetSS(this,std::wstring());
 		mApp->getStyleSheet()->removeCache(this);
@@ -536,7 +877,7 @@ namespace MetalBone
 		m_windowExtras->m_wndHandle = NULL;
 		MApplicationData::removeTLW(this);
 
-		m_widgetState |= MWS_HIDDEN;
+		m_widgetState |= MWS_Hidden;
 	}
 
 	void MWidget::createWnd()
@@ -545,6 +886,9 @@ namespace MetalBone
 			mWarning(true,L"A window for this widget already exists! In MWidget::createWnd()");
 			return;
 		}
+
+		MApplicationData::insertTLW(this);
+		setTopLevelParentRecursively(this);
 
 		if(m_windowExtras == 0)
 			m_windowExtras = new WindowExtras();
@@ -572,7 +916,7 @@ namespace MetalBone
 			rect.bottom - rect.top, // Height
 			parentHandle,NULL,
 			mApp->getAppHandle(), NULL);
-		
+
 		if(isLayered) {
 			m_windowExtras->m_layeredWndHandle = CreateWindowExW(winExStyle & WS_EX_LAYERED,
 				gMWidgetClassName,
@@ -585,11 +929,6 @@ namespace MetalBone
 				mApp->getAppHandle(), NULL);
 		}
 
-		setTopLevelParentRecursively(this);
-
-		// We have to remember this is a TopLevel Window. And
-		// we also have to create a renderTarget for it.
-		MApplicationData::insertTLW(this);
 		createRenderTarget();
 	}
 
@@ -637,9 +976,9 @@ namespace MetalBone
 		MWidget* tlp = parent;
 		if(parent == 0)
 		{
-			m_widgetState |= MWS_HIDDEN;
+			m_widgetState |= MWS_Hidden;
 			if(!testAttributes(WA_ConstStyleSheet))
-				m_widgetState &= (~MWS_POLISHED); // We need to repolish the widget.
+				m_widgetState &= (~MWS_Polished); // We need to repolish the widget.
 			tlp = this;
 		} else {
 			// We don't modify the widget's hidden state if it changes parent.
@@ -691,21 +1030,25 @@ namespace MetalBone
 		return false;
 	}
 
-	bool MWidget::isHidden() const { return (m_widgetState & MWS_HIDDEN) != 0; }
-	void MWidget::setStyleSheet(const std::wstring& css) { mApp->getStyleSheet()->setWidgetSS(this,css); }
+	bool MWidget::isHidden() const
+		{ return (m_widgetState & MWS_Hidden) != 0; }
+	void MWidget::setStyleSheet(const std::wstring& css)
+		{ mApp->getStyleSheet()->setWidgetSS(this,css); }
 	void MWidget::ensurePolished()
 	{
-		if(m_widgetState & MWS_POLISHED)
+		if(m_widgetState & MWS_Polished)
 			return;
-		m_widgetState |= MWS_POLISHED;
+		m_widgetState |= MWS_Polished;
 
 		if(m_attributes & WA_NoStyleSheet)
 			return;
 
 		MStyleSheetStyle* sss = mApp->getStyleSheet();
 		sss->polish(this);
-		setWidgetState(MWS_CSSOpaqueBG,sss->getRenderRule(this).opaqueBackground());
 	}
+
+	void MWidget::ssSetOpaque(bool opaque)
+		{ setWidgetState(MWS_CSSOpaqueBG,opaque); }
 
 	void MWidget::setWindowOwner(MWidget* parent)
 	{
@@ -814,7 +1157,7 @@ namespace MetalBone
 
 		// Mark the widget visible. When polishing stylesheet, this is still 
 		// hidden, so even if this widget's size changed, it won't repaint itself.
-		m_widgetState &= (~MWS_HIDDEN);
+		m_widgetState &= (~MWS_Hidden);
 		repaint();
 	}
 
@@ -822,8 +1165,8 @@ namespace MetalBone
 	{
 		if(isHidden())
 			return;
-		m_widgetState |= MWS_HIDDEN;
-		m_widgetState &= (~MWS_VISIBLE);
+		m_widgetState |= MWS_Hidden;
+		m_widgetState &= (~MWS_Visible);
 		if(hasWindow())
 			ShowWindow(m_windowExtras->getRealHwnd(),SW_HIDE);
 		else
@@ -877,7 +1220,7 @@ namespace MetalBone
 
 	bool MWidget::isVisible() const
 	{
-		bool selfVisible = 0 != (m_widgetState & MWS_VISIBLE);
+		bool selfVisible = 0 != (m_widgetState & MWS_Visible);
 		if(!selfVisible)
 			return false;
 
@@ -913,7 +1256,7 @@ namespace MetalBone
 
 		// If the widget needs to draw itself, we marks it invisible at this time,
 		// And if it does draw itself during next redrawing. It's visible.
-		m_widgetState &= (~MWS_VISIBLE);
+		m_widgetState &= (~MWS_Visible);
 
 		MWidget* parent = m_parent;
 		while(parent != 0)

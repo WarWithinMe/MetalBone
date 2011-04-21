@@ -14,11 +14,12 @@
 namespace MetalBone
 {
 	class MSSSPrivate;
+	class MStyleSheetStyle;
 	class MWidget;
 	namespace CSS
 	{
 		enum PseudoClassType {
-			PC_Default    = 0x1,        PC_Enabled      = 0x2,
+			PC_Default    = 0,          PC_Enabled      = 0x2,
 			PC_Disabled   = 0x4,        PC_Pressed      = 0x8,
 			PC_Focus      = 0x10,       PC_Hover        = 0x20,
 			PC_Checked    = 0x40,       PC_Unchecked    = 0x80,
@@ -64,6 +65,8 @@ namespace MetalBone
 			PT_MinimumWidth,           PT_MinimumHeight,
 			PT_MaximumWidth,           PT_MaximumHeight,
 
+			PT_Cursor,
+
 			PT_Color,                  PT_Font,                       PT_FontFamily,
 			PT_FontSize,               PT_FontStyle,                  PT_FontWeight,
 			PT_TextAlignment,          PT_TextDecoration,             PT_TextIndent,
@@ -87,6 +90,12 @@ namespace MetalBone
 			Value_Top,        Value_Right,       Value_Left,       Value_Bottom,    Value_Center,
 			Value_NoRepeat,   Value_RepeatX,     Value_RepeatY,    Value_Repeat,    Value_Stretch,
 			Value_True,
+			
+			// The Cursor's order must be the same as MCursor::CursorType
+			Value_Default,   Value_AppStarting, Value_Cross,   Value_Hand,    Value_Help,    Value_IBeam,
+			Value_Wait,      Value_Forbidden,   Value_UpArrow, Value_SizeAll, Value_SizeVer, Value_SizeHor,
+			Value_SizeBDiag, Value_SizeFDiag,   Value_Blank,
+
 			KnownValueCount
 		};
 
@@ -131,13 +140,16 @@ namespace MetalBone
 				inline operator bool() const;
 				inline bool isValid() const;
 				bool opaqueBackground() const;
-				bool setGeometry(MWidget* w);
+				void draw(ID2D1RenderTarget*,const RECT& widgetRectInRT, const RECT& clipRectInRT);
+				inline bool operator==(const RenderRule&) const;
+				inline bool operator!=(const RenderRule&) const;
 			private:
 				void init();
-				inline RenderRuleData* operator->() const;
+				inline RenderRuleData* operator->();
 				RenderRuleData* data;
 
 			friend class MSSSPrivate;
+			friend class MStyleSheetStyle;
 		};
 	} // namespace CSS
 
@@ -152,6 +164,8 @@ namespace MetalBone
 			void draw(MWidget* w,ID2D1RenderTarget* rt, const RECT& widgetRectInRT, const RECT& clipRectInRT);
 			void removeCache(MWidget* w);
 			CSS::RenderRule getRenderRule(MWidget* w, unsigned int p = CSS::PC_Default);
+			// Check if the widget needs to be unpdated.
+			void updateWidgetAppearance(MWidget*);
 		private:
 			MSSSPrivate* mImpl;
 	};
@@ -161,7 +175,11 @@ namespace MetalBone
 		{ return data != 0; }
 	inline bool CSS::RenderRule::isValid() const
 		{ return data != 0; }
-	inline CSS::RenderRuleData* CSS::RenderRule::operator->() const
+	inline bool CSS::RenderRule::operator==(const CSS::RenderRule& rhs) const
+		{ return data == rhs.data; }
+	inline bool CSS::RenderRule::operator!=(const CSS::RenderRule& rhs) const
+		{ return data != rhs.data; }
+	inline CSS::RenderRuleData* CSS::RenderRule::operator->()
 		{ return data; }
 } // namespace MetalBone
 #endif // MSTYLESHEET_H

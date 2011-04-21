@@ -2,6 +2,7 @@
 #include "MApplication.h"
 #include "MWidget.h"
 #include "MTimer.h"
+#include "MEvent.h"
 
 #include "vld.h"
 
@@ -11,9 +12,22 @@
 #include <windows.h>
 #include <vector>
 
-class ChildWidget : public MWidget {};
-class CheckBox    : public MWidget {};
-class Button      : public MWidget {};
+class NewWidget : public MWidget
+{
+
+	virtual void mousePressEvent(MMouseEvent* e)
+	{
+		std::wstringstream ss;
+		ss << "[On Mouse Press] X:" << e->getX();
+		ss << ", Y:" << e->getY();
+		ss << "   Widget: " << objectName() << "\n";
+
+		mDebug(ss.str().c_str());
+	}
+};
+class ChildWidget : public NewWidget {};
+class CheckBox    : public NewWidget {};
+class Button      : public NewWidget {};
 
 struct TestWidgetController : public has_slots
 {

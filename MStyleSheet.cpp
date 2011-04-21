@@ -4,8 +4,6 @@
 #include "MApplication.h"
 #include "MBGlobal.h"
 
-#include "3rd/XUnzip.h"
-
 #include <D2d1helper.h>
 #include <algorithm>
 #include <wincodec.h>
@@ -17,140 +15,6 @@
 
 namespace MetalBone
 {
-	// ========== MResource ==========
-	MResource::ResourceCache MResource::cache;
-	bool MResource::open(HINSTANCE hInstance, const wchar_t* name, const wchar_t* type)
-	{
-		HRSRC hrsrc = FindResourceW(hInstance,name,type);
-		if(hrsrc) {
-			HGLOBAL hglobal = LoadResource(hInstance,hrsrc);
-			if(hglobal) {
-				buffer = (const BYTE*)LockResource(hglobal);
-				if(buffer) {
-					size = SizeofResource(hInstance,hrsrc);
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-
-	bool MResource::open(const std::wstring& fileName)
-	{
-		ResourceCache::const_iterator iter;
-		if(fileName.at(0) == L':' && fileName.at(1) == L'/')
-		{
-			std::wstring temp(fileName,2,fileName.length() - 2);
-			iter = cache.find(temp);
-		} else {
-			iter = cache.find(fileName);
-		}
-		if(iter == cache.cend())
-			return false;
-
-		buffer = iter->second->buffer;
-		size   = iter->second->length;
-		return true;
-	}
-
-	void MResource::clearCache()
-	{
-		ResourceCache::const_iterator iter = cache.cbegin();
-		ResourceCache::const_iterator iterEnd = cache.cend();
-		while(iter != iterEnd) { delete iter->second; ++iter; }
-		cache.clear();
-	}
-
-	bool MResource::addFileToCache(const std::wstring& filePath)
-	{
-		if(cache.find(filePath) != cache.cend())
-			return false;
-
-		HANDLE resFile = CreateFileW(filePath.c_str(),GENERIC_READ,
-									 FILE_SHARE_READ,0,OPEN_EXISTING,
-									 FILE_ATTRIBUTE_NORMAL,0);
-		if(resFile == INVALID_HANDLE_VALUE)
-			return false;
-
-		ResourceEntry* newEntry = new ResourceEntry();
-
-		DWORD size = GetFileSize(resFile,0);
-		newEntry->length = size;
-		newEntry->unity  = true;
-		newEntry->buffer = new BYTE[size];
-
-		DWORD readSize;
-		if(ReadFile(resFile,newEntry->buffer,size,&readSize,0))
-		{
-			if(readSize != size) {
-				delete newEntry;
-			} else {
-				cache.insert(ResourceCache::value_type(filePath, newEntry));
-				return true;
-			}
-		} else {
-			delete newEntry;
-		}
-		return false;
-	}
-
-	bool MResource::addZipToCache(const std::wstring& zipPath)
-	{
-		HZIP zip = OpenZip((void*)zipPath.c_str(), 0, ZIP_FILENAME);
-		if(zip == 0)
-			return false;
-
-		bool success = true;
-		ZIPENTRYW zipEntry;
-		if(ZR_OK == GetZipItem(zip, -1, &zipEntry))
-		{
-			std::vector<std::pair<int,ResourceEntry*> > tempCache;
-
-			int totalItemCount = zipEntry.index;
-			int buffer = 0;
-			// Get the size of every item.
-			for(int i = 0; i < totalItemCount; ++i)
-			{
-				GetZipItem(zip,i,&zipEntry);
-				if(!(zipEntry.attr & FILE_ATTRIBUTE_DIRECTORY)) // ignore every folder
-				{
-					ResourceEntry* entry = new ResourceEntry();
-					entry->buffer += buffer;
-					entry->length = zipEntry.unc_size;
-
-					cache.insert(ResourceCache::value_type(zipEntry.name,entry));
-					tempCache.push_back(std::make_pair(i,entry));
-
-					buffer += zipEntry.unc_size;
-				}
-			}
-
-			BYTE* memBlock = new BYTE[buffer]; // buffer is the size of the zip file.
-
-			// Uncompress every item.
-			totalItemCount = tempCache.size();
-			for(int i = 0; i < totalItemCount; ++i)
-			{
-				ResourceEntry* re = tempCache.at(i).second;
-				re->buffer = memBlock + (int)re->buffer;
-
-				UnzipItem(zip, tempCache.at(i).first,
-						  re->buffer, re->length, ZIP_MEMORY);
-			}
-
-			tempCache.at(0).second->unity = true;
-		} else {
-			success = false;
-		}
-
-		CloseZip(zip);
-		return success;
-	}
-
-
-
-
-
 	// ========== StyleSheet ==========
 	namespace CSS
 	{
@@ -215,14 +79,14 @@ namespace MetalBone
 
 			std::wstring elementName; // ClassA .ClassA
 			std::wstring id; // #Id
-			unsigned int pseudo;
+			unsigned int pseudo; // pseudo may contain a pseudo-element and many pseudo-classes
 			unsigned int pseudoCount;
 			Relation     relationToNext;
 		};
 
 		struct Selector
 		{
-			Selector(const std::wstring* css,int index = 0,int length = -1);
+			Selector(const std::wstring* css, int index = 0,int length = -1);
 			~Selector();
 
 			std::vector<BasicSelector*> basicSelectors;
@@ -287,104 +151,119 @@ namespace MetalBone
 	};
 
 	static const CSSValuePair properties[knownPropertyCount] = {
-		{ L"background",                 PT_Background },
-		{ L"background-alignment",       PT_BackgroundAlignment },
-		{ L"background-clip",            PT_BackgroundClip },
-		{ L"background-position",        PT_BackgroundPosition },
-		{ L"background-repeat",          PT_BackgroundRepeat },
-		{ L"background-size",            PT_BackgroundSize },
-		{ L"border",                     PT_Border },
-		{ L"border-bottom",              PT_BorderBottom },
-		{ L"border-bottom-color",        PT_BorderBottomColor },
-		{ L"border-bottom-left-radius",  PT_BorderBottomLeftRadius },
+		{ L"background",                 PT_Background              },
+		{ L"background-alignment",       PT_BackgroundAlignment     },
+		{ L"background-clip",            PT_BackgroundClip          },
+		{ L"background-position",        PT_BackgroundPosition      },
+		{ L"background-repeat",          PT_BackgroundRepeat        },
+		{ L"background-size",            PT_BackgroundSize          },
+		{ L"border",                     PT_Border                  },
+		{ L"border-bottom",              PT_BorderBottom            },
+		{ L"border-bottom-color",        PT_BorderBottomColor       },
+		{ L"border-bottom-left-radius",  PT_BorderBottomLeftRadius  },
 		{ L"border-bottom-right-radius", PT_BorderBottomRightRadius },
-		{ L"border-bottom-style",        PT_BorderBottomStyle },
-		{ L"border-bottom-width",        PT_BorderBottomWidth },
-		{ L"border-color",               PT_BorderColor },
-		{ L"border-image",               PT_BorderImage },
-		{ L"border-left",                PT_BorderLeft },
-		{ L"border-left-color",          PT_BorderLeftColor },
-		{ L"border-left-style",          PT_BorderLeftStyle },
-		{ L"border-left-width",          PT_BorderLeftWidth },
-		{ L"border-radius",              PT_BorderRadius },
-		{ L"border-right",               PT_BorderRight },
-		{ L"border-right-color",         PT_BorderRightColor },
-		{ L"border-right-style",         PT_BorderRightStyle },
-		{ L"border-right-width",         PT_BorderRightWidth },
-		{ L"border-style",               PT_BorderStyles },
-		{ L"border-top",                 PT_BorderTop },
-		{ L"border-top-color",           PT_BorderTopColor },
-		{ L"border-top-left-radius",     PT_BorderTopLeftRadius },
-		{ L"border-top-right-radius",    PT_BorderTopRightRadius },
-		{ L"border-top-style",           PT_BorderTopStyle },
-		{ L"border-top-width",           PT_BorderTopWidth },
-		{ L"border-width",               PT_BorderWidth },
-		{ L"color",                      PT_Color },
-		{ L"font",                       PT_Font },
-		{ L"font-family",                PT_FontFamily },
-		{ L"font-size",                  PT_FontSize },
-		{ L"font-style",                 PT_FontStyle },
-		{ L"font-weight",                PT_FontWeight },
-		{ L"height",                     PT_Height },
-		{ L"inherit-background",         PT_InheritBackground },
-		{ L"margin",                     PT_Margin },
-		{ L"margin-bottom",              PT_MarginBottom },
-		{ L"margin-left",                PT_MarginLeft },
-		{ L"margin-right",               PT_MarginRight },
-		{ L"margin-top",                 PT_MarginTop },
-		{ L"max-height",                 PT_MaximumHeight },
-		{ L"max-width",                  PT_MaximumWidth },
-		{ L"min-height",                 PT_MinimumHeight },
-		{ L"min-width",                  PT_MinimumWidth },
-		{ L"padding",                    PT_Padding },
-		{ L"padding-bottom",             PT_PaddingBottom },
-		{ L"padding-left",               PT_PaddingLeft },
-		{ L"padding-right",              PT_PaddingRight },
-		{ L"padding-top",                PT_PaddingTop },
-		{ L"text-align",                 PT_TextAlignment },
-		{ L"text-decoration",            PT_TextDecoration },
-		{ L"text-indent",                PT_TextIndent },
-		{ L"text-outline",               PT_TextOutline },
-		{ L"text-overflow",              PT_TextOverflow },
-		{ L"text-shadow",                PT_TextShadow },
-		{ L"text-underline-style",       PT_TextUnderlineStyle },
-		{ L"width",                      PT_Width }
+		{ L"border-bottom-style",        PT_BorderBottomStyle       },
+		{ L"border-bottom-width",        PT_BorderBottomWidth       },
+		{ L"border-color",               PT_BorderColor             },
+		{ L"border-image",               PT_BorderImage             },
+		{ L"border-left",                PT_BorderLeft              },
+		{ L"border-left-color",          PT_BorderLeftColor         },
+		{ L"border-left-style",          PT_BorderLeftStyle         },
+		{ L"border-left-width",          PT_BorderLeftWidth         },
+		{ L"border-radius",              PT_BorderRadius            },
+		{ L"border-right",               PT_BorderRight             },
+		{ L"border-right-color",         PT_BorderRightColor        },
+		{ L"border-right-style",         PT_BorderRightStyle        },
+		{ L"border-right-width",         PT_BorderRightWidth        },
+		{ L"border-style",               PT_BorderStyles            },
+		{ L"border-top",                 PT_BorderTop               },
+		{ L"border-top-color",           PT_BorderTopColor          },
+		{ L"border-top-left-radius",     PT_BorderTopLeftRadius     },
+		{ L"border-top-right-radius",    PT_BorderTopRightRadius    },
+		{ L"border-top-style",           PT_BorderTopStyle          },
+		{ L"border-top-width",           PT_BorderTopWidth          },
+		{ L"border-width",               PT_BorderWidth             },
+		{ L"color",                      PT_Color                   },
+		{ L"cursor",                     PT_Cursor                  },
+		{ L"font",                       PT_Font                    },
+		{ L"font-family",                PT_FontFamily              },
+		{ L"font-size",                  PT_FontSize                },
+		{ L"font-style",                 PT_FontStyle               },
+		{ L"font-weight",                PT_FontWeight              },
+		{ L"height",                     PT_Height                  },
+		{ L"inherit-background",         PT_InheritBackground       },
+		{ L"margin",                     PT_Margin                  },
+		{ L"margin-bottom",              PT_MarginBottom            },
+		{ L"margin-left",                PT_MarginLeft              },
+		{ L"margin-right",               PT_MarginRight             },
+		{ L"margin-top",                 PT_MarginTop               },
+		{ L"max-height",                 PT_MaximumHeight           },
+		{ L"max-width",                  PT_MaximumWidth            },
+		{ L"min-height",                 PT_MinimumHeight           },
+		{ L"min-width",                  PT_MinimumWidth            },
+		{ L"padding",                    PT_Padding                 },
+		{ L"padding-bottom",             PT_PaddingBottom           },
+		{ L"padding-left",               PT_PaddingLeft             },
+		{ L"padding-right",              PT_PaddingRight            },
+		{ L"padding-top",                PT_PaddingTop              },
+		{ L"text-align",                 PT_TextAlignment           },
+		{ L"text-decoration",            PT_TextDecoration          },
+		{ L"text-indent",                PT_TextIndent              },
+		{ L"text-outline",               PT_TextOutline             },
+		{ L"text-overflow",              PT_TextOverflow            },
+		{ L"text-shadow",                PT_TextShadow              },
+		{ L"text-underline-style",       PT_TextUnderlineStyle      },
+		{ L"width",                      PT_Width                   }
 	};
 
 	static const CSSValuePair knownValues[KnownValueCount - 1] = {
-		{ L"bold",         Value_Bold },
-		{ L"border",       Value_Border },
-		{ L"bottom",       Value_Bottom },
-		{ L"center",       Value_Center },
-		{ L"clip",         Value_Clip },
-		{ L"content",      Value_Content },
-		{ L"dashed",       Value_Dashed },
-		{ L"dot-dash",     Value_DotDash },
-		{ L"dot-dot-dash", Value_DotDotDash },
-		{ L"dotted",       Value_Dotted },
-		{ L"ellipsis",     Value_Ellipsis },
-		{ L"italic",       Value_Italic },
-		{ L"left",         Value_Left },
+		{ L"bold",         Value_Bold        },
+		{ L"border",       Value_Border      },
+		{ L"bottom",       Value_Bottom      },
+		{ L"center",       Value_Center      },
+		{ L"clip",         Value_Clip        },
+		{ L"content",      Value_Content     },
+		{ L"crosshair",    Value_Cross       },
+		{ L"dashed",       Value_Dashed      },
+		{ L"default",      Value_Default     },
+		{ L"dot-dash",     Value_DotDash     },
+		{ L"dot-dot-dash", Value_DotDotDash  },
+		{ L"dotted",       Value_Dotted      },
+		{ L"ellipsis",     Value_Ellipsis    },
+		{ L"ew-resize",    Value_SizeHor     },
+		{ L"help",         Value_Help        },
+		{ L"italic",       Value_Italic      },
+		{ L"left",         Value_Left        },
 		{ L"line-through", Value_LineThrough },
-		{ L"margin",       Value_Margin },
-		{ L"no-repeat",    Value_NoRepeat },
-		{ L"none",         Value_None },
-		{ L"normal",       Value_Normal },
-		{ L"oblique",      Value_Oblique },
-		{ L"overline",     Value_Overline },
-		{ L"padding",      Value_Padding },
-		{ L"repeat",       Value_Repeat },
-		{ L"repeat-x",     Value_RepeatX },
-		{ L"repeat-y",     Value_RepeatY },
-		{ L"right",        Value_Right },
-		{ L"solid",        Value_Solid },
-		{ L"stretch",      Value_Stretch },
-		{ L"top",          Value_Top },
+		{ L"margin",       Value_Margin      },
+		{ L"move",         Value_SizeAll     },
+		{ L"nesw-resize",  Value_SizeBDiag   },
+		{ L"no-cursor",    Value_Blank       },
+		{ L"no-repeat",    Value_NoRepeat    },
+		{ L"none",         Value_None        },
+		{ L"normal",       Value_Normal      },
+		{ L"not-allowed",  Value_Forbidden   },
+		{ L"ns-resize",    Value_SizeVer     },
+		{ L"nwse-resize",  Value_SizeFDiag   },
+		{ L"oblique",      Value_Oblique     },
+		{ L"overline",     Value_Overline    },
+		{ L"padding",      Value_Padding     },
+		{ L"pointer",      Value_Hand        },
+		{ L"progress",     Value_AppStarting },
+		{ L"repeat",       Value_Repeat      },
+		{ L"repeat-x",     Value_RepeatX     },
+		{ L"repeat-y",     Value_RepeatY     },
+		{ L"right",        Value_Right       },
+		{ L"solid",        Value_Solid       },
+		{ L"stretch",      Value_Stretch     },
+		{ L"text",         Value_IBeam       },
+		{ L"top",          Value_Top         },
 		{ L"transparent",  Value_Transparent },
-		{ L"true",         Value_True },
-		{ L"underline",    Value_Underline },
-		{ L"wave",         Value_Wave },
-		{ L"wrap",         Value_Wrap },
+		{ L"true",         Value_True        },
+		{ L"underline",    Value_Underline   },
+		{ L"wait",         Value_Wait        },
+		{ L"wave",         Value_Wave        },
+		{ L"wrap",         Value_Wrap        },
 	};
 
 	const CSSValuePair* findCSSValue(const std::wstring& p, const CSSValuePair values[],int valueCount)
@@ -426,12 +305,11 @@ namespace MetalBone
 	bool Selector::matchPseudo(unsigned int p) const
 	{
 		BasicSelector* bs = basicSelectors.at(basicSelectors.size() - 1);
-		// Special treatment for Hover Pseudo.
-		if(p == PC_Hover)
-			return bs->pseudo == p;
-
-		return bs->pseudo == PC_Default ? true :
-				(p != (bs->pseudo & p)) ? false : (p != 0);
+		// Always match the default pseudo
+		if(PC_Default == bs->pseudo)
+			return true;
+		// If bs->pseudo is a subset of p, it matches.
+		return (bs->pseudo & p) != bs->pseudo ? false : (PC_Default != p);
 	}
 
 	inline unsigned int Selector::pseudo() const
@@ -1052,7 +930,6 @@ namespace MetalBone
 			RenderRule getRenderRule(MWidget*, unsigned int);
 			void initRenderRule(RenderRule&, DeclMap&);
 
-
 			BackgroundRenderObject*  createBackgroundRO (CssValueArray&);
 			BorderImageRenderObject* createBorderImageRO(CssValueArray&);
 			void setSimpleBorderRO (SimpleBorderRenderObject*,  DeclMap::iterator&, DeclMap::iterator);
@@ -1447,10 +1324,11 @@ namespace MetalBone
 			bool hasMargin;
 			bool hasPadding;
 
-			std::vector<BackgroundRenderObject*> backgroundROs;
-			BorderImageRenderObject*             borderImageRO;
-			BorderRenderObject*                  borderRO;
-			GeometryRenderObject*                geoRO;
+			vector<BackgroundRenderObject*> backgroundROs;
+			BorderImageRenderObject*        borderImageRO;
+			BorderRenderObject*             borderRO;
+			GeometryRenderObject*           geoRO;
+			MCursor*                        cursor;
 
 			D2D_RECT_U margin;
 			D2D_RECT_U padding;
@@ -1482,7 +1360,8 @@ namespace MetalBone
 	ID2D1RenderTarget* RenderRuleData::workingRT = 0;
 	inline RenderRuleData::RenderRuleData():
 		refCount(1), opaqueBackground(false), animated(false),
-		hasMargin(false), hasPadding(false), borderImageRO(0), borderRO(0), geoRO(0)
+		hasMargin(false), hasPadding(false), borderImageRO(0),
+		borderRO(0), geoRO(0),cursor(0)
 	{
 		memset(&margin, 0,sizeof(D2D_RECT_U));
 		memset(&padding,0,sizeof(D2D_RECT_U));
@@ -1494,6 +1373,7 @@ namespace MetalBone
 		delete borderImageRO;
 		delete borderRO;
 		delete geoRO;
+		delete cursor;
 	}
 	bool RenderRuleData::setGeometry(MWidget* w)
 	{
@@ -2072,6 +1952,8 @@ namespace MetalBone
 		{ if(data) ++data->refCount; }
 	bool RenderRule::opaqueBackground() const
 		{ return data == 0 ? false : data->opaqueBackground; }
+	void RenderRule::draw(ID2D1RenderTarget* rt,const RECT& wr, const RECT& cr)
+		{ if(data) data->draw(rt,wr,cr); }
 	void RenderRule::init()
 		{ M_ASSERT(data==0); data = new RenderRuleData(); }
 	RenderRule::~RenderRule()
@@ -2122,6 +2004,7 @@ namespace MetalBone
 	}
 
 
+	extern MCursor gArrowCursor;
 	// ********** MStyleSheetStyle Impl
 	MStyleSheetStyle::MStyleSheetStyle():mImpl(new MSSSPrivate()) {}
 	MStyleSheetStyle::~MStyleSheetStyle()
@@ -2138,7 +2021,29 @@ namespace MetalBone
 		{ mImpl->removeCache(w); }
 	RenderRule MStyleSheetStyle::getRenderRule(MWidget* w, unsigned int p)
 		{return mImpl->getRenderRule(w,p); }
+	void MStyleSheetStyle::updateWidgetAppearance(MWidget* w)
+	{
+		unsigned int lastP = w->getLastWidgetPseudo();
+		unsigned int currP = w->getWidgetPseudo();
+		RenderRule currRule = getRenderRule(w,currP);
+		if(lastP != currP)
+		{
+			RenderRule lastRule = getRenderRule(w,w->getLastWidgetPseudo());
+			if(lastRule != currRule)
+			{
+				w->repaint();
+				w->ssSetOpaque(currRule.opaqueBackground());
+				// Remark: we can update the widget's property here.
+			}
 
+		}
+
+		// We always update the cursor.
+		MCursor* cursor = w->getCursor();
+		if(cursor == 0) cursor = currRule->cursor;
+		if(cursor == 0) cursor = &gArrowCursor;
+		cursor->show();
+	}
 	// ********** MSSSPrivate Implementation
 	MSSSPrivate* MSSSPrivate::instance = 0;
 	void getWidgetClassName(const MWidget* w,wstring& name)
@@ -2298,7 +2203,7 @@ namespace MetalBone
 			prrMap = widgetCacheIter->second;
 			PseudoRenderRuleMap::Element::iterator prrIter = prrMap->element.find(pseudo);
 			if(prrIter != prrMap->element.end())
-				return prrIter->second; // Found sth. we are insterested in.
+				return prrIter->second;
 		}
 
 		// == 2.Find StyleRules for MWidget w from Widget-StyleRule cache.
@@ -2402,7 +2307,6 @@ namespace MetalBone
 			}
 		}
 		
-
 		// Remove duplicate declarations (except background, because we support multi backgrounds)
 		PropertyType lastType = knownPropertyCount;
 		DeclMap::iterator declRIter = declarations.begin();
@@ -2429,20 +2333,21 @@ namespace MetalBone
 
 	inline void MSSSPrivate::polish(MWidget* w)
 	{
-		RenderRule rule = getRenderRule(w,PC_Default);
-		if(rule.isValid())
-			rule->setGeometry(w);
+		RenderRule rule = getRenderRule(w, PC_Default);
+		if(rule) rule->setGeometry(w);
 
-		if(getRenderRule(w, PC_Hover))
+		RenderRule hoverRule = getRenderRule(w, PC_Hover);
+		if(hoverRule && hoverRule != rule)
 			w->setAttributes(WA_Hover);
+
+		w->ssSetOpaque(rule.opaqueBackground());
 	}
 
 	inline void MSSSPrivate::draw(MWidget* w, ID2D1RenderTarget* rt,
 		const RECT& wr, const RECT& cr)
 	{
-		CSS::RenderRule rule = getRenderRule(w,w->getCurrentWidgetPseudo());
-		if(rule.isValid())
-			rule->draw(rt,wr,cr);
+		CSS::RenderRule rule = getRenderRule(w,w->getWidgetPseudo(true));
+		rule.draw(rt,wr,cr);
 	}
 
 	inline void MSSSPrivate::removeCache(MWidget* w)
@@ -3065,7 +2970,7 @@ namespace MetalBone
 		}
 
 		// --- Geometry ---
-		if(declIter->first <= PT_MinimumHeight)
+		if(declIter->first <= PT_MaximumHeight)
 		{
 			GeometryRenderObject* geoData = new GeometryRenderObject();
 			renderRule->geoRO = geoData;
@@ -3081,6 +2986,36 @@ namespace MetalBone
 				case PT_MaximumHeight:geoData->maxHeight = data; break;
 				}
 			}while(++declIter != declIterEnd);
+			if(++declIter == declIterEnd) goto END;
+		}
+
+		if(declIter->first == PT_Cursor)
+		{
+			MCursor* cursor = new MCursor();
+			const CssValue& value = declIter->second->values.at(0);
+			switch(value.type)
+			{
+				case CssValue::Identifier:
+					if(value.data.videntifier < Value_Default || value.data.videntifier > Value_Blank)
+					{
+						delete cursor;
+						cursor = 0;
+					} else {
+						cursor->setType(static_cast<MCursor::CursorType>
+							(value.data.videntifier - Value_Default));
+					}
+					break;
+				case CssValue::Uri:
+					cursor->loadCursorFromFile(*value.data.vstring);
+					break;
+				case CssValue::Number:
+					cursor->loadCursorFromRes(MAKEINTRESOURCEW(value.data.vint));
+					break;
+				default:
+					delete cursor;
+					cursor = 0;
+			}
+			renderRule->cursor = cursor;
 		}
 
 		// TODO: Create TextRenderObject

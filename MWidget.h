@@ -48,7 +48,12 @@ namespace MetalBone
 									 // each other. This will optimize a bit when we redraw, since we
 									 // don't have to test if there's a widget overlaps the drawing rect.
 
-		WA_Hover             = 0x40  // Change apperent when hover
+		WA_Hover              = 0x40, // Change appearence when hover
+		WA_MouseThrough       = 0x80, // When set, the widget and its children won't receive any mouse
+									  // event, as if they do not exist.
+		WA_NoMousePropagation = 0x100,// If a MouseEvent is not accpeted, and this attribute is not set,
+									  // it will by default propagete to its parent.
+		WA_TrackMouseMove     = 0x200 // If set, the widget will receive MouseMoveEvent.
 	};
 
 	enum WindowStates
@@ -59,12 +64,23 @@ namespace MetalBone
 		WindowActive
 	};
 
+	enum FocusPolicy
+	{
+		NoFocus = 0,
+		TabFocus,
+		ClickFocus,
+		MoveOverFocus, // If set, the widget will automatically grab focus when move over.
+	};
+
 	class MEvent;
 	class MPaintEvent;
+	class MMouseEvent;
 	class MStyleSheetStyle;
 	class MWidget;
 	class MRegion;
+	class MToolTip;
 	struct MApplicationData;
+	class MCursor;
 	struct WindowExtras;
 	typedef std::list<MWidget*> MWidgetList; 
 	class MWidget
@@ -104,6 +120,7 @@ namespace MetalBone
 			// rect(5,5,10,10) and rect(30,30,35,35) will results in a rect(5,5,35,35) 
 			inline void repaint();
 			void repaint(int x, int y, unsigned int width, unsigned int height);
+			inline void repaintIfCSSChanged();
 			ID2D1RenderTarget* getRenderTarget();
 
 			// Sets the owner of this Window to the Window contains p.
@@ -114,6 +131,27 @@ namespace MetalBone
 			// Return the parent widget of this or 0.
 			inline MWidget* parent() const;
 			inline const MWidgetList& children() const;
+
+			// Finds a visible widget a point{x,y}. After calling this function,
+			// x and y will be in the found widget's coordinate.
+			// If ignoreMouseThroughWidget is true, we only check those
+			// widgets who receive mouseEvent.
+			MWidget* findWidget(int& x, int& y, bool ignoreMouseThroughWidget = true);
+
+			void setFocus();
+			inline FocusPolicy focusPolicy() const;
+			inline void setFocusPolicy(FocusPolicy);
+
+			inline MToolTip* getToolTip();
+			// MWidget will take control of the MToolTip
+			void setToolTip(MToolTip*);
+			void setToolTip(const std::wstring&);
+
+			// StyleSheet only changes a widget's cursor if it doesn't have one.
+			// This function take control of the MCursor. The caller don't have to 
+			// delete the cursor.
+			inline void setCursor(MCursor*);
+			MCursor* getCursor();
 
 			// The widget can be invisible while it's not hidden.
 			// The widget is not visible because its parent is not visible,
@@ -144,29 +182,33 @@ namespace MetalBone
 			void setMaximumSize(unsigned int maxWidth, unsigned int maxHeight);
 
 
-			// Only received this event when MWidget is a window.
+			// These function SHOULD only be used by StyleSheetStyle.
+			// The StyleSheetStyle calls this to determine which RenderRule is needed.
+			virtual unsigned int getLastWidgetPseudo() const;
+			virtual unsigned int getWidgetPseudo(bool markAsLast = false);
+			void ssSetOpaque(bool opaque);
+
+		protected:
+			// MWidget only receive closeEvent when it is a window.
 			// If the MEvent is not accepted, nothing happen.
 			// By default the MEvent is accepted, and the window will
 			// be destroyed which makes the widget hidden.
 			// If the widget has the attribute WA_DeleteOnClose,
 			// the widget is also be deleted.
-			virtual void closeEvent(MEvent*     ) {}
-			virtual void paintEvent(MPaintEvent*) {}
-
-
-
-
-
-
-
-
-
-			// The StyleSheetStyle calls this to determine which RenderRule is needed.
-			virtual unsigned int getCurrentWidgetPseudo() { return 1; /* PC_Default */ }
-
-
-
-
+			virtual void closeEvent(MEvent*     )       {}
+			// If MPaintEvent is not accepted, its children won't be painted.
+			virtual void focusEvent()                   {}
+			virtual void paintEvent(MPaintEvent*)       {}
+			virtual void leaveEvent()                   {}
+			// If enterEvent is not accepted, it will generate a mouseMoveEvent
+			// The event is not accepted by default.
+			virtual void enterEvent(MEvent*)            {}
+			// mouseMoveEvent is accepted by default.
+			virtual void mouseMoveEvent(MMouseEvent*)   {}
+			// mousePressEvent / mouseReleaseEvent / mouseDClickEvent is ignored by default.
+			virtual void mousePressEvent(MMouseEvent*)  {}
+			virtual void mouseReleaseEvent(MMouseEvent*){}
+			virtual void mouseDClickEvent(MMouseEvent*) {}
 
 		private:
 			MWidget* m_parent;
@@ -190,11 +232,19 @@ namespace MetalBone
 			unsigned int m_windowState;
 			unsigned int m_widgetState;
 
+			unsigned int lastPseudo;
+			unsigned int mainPseudo;
+
+			FocusPolicy fp;
+			MToolTip* m_toolTip;
+			MCursor* m_cursor;
+
 			std::wstring m_objectName;
 
 			void setTopLevelParentRecursively(MWidget*);
 			bool isOpaqueDrawing() const;
-			inline void setWidgetState(unsigned int,bool);
+			inline void setWidgetState(unsigned int, bool on);
+			inline bool testWidgetState(unsigned int) const;
 
 			void createRenderTarget();
 			void destroyWnd();
@@ -216,32 +266,27 @@ namespace MetalBone
 	inline D2D_SIZE_U   MWidget::maxSize()             const          { return D2D1::SizeU(maxWidth,maxHeight); }
 	inline POINT        MWidget::pos()                 const          { POINT p = {x,y}; return p; }
 	inline RECT         MWidget::geometry()            const          { RECT r = {x,y,x+width,y+height}; return r;}
-	inline MWidget*     MWidget::parent()              const          { return m_parent; }
+	inline MWidget*     MWidget::parent()              const          { return m_parent;      }
 	inline unsigned int MWidget::windowFlags()         const          { return m_windowFlags; }
-	inline unsigned int MWidget::attributes()          const          { return m_attributes; }
-	inline const MWidgetList& MWidget::children()      const          { return m_children;}
-	inline MWidget*     MWidget::windowWidget()                       { return m_topLevelParent; }
+	inline unsigned int MWidget::attributes()          const          { return m_attributes;  }
+	inline const MWidgetList& MWidget::children()      const          { return m_children;    }
+	inline FocusPolicy  MWidget::focusPolicy()         const          { return fp;            }
+	inline void         MWidget::setFocusPolicy(FocusPolicy p)        { fp = p;               }
+	inline MToolTip*    MWidget::getToolTip()                         { return m_toolTip;     }
+	inline MCursor*     MWidget::getCursor()                          { return m_cursor;      }
+	inline MWidget*     MWidget::windowWidget()                       { return m_topLevelParent;   }
 	inline void         MWidget::repaint()                            { repaint(0,0,width,height); }
-	inline void         MWidget::setObjectName(const std::wstring& n) { m_objectName = n; }
+	inline unsigned int MWidget::getLastWidgetPseudo() const          { return lastPseudo;         }
+	inline void         MWidget::setObjectName(const std::wstring& n) { m_objectName = n;          }
 	inline bool         MWidget::testAttributes(WidgetAttributes a) const { return (m_attributes & a) != 0; }
+	inline bool         MWidget::testWidgetState(unsigned int s)    const { return (m_widgetState & s) != 0; }
 	inline void MWidget::move(int xpos, int ypos)
-	{
-		if(xpos != x && ypos != y)
-			setGeometry(xpos,ypos,width,height);
-	}
+		{ if(xpos != x && ypos != y) setGeometry(xpos,ypos,width,height); }
 	inline void MWidget::resize(unsigned int w, unsigned int h)
-	{
-		if(w != width && h != height)
-			setGeometry(x,y,w,h);
-	}
+		{ if(w != width && h != height) setGeometry(x,y,w,h); }
 	inline void MWidget::setAttributes(WidgetAttributes attr, bool on)
-	{
-		on ? (m_attributes |= attr) : (m_attributes &= (~attr));
-	}
-
-	inline void MWidget::setWidgetState(unsigned int s,bool on)
-	{
-		on ? (m_widgetState |= s) : (m_widgetState &= (~s));
-	}
+		{ on ? (m_attributes |= attr) : (m_attributes &= (~attr)); }
+	inline void MWidget::setWidgetState(unsigned int s, bool on)
+		{ on ? (m_widgetState |= s) : (m_widgetState &= (~s)); }
 }
 #endif // MWIDGET_H

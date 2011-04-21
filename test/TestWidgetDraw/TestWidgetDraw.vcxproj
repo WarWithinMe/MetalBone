@@ -67,6 +67,7 @@
     <ClCompile Include="..\..\3rd\XUnzip.cpp" />
     <ClCompile Include="..\..\MBGlobal.cpp" />
     <ClCompile Include="..\..\MRegion.cpp" />
+    <ClCompile Include="..\..\MResource.cpp" />
     <ClCompile Include="..\..\MStyleSheet.cpp" />
     <ClCompile Include="..\..\MTimer.cpp" />
     <ClCompile Include="..\..\MWidget.cpp" />
@@ -83,6 +84,7 @@
     <ClInclude Include="..\..\MResource.h" />
     <ClInclude Include="..\..\MStyleSheet.h" />
     <ClInclude Include="..\..\MTimer.h" />
+    <ClInclude Include="..\..\MToolTip.h" />
     <ClInclude Include="..\..\MWidget.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

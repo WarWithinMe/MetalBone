@@ -42,6 +42,9 @@
     <ClCompile Include="..\..\3rd\XUnzip.cpp">
       <Filter>ExternMB\Source\3rd</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\MResource.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\MBGlobal.h">
@@ -76,6 +79,9 @@
     </ClInclude>
     <ClInclude Include="..\..\3rd\ContainersInl.h">
       <Filter>ExternMB\Header\3rd</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MToolTip.h">
+      <Filter>ExternMB\Header</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

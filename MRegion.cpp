@@ -481,10 +481,10 @@ namespace MetalBone
 
 	void MRegion::offset(LONG x, LONG y)
 	{
-		// Remark: In the original version off this region class,
-		// offsetting a region can cause overflow happens.
-		// But I don't think of a example right now. So here I only
-		// offset the region.
+		// In the original version of this region class,
+		// offseting a region can cause overflow happens.
+		// But I don't think this will happen in a normal GUI app.
+		// So, simply ignore the overflow problem.
 		for(YNode* yNode = m_yCoorTree.FindMin(); yNode; yNode = m_yCoorTree.FindNext(*yNode))
 		{
 			yNode->m_Key += y;
