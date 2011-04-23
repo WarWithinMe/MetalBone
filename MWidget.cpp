@@ -14,6 +14,7 @@
 #include <WinError.h>
 #include <WindowsX.h>
 #include <ObjBase.h>
+#include <dwmapi.h>
 
 namespace MetalBone
 {
@@ -34,7 +35,7 @@ namespace MetalBone
 	struct WindowExtras {
 		WindowExtras():m_wndHandle(NULL),m_layeredWndHandle(NULL),
 			m_renderTarget(0),m_rtHook(0),bTrackingMouse(false),
-			widgetUnderMouse(0),lastMouseX(0),lastMouseY(0){}
+			widgetUnderMouse(0),focusedWidget(0),lastMouseX(0),lastMouseY(0){}
 		HWND m_wndHandle;
 		HWND m_layeredWndHandle;
 		ID2D1HwndRenderTarget* m_renderTarget;
@@ -42,6 +43,7 @@ namespace MetalBone
 
 		bool bTrackingMouse;
 		MWidget* widgetUnderMouse;
+		MWidget* focusedWidget;
 		int lastMouseX;
 		int lastMouseY;
 
@@ -95,8 +97,7 @@ namespace MetalBone
 		MApplicationData(bool hwAccelerated):
 				quitOnLastWindowClosed(true),
 				hardwareAccelerated(hwAccelerated),
-				currentToolTip(0),focusedWidget(0)
-		{ instance = this; }
+				currentToolTip(0){ instance = this; }
 		// Window procedure
 		static LRESULT CALLBACK windowProc(HWND, UINT, WPARAM, LPARAM);
 
@@ -123,7 +124,6 @@ namespace MetalBone
 		static void hideToolTip(MToolTip* tooltip = 0);
 		
 		MToolTip* currentToolTip;
-		MWidget* focusedWidget;
 	};
 
 	MApplication::WinProc MApplicationData::customWndProc = 0;
@@ -181,10 +181,11 @@ namespace MetalBone
 
 	void MApplicationData::setFocusWidget(MWidget* w)
 	{
-		MWidget* oldFocus = instance->focusedWidget;
+		WindowExtras* xtr = w->windowWidget()->m_windowExtras;
+		MWidget* oldFocus = xtr->focusedWidget;
 		if(oldFocus == w)
 			return;
-		instance->focusedWidget = w;
+		xtr->focusedWidget = w;
 
 		if(oldFocus != 0) {
 			oldFocus->setWidgetState(MWS_Focused,false);
@@ -197,7 +198,19 @@ namespace MetalBone
 			w->focusEvent();
 		}
 	}
+
+	unsigned int mapKeyState()
+	{
+		unsigned int result = NoModifier;
+		if(::GetKeyState(VK_CONTROL)< 0) result |= CtrlModifier;
+		if(::GetKeyState(VK_SHIFT)  < 0) result |= ShiftModifier;
+		if(::GetKeyState(VK_MENU)   < 0) result |= AltModifier;
+		if(::GetKeyState(VK_LWIN) < 0 ||
+			::GetKeyState(VK_RWIN) < 0)  result |= WinModifier;
+		return result;
+	}
 	
+	void generateStyleFlags(unsigned int flags, DWORD* winStyleOut, DWORD* winExStyleOut);
 	LRESULT MApplicationData::windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	{
 		if(customWndProc)
@@ -218,46 +231,13 @@ namespace MetalBone
 
 		MWidget* window = instance->findWidgetByHandle(hwnd);
 		if(window == 0) return DefWindowProcW(hwnd,msg,wparam,lparam);
+		WindowExtras* xtr = window->m_windowExtras;
 		switch(msg) {
 
-		case WM_CLOSE:
-			{
-				MEvent closeEvent;
-				window->closeEvent(&closeEvent);
-				if(closeEvent.isAccepted()) {
-					if(window->testAttributes(WA_DeleteOnClose))
-						delete window;
-					else
-						window->destroyWnd();
-				}
-			}
-			break;
-		case WM_PAINT:
-			{
-				RECT updateRect;
-				GetUpdateRect(hwnd,&updateRect,false);
-				if(updateRect.right > 1 && updateRect.bottom > 1)
-				{
-					RECT clientRect;
-					GetClientRect(hwnd,&clientRect);
-					// If we have to update the whole window,
-					// we should ignore the update request make by the child widgets.
-					if(memcmp(&updateRect,&clientRect,sizeof(updateRect)) == 0)
-						window->m_windowExtras->clearUpdateQueue();
-
-					window->m_windowExtras->addToRepaintMap(window,
-						updateRect.left,updateRect.right,updateRect.top,updateRect.bottom);
-
-				}
-				window->drawWindow();
-				ValidateRect(hwnd,0);
-			}
-			break;
 		case WM_SETCURSOR:
 			return (LOWORD(lparam) == HTCLIENT) ? TRUE : DefWindowProcW(hwnd,msg,wparam,lparam);
 		case WM_MOUSEHOVER:
 			{
-				WindowExtras* xtr = window->m_windowExtras;
 				if(xtr->widgetUnderMouse != 0)
 				{
 					MToolTip* tip = xtr->widgetUnderMouse->getToolTip();
@@ -270,11 +250,6 @@ namespace MetalBone
 				}
 				xtr->bTrackingMouse = false;
 			}
-			break;
-		case WM_MOUSELEAVE:
-			if(window->m_windowExtras->bTrackingMouse)
-				SendMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(-1,-1));
-			window->m_windowExtras->bTrackingMouse = false;
 			break;
 		case WM_MOUSEMOVE:
 			{
@@ -289,7 +264,6 @@ namespace MetalBone
 					window->m_windowExtras->bTrackingMouse = true;
 				}
 
-				WindowExtras* xtr = window->m_windowExtras;
 				int xpos = xtr->lastMouseX = GET_X_LPARAM(lparam);
 				int ypos = xtr->lastMouseY = GET_Y_LPARAM(lparam);
 
@@ -351,6 +325,133 @@ namespace MetalBone
 					hideToolTip();
 			}
 			break;
+		case WM_SYSKEYDOWN:
+		case WM_KEYDOWN:
+			{
+				// When we press down keys, we need to check the shortcut first.
+				std::vector<MShortCut*> scs = MShortCut::getMachedShortCuts(mapKeyState(),wparam);
+				MWidget* fw = xtr->focusedWidget;
+				if(fw == 0) fw = window;
+				MShortCut* invoker = 0;
+				for(int i = scs.size() - 1; i>=0; --i) {
+					MShortCut* sc = scs.at(i);
+					if(sc->getTarget() == fw) {
+						invoker = sc;
+						break;
+					}
+				}
+				bool accepted = false;
+				if(!invoker)
+				{
+					while(fw != 0 && !accepted) {
+						if(fw->focusPolicy() != NoFocus)
+						{
+							// We don't check the modifiers when receive keyup event.
+							// But we still want to know if the key is in the keypad.
+							unsigned int mod = (wparam > VK_NUMPAD0 && wparam < VK_DIVIDE) ?
+									KeypadModifier : NoModifier;
+							mod |= mapKeyState();
+							MKeyEvent ev(wparam,mod);
+							fw->keyPressEvent(&ev);
+							accepted = ev.isAccepted();
+						}
+						fw = fw->m_parent;
+					}
+				}
+				if(!accepted) {
+					if(!invoker) {
+						for(int i = scs.size() - 1; i>=0; --i) {
+							MShortCut* sc = scs.at(i);
+							if(sc->getTarget() == window) {
+								invoker = sc;
+								break;
+							}
+						}
+					}
+					if(!invoker) {
+						for(int i = scs.size() - 1; i>=0; --i) {
+							MShortCut* sc = scs.at(i);
+							if(sc->getTarget() == 0) {
+								invoker = sc;
+								break;
+							}
+						}
+					}
+				}
+				if(invoker)
+				{
+#ifdef METALBONE_USE_SIGSLOT
+					invoker->invoked.emit();
+#else
+					invoker->invoked();
+#endif
+				}
+			}
+			if(msg == WM_SYSKEYDOWN)
+				return DefWindowProcW(hwnd,msg,wparam,lparam);
+			break;
+		case WM_KEYUP:
+			{
+				MWidget* fw = xtr->focusedWidget;
+				if(fw == 0) fw = window;
+				while(fw != 0)
+				{
+					if(fw->focusPolicy() != NoFocus)
+					{
+						// We don't check the modifiers when receive keyup event.
+						// But we still want to know if the key is in the keypad.
+						KeyboardModifier mod = (wparam > VK_NUMPAD0 && wparam < VK_DIVIDE) ?
+							KeypadModifier : NoModifier;
+						MKeyEvent ev(wparam,mod);
+						fw->keyUpEvent(&ev);
+						if(ev.isAccepted())
+							break;
+					}
+					fw = fw->m_parent;
+				}
+			}
+			break;
+		case WM_CHAR:
+		case WM_SYSCHAR:
+			{
+				MWidget* fw = xtr->focusedWidget;
+				if(fw == 0) fw = window;
+				while(fw != 0)
+				{
+					if(fw->focusPolicy() != NoFocus)
+					{
+						MCharEvent ev(wparam);
+						fw->charEvent(&ev);
+						if(ev.isAccepted())
+							break;
+					}
+					fw = fw->m_parent;
+				}
+				if(msg == WM_SYSCHAR)
+					return DefWindowProcW(hwnd,msg,wparam,lparam);
+			}
+			break;
+		case WM_PAINT:
+			{
+				RECT updateRect;
+				GetUpdateRect(hwnd,&updateRect,false);
+				if(updateRect.right > 1 && updateRect.bottom > 1)
+				{
+					RECT clientRect;
+					GetClientRect(hwnd,&clientRect);
+					// If we have to update the whole window,
+					// we should ignore the update request make by the child widgets.
+					if(memcmp(&updateRect,&clientRect,sizeof(updateRect)) == 0)
+						window->m_windowExtras->clearUpdateQueue();
+
+					window->m_windowExtras->addToRepaintMap(window,
+						updateRect.left,updateRect.right,updateRect.top,updateRect.bottom);
+
+				}
+				window->drawWindow();
+				ValidateRect(hwnd,0);
+			}
+			break;
 		case WM_LBUTTONDOWN:
 		case WM_RBUTTONDOWN:
 		case WM_MBUTTONDOWN:
@@ -359,13 +460,14 @@ namespace MetalBone
 				int xpos = GET_X_LPARAM(lparam);
 				int ypos = GET_Y_LPARAM(lparam);
 				MWidget* cw = 0;
-				WindowExtras* xtr = window->m_windowExtras;
 				if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
 					SendMessage(hwnd,WM_MOUSEMOVE,wparam,lparam);
 				
 				cw = xtr->widgetUnderMouse;
 				if(cw != 0)
 				{
+					if(cw->focusPolicy() == ClickFocus)
+						cw->setFocus();
 					MouseButton btn = (msg == WM_LBUTTONDOWN ? LeftButton :
 						(msg == WM_RBUTTONDOWN ? RightButton : MiddleButton));
 					if(btn == LeftButton)
@@ -407,7 +509,6 @@ namespace MetalBone
 				int xpos = GET_X_LPARAM(lparam);
 				int ypos = GET_Y_LPARAM(lparam);
 				MWidget* cw = 0;
-				WindowExtras* xtr = window->m_windowExtras;
 				if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
 					SendMessage(hwnd,WM_MOUSEMOVE,wparam,lparam);
 
@@ -445,7 +546,6 @@ namespace MetalBone
 				int xpos = GET_X_LPARAM(lparam);
 				int ypos = GET_Y_LPARAM(lparam);
 				MWidget* cw = 0;
-				WindowExtras* xtr = window->m_windowExtras;
 				if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
 					SendMessage(hwnd,WM_MOUSEMOVE,wparam,lparam);
 
@@ -471,6 +571,80 @@ namespace MetalBone
 					} while (cw && !me.isAccepted() &&
 						cw->testAttributes(WA_NoMousePropagation));
 				}
+			}
+			break;
+		case WM_MOUSELEAVE:
+			if(window->m_windowExtras->bTrackingMouse)
+				SendMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(-1,-1));
+			window->m_windowExtras->bTrackingMouse = false;
+			break;
+		case WM_CLOSE:
+			{
+				MEvent closeEvent;
+				window->closeEvent(&closeEvent);
+				if(closeEvent.isAccepted()) {
+					if(window->testAttributes(WA_DeleteOnClose))
+						delete window;
+					else
+						window->destroyWnd();
+				}
+			}
+			break;
+		case WM_MOVE:
+			window->x = LOWORD(lparam);
+			window->y = HIWORD(lparam);
+			break;
+		case WM_SIZE:
+			if(wparam == SIZE_MAXIMIZED)
+				window->m_windowState = WindowMaximized;
+			else if(wparam == SIZE_MINIMIZED)
+				window->m_windowState = WindowMinimized;
+			window->width = LOWORD(lparam);
+			window->height = HIWORD(lparam);
+			xtr->m_renderTarget->Resize(D2D1::SizeU(LOWORD(lparam),HIWORD(lparam)));
+			break;
+		case WM_NCHITTEST:
+			{
+				LRESULT result;
+				if(!::DwmDefWindowProc(hwnd,msg,wparam,lparam, &result))
+					result = DefWindowProcW(hwnd,msg,wparam,lparam);
+				switch(result)
+				{
+					case HTTOP:
+					case HTBOTTOM:
+						if(window->maxHeight == window->minHeight)
+							return HTBORDER;
+					case HTLEFT:
+					case HTRIGHT:
+						if(window->maxWidth == window->maxHeight)
+							return HTBORDER;
+					case HTBOTTOMLEFT:
+					case HTBOTTOMRIGHT:
+					case HTTOPLEFT:
+					case HTTOPRIGHT:
+						if(window->maxHeight == window->minHeight ||
+							window->maxWidth == window->maxHeight)
+							return HTBORDER;
+					default: return result;
+				}
+			}
+			
+		case WM_GETMINMAXINFO:
+			{
+				DWORD winStyle    = 0;
+				DWORD winExStyle  = 0;
+				// We don't set parent of layered window.
+				RECT rect = {0,0,window->width,window->height};
+				generateStyleFlags(window->m_windowFlags,&winStyle,&winExStyle);
+				AdjustWindowRectEx(&rect,winStyle,false,winExStyle);
+				int dx = rect.right - rect.left - window->width;
+				int dy = rect.bottom - rect.top - window->height;
+
+				MINMAXINFO* info = (MINMAXINFO*)lparam;
+				info->ptMaxTrackSize.x = window->maxWidth + dx;
+				info->ptMaxTrackSize.y = window->maxHeight + dy;
+				info->ptMinTrackSize.x = window->minWidth + dx;
+				info->ptMinTrackSize.y = window->maxHeight + dy;
 			}
 			break;
 
@@ -560,8 +734,23 @@ namespace MetalBone
 			if(result == -1) // GetMessage ³ö´í
 				break;
 
-			TranslateMessage(&msg);
-			DispatchMessageW(&msg);
+			if(msg.message == WM_HOTKEY)
+			{
+				std::vector<MShortCut*> scs = MShortCut::getMachedShortCuts(
+					LOWORD(msg.lParam),HIWORD(msg.lParam));
+				for(int i = scs.size() - 1; i >= 0; --i)
+				{
+#ifdef METALBONE_USE_SIGSLOT
+					scs.at(i)->invoked.emit();
+#else
+					scs.at(i)->invoked();
+#endif
+				}
+			} else
+			{
+				TranslateMessage(&msg);
+				DispatchMessageW(&msg);
+			}
 		}
 
 #ifdef METALBONE_USE_SIGSLOT
@@ -659,6 +848,18 @@ namespace MetalBone
 
 	MWidget::~MWidget()
 	{
+		if(m_topLevelParent->m_windowExtras->focusedWidget == this)
+			m_topLevelParent->m_windowExtras->focusedWidget = 0;
+
+		// Delete children
+		MWidgetList::iterator iter    = m_children.begin();
+		MWidgetList::iterator iterEnd = m_children.end();
+		while(iter != iterEnd) {
+			delete (*iter);
+			iter = m_children.begin();
+		}
+
+		// After setting the parent, the m_topLevelParent will change.
 		if(m_parent != 0)
 			setParent(0);
 
@@ -668,19 +869,10 @@ namespace MetalBone
 			delete m_toolTip;
 		}
 		delete m_cursor;
-		if(MApplicationData::instance->focusedWidget == this)
-			MApplicationData::instance->focusedWidget = 0;
 
 		mApp->getStyleSheet()->setWidgetSS(this,std::wstring());
 		mApp->getStyleSheet()->removeCache(this);
 
-		// Delete children
-		MWidgetList::iterator iter    = m_children.begin();
-		MWidgetList::iterator iterEnd = m_children.end();
-		while(iter != iterEnd) {
-			delete (*iter);
-			iter = m_children.begin();
-		}
 
 		// Destroy window
 		if(hasWindow())

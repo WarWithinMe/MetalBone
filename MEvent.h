@@ -51,6 +51,36 @@ namespace MetalBone
 			int ix,iy,igx,igy;
 			MouseButton btn;
 	};
+	
+	enum KeyboardModifier
+	{
+		NoModifier     = 0,
+		AltModifier    = MOD_ALT,
+		ShiftModifier  = MOD_SHIFT,
+		CtrlModifier   = MOD_CONTROL,
+		WinModifier    = MOD_WIN,
+		KeypadModifier = 0x80
+	};
+
+	class MKeyEvent : public MEvent
+	{
+		public:
+			inline MKeyEvent(unsigned int vk, unsigned int modifiers = NoModifier);
+			inline unsigned int getModifier() const;
+			inline unsigned int getVirtualKey() const;
+		private:
+			unsigned int virtualKey;
+			unsigned int modifiers;
+	};
+
+	class MCharEvent : public MEvent
+	{
+		public:
+			inline MCharEvent(unsigned int ch);
+			inline unsigned int getChar() const;
+		private:
+			unsigned int ch;
+	};
 
 	inline MEvent::MEvent(bool a):accepted(a){}
 	inline MEvent::~MEvent(){}
@@ -71,5 +101,12 @@ namespace MetalBone
 	inline MouseButton MMouseEvent::button() const { return btn; }
 	inline void MMouseEvent::offsetPos(int x,int y)
 		{ ix += x; iy += y; }
+
+	inline MKeyEvent::MKeyEvent(unsigned int vk, unsigned int m):virtualKey(vk),modifiers(m){}
+	inline unsigned int MKeyEvent::getVirtualKey() const { return virtualKey; }
+	inline unsigned int MKeyEvent::getModifier()   const { return modifiers; }
+
+	inline MCharEvent::MCharEvent(unsigned int c):ch(c){}
+	inline unsigned int MCharEvent::getChar() const { return ch; }
 }
 #endif // MEVENT_H

@@ -1,7 +1,7 @@
 #include "MBGlobal.h"
 #include "MApplication.h"
 #include "MWidget.h"
-#include "MTimer.h"
+#include "MResource.h"
 #include "MEvent.h"
 
 #include "vld.h"
@@ -38,6 +38,8 @@ struct TestWidgetController : public has_slots
 	void createWidgets();
 
 	void updateC10();
+	void globalShortCut() { OutputDebugStringW(L"Global ShortCut."); }
+	void localShortCut() { OutputDebugStringW(L"Local ShortCut."); }
 
 	enum WidgetIndex
 	{
@@ -125,7 +127,16 @@ void TestWidgetController::createWidgets()
 	c10->setGeometry(50,50,80,30);
 	c10->setParent(c1);
 	c10->show();
+	c10->setFocusPolicy(ClickFocus);
 	allWidgets.push_back(c10);
+	MShortCut* sc = new MShortCut(WinModifier | CtrlModifier , 0x53, 0, true);
+	MShortCut* sc2= new MShortCut(CtrlModifier | NoModifier, 0x53, c10, false);
+	MShortCut* sc3= new MShortCut(CtrlModifier | NoModifier, 0x44, 0, false);
+	sc->invoked.connect(this,&TestWidgetController::globalShortCut);
+	sc2->invoked.connect(this,&TestWidgetController::localShortCut);
+	sc3->invoked.connect(this,&TestWidgetController::localShortCut);
 
+	mainWindow->setMaximumSize(500,500);
+	mainWindow->setMinimumSize(500,500);
 	mainWindow->show();
 }

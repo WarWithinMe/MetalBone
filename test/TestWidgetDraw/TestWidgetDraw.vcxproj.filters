@@ -30,9 +30,6 @@
     <ClCompile Include="main.cpp">
       <Filter>Source</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\MTimer.cpp">
-      <Filter>ExternMB\Source</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\MStyleSheet.cpp">
       <Filter>ExternMB\Source</Filter>
     </ClCompile>
@@ -66,9 +63,6 @@
       <Filter>ExternMB\Header</Filter>
     </ClInclude>
     <ClInclude Include="..\..\MStyleSheet.h">
-      <Filter>ExternMB\Header</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\MTimer.h">
       <Filter>ExternMB\Header</Filter>
     </ClInclude>
     <ClInclude Include="..\..\MWidget.h">

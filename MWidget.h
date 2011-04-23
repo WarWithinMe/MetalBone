@@ -75,6 +75,8 @@ namespace MetalBone
 	class MEvent;
 	class MPaintEvent;
 	class MMouseEvent;
+	class MKeyEvent;
+	class MCharEvent;
 	class MStyleSheetStyle;
 	class MWidget;
 	class MRegion;
@@ -209,6 +211,9 @@ namespace MetalBone
 			virtual void mousePressEvent(MMouseEvent*)  {}
 			virtual void mouseReleaseEvent(MMouseEvent*){}
 			virtual void mouseDClickEvent(MMouseEvent*) {}
+			virtual void keyPressEvent(MKeyEvent*)      {}
+			virtual void keyUpEvent(MKeyEvent*)         {}
+			virtual void charEvent(MCharEvent*)         {}
 
 		private:
 			MWidget* m_parent;
