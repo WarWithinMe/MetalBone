@@ -62,6 +62,8 @@ namespace MetalBone
 			ID2D1Factory* getD2D1Factory();
 			IWICImagingFactory* getWICImagingFactory();
 
+			inline unsigned int winDpi() const;
+
 #ifdef METALBONE_USE_SIGSLOT
 			Signal0 aboutToQuit;		// 当MApplication退出Message Loop的时候发送aboutToQuit信号
 #else
@@ -76,6 +78,7 @@ namespace MetalBone
 		private:
 			static MApplication* s_instance;
 			MApplicationData* mImpl;
+			unsigned int windowsDPI;
 			friend class MWidget;
 	};
 
@@ -86,6 +89,7 @@ namespace MetalBone
 
 	inline MApplication* MApplication::instance()	{ return s_instance; }
 	inline void MApplication::exit(int ret)			{ PostQuitMessage(ret); }
+	inline unsigned int MApplication::winDpi() const { return windowsDPI; }
 }
 
 #endif // GUI_MAPPLICATION_H

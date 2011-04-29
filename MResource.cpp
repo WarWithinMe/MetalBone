@@ -3,6 +3,137 @@
 #include "3rd/XUnzip.h"
 namespace MetalBone
 {
+	// ========== MFont ==========
+	struct MFontData
+	{
+		enum FontStyle
+		{
+			None      = 0,
+			Bold      = 0x1,
+			Italic    = 0x2
+		};
+		inline MFontData();
+		inline ~MFontData();
+
+		HFONT fontHandle;
+		int refCount;
+		unsigned int ptSize;
+		unsigned int style;
+
+		typedef std::tr1::unordered_multimap<std::wstring, MFont> FontCache;
+		static FontCache cache;
+	};
+	inline MFontData::MFontData():fontHandle(NULL),refCount(0),style(None),ptSize(9){}
+	inline MFontData::~MFontData(){ if(fontHandle != NULL) ::DeleteObject(fontHandle); }
+	MFontData::FontCache MFontData::cache;
+	
+	MFont::~MFont()
+	{
+		--data->refCount;
+		if(data->refCount == 0)
+			delete data;
+	}
+
+	MFont::MFont()
+	{
+		static bool inited = false;
+		static MFontData defaultData;
+		if(inited == false)
+		{
+			LOGFONTW lf;
+			memset(&lf,0,sizeof(LOGFONTW));
+			lf.lfHeight = mApp->winDpi() / 72 * 9;
+			lf.lfWeight = FW_NORMAL;
+			lf.lfQuality = ANTIALIASED_QUALITY;
+			wcscpy(lf.lfFaceName,L"Arial");
+			defaultData.fontHandle = ::CreateFontIndirectW(&lf);
+			defaultData.refCount = 1;
+			inited = true;
+		}
+
+		data = &defaultData;
+		++defaultData.refCount;
+	}
+
+	MFont::MFont(const LOGFONTW& lf)
+	{
+		data = new MFontData();
+		data->refCount = 1;
+		data->fontHandle = ::CreateFontIndirectW(&lf);
+	}
+
+	MFont::MFont(const MFont& rhs)
+	{
+		data = rhs.data;
+		++data->refCount;
+	}
+
+	MFont::MFont(unsigned int size, const std::wstring& faceName,
+		bool bold, bool italic, bool pixelUnit)
+	{
+		// Search for sharing.
+		unsigned int style = bold ? MFontData::Bold : MFontData::None;
+		if(italic)
+			style |= MFontData::Italic;
+		unsigned int ptSize = pixelUnit ? size * mApp->winDpi() / 72 : size;
+		std::pair<MFontData::FontCache::iterator, MFontData::FontCache::iterator>
+			cIts = MFontData::cache.equal_range(faceName);
+		MFontData::FontCache::iterator& it = cIts.first;
+		while(it != cIts.second)
+		{
+			MFontData* d = it->second.data;
+			if(d->style == style && d->ptSize == ptSize)
+			{
+				data = d;
+				++data->refCount;
+				return;
+			}
+			++it;
+		}
+
+		data = new MFontData();
+		data->style = style;
+		LOGFONTW lf;
+		memset(&lf,0,sizeof(LOGFONTW));
+		lf.lfHeight = 0 - (pixelUnit ? size : size * mApp->winDpi() / 72);
+		lf.lfWeight = FW_NORMAL;
+		lf.lfWeight = bold ? FW_BOLD : FW_NORMAL;
+		lf.lfItalic = italic ? TRUE : FALSE;
+		lf.lfQuality = ANTIALIASED_QUALITY;
+		lf.lfPitchAndFamily = DEFAULT_PITCH;
+		wcscpy_s(lf.lfFaceName, faceName.c_str());
+		data->fontHandle = ::CreateFontIndirectW(&lf);
+		data->refCount = 1;
+		data->ptSize = ptSize;
+		data->style = style;
+
+		MFontData::cache.insert(MFontData::FontCache::value_type(faceName,*this));
+	}
+
+	HFONT MFont::getHandle()
+		{ return data->fontHandle; }
+	bool MFont::isBold() const
+		{ return (data->style & MFontData::Bold)   != 0; }
+	bool MFont::isItalic() const
+		{ return (data->style & MFontData::Italic) != 0; }
+
+	const MFont& MFont::operator=(const MFont& rhs)
+	{
+		--data->refCount;
+		if(data->refCount == 0)
+			delete data;
+		data = rhs.data;
+		++data->refCount;
+		return *this;
+	}
+
+	MFont::operator HFONT() const
+		{ return data->fontHandle; }
+
+
+
+
+
 	// ========== MCursor ==========
 	MCursor* MCursor::appCursor = 0;
 	const MCursor* MCursor::showingCursor = 0;
@@ -219,8 +350,7 @@ namespace MetalBone
 			if(modifier == 0 || virtualKey == 0)
 				return;
 			unsigned int mod = modifier & (~KeypadModifier) | MOD_NOREPEAT;
-			bool r = ::RegisterHotKey(0,getKey(),mod,virtualKey);
-			bool check = r;
+			::RegisterHotKey(0,getKey(),mod,virtualKey);
 		} else {
 			::UnregisterHotKey(0,getKey());
 		}

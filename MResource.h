@@ -3,12 +3,39 @@
 #include "MBGlobal.h"
 #include "MApplication.h"
 
+#include <D2d1helper.h>
 #include <Windows.h>
 #include <string>
 #include <unordered_map>
 
 namespace MetalBone
 {
+	struct MFontData;
+	// A wrapper class for HFONT
+	class MFont
+	{
+		public:
+			~MFont();
+			MFont();
+			MFont(const MFont&);
+			explicit MFont(const LOGFONTW&);
+
+			MFont(unsigned int size, const std::wstring& faceName,
+				bool bold = false, bool italic = false,
+				bool pixelUnit = true);
+
+			HFONT getHandle();
+			bool isBold()   const;
+			bool isItalic() const;
+
+			operator HFONT() const;
+			const MFont& operator=(const MFont&);
+		private:
+			MFontData* data;
+	};
+
+
+
 	class MCursor
 	{
 		public:
@@ -140,7 +167,8 @@ namespace MetalBone
 #endif
 		private:
 			const BYTE* buffer;
-			DWORD       size;
+			unsigned int size;
+
 
 			struct ResourceEntry
 			{
@@ -204,6 +232,87 @@ namespace MetalBone
 			inline unsigned int getKey();
 
 	};
+
+
+
+	// A class for storing ARGB(0xAARRGGBB) color value.
+	class MColor
+	{
+		public:
+			inline MColor();
+			inline explicit MColor(unsigned int argb);
+			inline MColor(const MColor&);
+
+			inline void setRed  (BYTE red);
+			inline void setGreen(BYTE green);
+			inline void setBlue (BYTE blue);
+			inline void setAlpha(BYTE alpha);
+
+			inline BYTE getRed()   const;
+			inline BYTE getGreen() const;
+			inline BYTE getBlue()  const;
+			inline BYTE getAlpha() const;
+			inline bool isTransparent() const;
+
+			inline unsigned int getARGB() const;
+			inline unsigned int getRGB()  const;
+			inline COLORREF getCOLORREF() const;
+
+// 			inline static MColor fromRGBA(unsigned int);
+			inline static MColor fromCOLORREF(COLORREF color, BYTE alpha);
+
+			inline const MColor& operator=(const MColor&);
+			inline bool operator==(const MColor&) const;
+
+			inline operator D2D1_COLOR_F() const;
+		private:
+			unsigned int argb;
+	};
+
+
+// 	inline MColor MColor::fromRGBA(unsigned int rgba)
+// 		{ return MColor(((rgba & 0xFF) << 24) | (rgba & 0xFFFFFF)); }
+	inline MColor MColor::fromCOLORREF(COLORREF color, BYTE alpha)
+	{
+		unsigned int argb = alpha;
+		argb = argb << 24 | ((color & 0xFF) << 16) | (color & 0xFF00) | (color >> 16) & 0xFF;
+		return MColor(argb);
+	}
+	inline COLORREF MColor::getCOLORREF() const // ColorRef is bgr format.
+		{ return ((argb & 0xFF) << 16) | (argb & 0xFF00) | (argb >> 16 & 0xFF); }
+	inline MColor::MColor():argb(0xFF000000){}
+	inline MColor::MColor(unsigned int c):argb(c){}
+	inline MColor::MColor(const MColor& rhs):argb(rhs.argb){}
+	inline void MColor::setRed(BYTE red)
+		{ argb = argb & 0xFF00FFFF | (red << 16); }
+	inline void MColor::setGreen(BYTE green)
+		{ argb = argb & 0xFFFF00FF | (green << 8); }
+	inline void MColor::setBlue(BYTE blue)
+		{ argb = argb & 0xFFFFFF00 | blue; }
+	inline void MColor::setAlpha(BYTE alpha)
+		{ argb = argb & 0xFFFFFF | (alpha << 24); }
+	inline BYTE MColor::getRed() const
+		{ return BYTE(argb >> 16); }
+	inline BYTE MColor::getGreen() const
+		{ return BYTE(argb >> 8); }
+	inline BYTE MColor::getBlue() const
+		{ return (BYTE)argb; }
+	inline BYTE MColor::getAlpha() const
+		{ return BYTE(argb >> 24); }
+	inline bool MColor::isTransparent() const
+		{ return argb <= 0x00FFFFFF; }
+	inline const MColor& MColor::operator=(const MColor& rhs)
+		{ argb = rhs.argb; return *this; }
+	inline bool MColor::operator==(const MColor& rhs) const
+		{ return argb == rhs.argb; }
+	inline unsigned int MColor::getARGB() const
+		{ return argb; }
+	inline unsigned int MColor::getRGB() const
+		{ return argb & 0xFFFFFF; }
+	inline MColor::operator D2D1_COLOR_F() const
+		{ return D2D1::ColorF(argb & 0xFFFFFF, float(argb >> 24 & 0xFF) / 255); }
+
+
 
 	MShortCut::MShortCut():modifier(0),virtualKey(0),target(0),global(false),enabled(false){}
 	MShortCut::MShortCut(unsigned int m, unsigned int vk, MWidget* t, bool g):
@@ -277,4 +386,13 @@ namespace MetalBone
 	inline void MTimer::start(unsigned int msec)
 		{ m_interval = msec; start(); }
 }
+
+
+template<>
+class std::tr1::hash<MColor>
+{
+	public:
+		size_t operator()(const MColor& color) const
+			{ return std::tr1::hash<unsigned int>().operator()(color.getARGB()); }
+};
 #endif // MRESOURCE_H

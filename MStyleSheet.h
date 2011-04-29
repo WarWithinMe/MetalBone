@@ -67,11 +67,10 @@ namespace MetalBone
 
 			PT_Cursor,
 
-			PT_Color,                  PT_Font,                       PT_FontFamily,
-			PT_FontSize,               PT_FontStyle,                  PT_FontWeight,
-			PT_TextAlignment,          PT_TextDecoration,             PT_TextIndent,
-			PT_TextOverflow,           PT_TextUnderlineStyle,         PT_TextOutline,
-			PT_TextShadow,
+			PT_Font,                   PT_FontSize,                   PT_FontStyle,
+			PT_FontWeight,             PT_Color,
+			PT_TextAlignment,          PT_TextDecoration,             PT_TextOverflow,
+			PT_TextUnderlineStyle,     PT_TextOutline,                PT_TextShadow,
 
 			knownPropertyCount
 		};
@@ -140,7 +139,8 @@ namespace MetalBone
 				inline operator bool() const;
 				inline bool isValid() const;
 				bool opaqueBackground() const;
-				void draw(ID2D1RenderTarget*,const RECT& widgetRectInRT, const RECT& clipRectInRT);
+				void draw(ID2D1RenderTarget*,const RECT& widgetRectInRT, const RECT& clipRectInRT,
+					 const std::wstring& text = std::wstring());
 				inline bool operator==(const RenderRule&) const;
 				inline bool operator!=(const RenderRule&) const;
 			private:
@@ -156,16 +156,28 @@ namespace MetalBone
 	class MStyleSheetStyle
 	{
 		public:
+			enum TextRenderer
+			{
+				Gdi,
+				Direct2D,
+				AutoDetermine
+			};
 			MStyleSheetStyle();
 			~MStyleSheetStyle();
 			void setAppSS(const std::wstring& css);
 			void setWidgetSS(MWidget* w, const std::wstring& css);
 			void polish(MWidget* w);
-			void draw(MWidget* w,ID2D1RenderTarget* rt, const RECT& widgetRectInRT, const RECT& clipRectInRT);
+			// clipRect should be equal to or inside the widgetRect.
+			void draw(MWidget* w,ID2D1RenderTarget* rt, const RECT& widgetRectInRT, const RECT& clipRectInRT,
+					const std::wstring& text = std::wstring());
 			void removeCache(MWidget* w);
 			CSS::RenderRule getRenderRule(MWidget* w, unsigned int p = CSS::PC_Default);
 			// Check if the widget needs to be unpdated.
 			void updateWidgetAppearance(MWidget*);
+
+			// One should set the TextRender BEFORE creating MStyleSheetStyle.
+			static void setTextRenderer(TextRenderer);
+			static TextRenderer getTextRenderer();
 		private:
 			MSSSPrivate* mImpl;
 	};

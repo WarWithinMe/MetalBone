@@ -12,6 +12,7 @@
 #include <sstream>
 #include <list>
 #include <map>
+#include <GdiPlus.h>
 
 namespace MetalBone
 {
@@ -20,7 +21,8 @@ namespace MetalBone
 	{
 		struct CssValue
 		{
-			enum  Type    { Unknown, Number, Length, Identifier, Uri, Color };
+			// Color store inside CssValue is ARGB format. (The same as MColor)
+			enum  Type    { Unknown, Number, Length, Identifier, Uri, Color, String};
 			union Variant
 			{
 				int           vint;
@@ -35,8 +37,8 @@ namespace MetalBone
 			inline CssValue(const CssValue&);
 			explicit inline CssValue(Type t = Unknown);
 
-			inline D2D_COLOR_F getColor();
-			static inline D2D1_COLOR_F getColor(unsigned int);
+			inline MColor getColor() const;
+ 
 			inline const CssValue& operator=(const CssValue&);
 		};
 
@@ -45,13 +47,8 @@ namespace MetalBone
 			{ data.vint = 0; }
 		inline const CssValue& CssValue::operator=(const CssValue& rhs)
 			{ type = rhs.type; data = rhs.data; return *this; }
-		inline D2D_COLOR_F CssValue::getColor()
-		{
-			M_ASSERT(type == Color);
-			return D2D1::ColorF((data.vint >> 8) & 0xFFFFFF, float(data.vint & 0xFF) / 255);
-		}
-		inline D2D_COLOR_F CssValue::getColor(unsigned int color)
-		{ return D2D1::ColorF((color >> 8) & 0xFFFFFF, float(color & 0xFF) / 255); }
+		inline MColor CssValue::getColor() const
+			{ M_ASSERT(type == Color); return MColor(data.vuint); }
 
 		typedef std::vector<CssValue> CssValueArray;
 
@@ -186,7 +183,6 @@ namespace MetalBone
 		{ L"color",                      PT_Color                   },
 		{ L"cursor",                     PT_Cursor                  },
 		{ L"font",                       PT_Font                    },
-		{ L"font-family",                PT_FontFamily              },
 		{ L"font-size",                  PT_FontSize                },
 		{ L"font-style",                 PT_FontStyle               },
 		{ L"font-weight",                PT_FontWeight              },
@@ -208,14 +204,12 @@ namespace MetalBone
 		{ L"padding-top",                PT_PaddingTop              },
 		{ L"text-align",                 PT_TextAlignment           },
 		{ L"text-decoration",            PT_TextDecoration          },
-		{ L"text-indent",                PT_TextIndent              },
 		{ L"text-outline",               PT_TextOutline             },
 		{ L"text-overflow",              PT_TextOverflow            },
 		{ L"text-shadow",                PT_TextShadow              },
 		{ L"text-underline-style",       PT_TextUnderlineStyle      },
 		{ L"width",                      PT_Width                   }
 	};
-
 	static const CSSValuePair knownValues[KnownValueCount - 1] = {
 		{ L"bold",         Value_Bold        },
 		{ L"border",       Value_Border      },
@@ -261,6 +255,7 @@ namespace MetalBone
 		{ L"transparent",  Value_Transparent },
 		{ L"true",         Value_True        },
 		{ L"underline",    Value_Underline   },
+		{ L"up-arrow",     Value_UpArrow     },
 		{ L"wait",         Value_Wait        },
 		{ L"wave",         Value_Wave        },
 		{ L"wrap",         Value_Wrap        },
@@ -346,8 +341,13 @@ namespace MetalBone
 		for(int i = 0; i< length; ++i) {
 			// We cannot delete the String in the ~CssValue();
 			// Because the String are intended to share among CssValues.
-			if(values.at(i).type == CssValue::Uri)
-				delete values.at(i).data.vstring;
+			switch(values.at(i).type)
+			{
+				case CssValue::Uri:
+				case CssValue::String:
+					delete values.at(i).data.vstring;
+				default: break;
+			}
 		}
 	}
 
@@ -696,15 +696,17 @@ namespace MetalBone
 	// Border-image:    none | Url Number{4} (stretch | repeat){0,2}
 						// should be used as background & don't have to specify border width
 	// Color:           #rrggbb rgba(255,0,0,0) transparent
+
 	// Font:            (FontStyle | FontWeight){0,2} Length String
 	// FontStyle:       normal | italic | oblique
 	// FontWeight:      normal | bold
-	// Margin:          Length{1,4}
 	// Text-align:      Alignment;
 	// Text-decoration: none | underline | overline | line-through
 	// Text-overflow:   clip | ellipsis | wrap
 	// Text-Shadow:     h-shadow v-shadow blur Color;
 	// Text-underline-style: LineStyle
+
+	// Margin:          Length{1,4}
 	// Brush:           Color | Gradient
 	// Gradient:
 	// Repeat:          repeat | repeat-x | repeat-y | no-repeat
@@ -718,37 +720,37 @@ namespace MetalBone
 		std::wstring buffer;
 		CssValue value;
 		int maxIndex = index + length - 1;
+		int bufferLength = 0;
 		while(index <= maxIndex)
 		{
 			wchar_t byte = css.at(index);
 			if(iswspace(byte) || index == maxIndex)
 			{
-				if(index == maxIndex)
-					buffer.append(1,byte);
+				if(index == maxIndex) {
+					++index;
+					++bufferLength;
+				}
+
+				buffer.assign(css,index - bufferLength,bufferLength);
 
 				if(!buffer.empty())
 				{
 					if(buffer.at(buffer.size() - 1) == L'x' && buffer.at(buffer.size() - 2) == L'p') // Length
 					{
-						value = CssValue();
 						value.type = CssValue::Length;
 						buffer.erase(buffer.size() - 2, 2);
 						value.data.vint = _wtoi(buffer.c_str());
 						values.push_back(value);
-						buffer.clear();
 					} else if(iswdigit(buffer.at(0)) || buffer.at(0) == L'-') // Number
 					{
-						value = CssValue();
 						value.type = CssValue::Number;
 						value.data.vint = _wtoi(buffer.c_str());
 						values.push_back(value);
-						buffer.clear();
-					} else // Identifier
+					} else // Identifier or String
 					{
 						const CSSValuePair* crItem = findCSSValue(buffer,knownValues,KnownValueCount - 1);
 						if(crItem != 0)
 						{
-							value = CssValue();
 							if(crItem->value == Value_Transparent)
 							{
 								value.type = CssValue::Color;
@@ -757,12 +759,18 @@ namespace MetalBone
 								value.type = CssValue::Identifier;
 								value.data.videntifier = static_cast<ValueType>(crItem->value);
 							}
-							values.push_back(value);
-							buffer.clear();
+						} else // Treat it as string
+						{
+							value.type = CssValue::String;
+							value.data.vstring = new std::wstring(buffer);
 						}
+						values.push_back(value);
 					}
+
+					buffer.clear();
+					bufferLength = 0;
 				}
-			}else if(byte == L'#') // Hex Color
+			} else if(byte == L'#') // Hex Color
 			{
 				++index;
 				byte = css.at(index);
@@ -778,78 +786,83 @@ namespace MetalBone
 					}else
 						break;
 				}
-				value = CssValue();
-				value.type = CssValue::Color;
 				unsigned int hexCol;
 				s >> std::hex >> hexCol;
-				value.data.vuint = hexCol << 8 | 0xFF;
-
+				value.type = CssValue::Color;
+				value.data.vuint = hexCol > 0xFFFFFF ? hexCol : (hexCol | 0xFF000000);
 				values.push_back(value);
 
-			}else if(byte == L'u' && css.at(index + 1) == L'r' &&
+			} else if(byte == L'u' && css.at(index + 1) == L'r' &&
 					 css.at(index + 2) == L'l' && css.at(index + 3) == L'(') // url()
 			{
 				index += 4;
-				value = CssValue();
 				value.type = CssValue::Uri;
-				value.data.vstring = new std::wstring();
+				int startIndex = index;
 				while(true)
 				{
-					byte = css.at(index);
-					if(byte == L')')
+					if(css.at(index) == L')')
 						break;
-
-					value.data.vstring->append(1,byte);
 					++index;
 				}
+				value.data.vstring = new std::wstring(css,startIndex,index - startIndex);
 				values.push_back(value);
-			}else if(byte == L'r' && css.at(index + 1) == L'g' &&
+				++index;
+			} else if(byte == L'r' && css.at(index + 1) == L'g' &&
 					 css.at(index + 2) == L'b' &&
 					 (css.at(index + 3) == L'(' ||
 					  (css.at(index + 3) == L'a' && css.at(index + 4) == L'(')))
 			{
-				if(css.at(index + 3) == L'(')
-					index += 4;
-				else
-					index += 5;
+				index += (css.at(index + 3) == L'(') ? 4 : 5;
 
-				value = CssValue();
 				value.type = CssValue::Color;
-				value.data.vuint = 0xFF;
-				int shift = 24;
+				value.data.vuint = 0xFF000000;
+				int shift = 16;
 				while(true)
 				{
 					byte = css.at(index);
-					if(byte == ',')
-					{
-						int c = _wtoi(buffer.c_str());
+					if(byte == ',') {
+						unsigned int c = _wtoi(buffer.c_str());
 						value.data.vuint |= (c << shift);
 						shift -= 8;
 						buffer.clear();
-					}else if(byte == ')')
+					} else if(byte == ')')
 						break;
 					else if(!iswspace(byte))
 						buffer.append(1,byte);
 				}
 
-				if(shift == 0) // alpha
-				{
+				if(shift == -8) {// alpha
 					float f;
 					std::wstringstream stream;
 					stream << buffer;
 					stream >> f;
-					int opacity = (int)(f * 255);
+					unsigned int opacity = (int)(f * 255) << 24;
 					value.data.vuint |= opacity;
-				}else // blue
-				{
-					int b = _wtoi(buffer.c_str());
-					value.data.vuint |= (b << 8);
+				} else {// blue
+					value.data.vuint |= _wtoi(buffer.c_str());
 				}
 
 				values.push_back(value);
 				buffer.clear();
-			}else
-				buffer.append(1,byte);
+			} else if(byte == '"')
+			{
+				++index;
+				value.type = CssValue::String;
+				int startIndex = index;
+				while(true)
+				{
+					if(css.at(index) == L'"')
+						break;
+					++index;
+				}
+				value.data.vstring = new std::wstring(css,startIndex,index);
+				values.push_back(value);
+				++index;
+			} else
+			{
+				++bufferLength;
+// 				buffer.append(1,byte);
+			}
 
 			++index;
 		}
@@ -888,7 +901,7 @@ namespace MetalBone
 			void removeResources();
 
 			inline void polish(MWidget*);
-			inline void draw(MWidget*,ID2D1RenderTarget*,const RECT&,const RECT&);
+			inline void draw(MWidget*,ID2D1RenderTarget*,const RECT&,const RECT&, const wstring&);
 			inline void removeCache(MWidget*);
 
 			typedef unordered_map<MWidget*, StyleSheet*> WidgetSSCache;
@@ -945,6 +958,7 @@ namespace MetalBone
 
 
 			static MSSSPrivate* instance;
+			static MStyleSheetStyle::TextRenderer textRenderer;
 
 		friend class MStyleSheetStyle;
 		friend struct RenderRuleData;
@@ -985,6 +999,41 @@ namespace MetalBone
 			inline GeometryRenderObject() : width(-1), height(-1), minWidth(-1),
 				minHeight(-1), maxWidth(-1), maxHeight(-1) {}
 		};
+		
+
+
+		// TextRenderObject is intended to use GDI to render text,
+		// so that we can take the benefit of GDI++ (not GDI+) to enhance
+		// the text output quality.
+		// Note: we can however draw the text with D2D, the text output looks
+		// ok in my laptop, but ugly on my old 17" LCD screen. Anyway, I don't
+		// know to to achieve blur effect with D2D yet.
+		struct TextRenderObject
+		{
+			inline TextRenderObject(const MFont& f);
+
+			MColor color;
+			ValueType alignX;
+			ValueType alignY;
+			ValueType decoration; // none | underline | overline | line-through
+			ValueType lineStyle;
+			ValueType overflow; // clip | ellipsis | wrap
+
+			char outlineWidth;
+			char outlineBlur;
+			MColor outlineColor;
+
+			char shadowOffsetX;
+			char shadowOffsetY;
+			char shadowBlur;
+			MColor shadowColor;
+
+			MFont font;
+		};
+		inline TextRenderObject::TextRenderObject(const MFont& f):
+			alignX(Value_Left), alignY(Value_Center), decoration(Value_None),
+			lineStyle(Value_Solid),outlineWidth(0),outlineBlur(0),
+			shadowOffsetX(0),shadowOffsetY(0),shadowBlur(0),font(f){}
 
 
 
@@ -1328,6 +1377,7 @@ namespace MetalBone
 			BorderImageRenderObject*        borderImageRO;
 			BorderRenderObject*             borderRO;
 			GeometryRenderObject*           geoRO;
+			TextRenderObject*               textRO;
 			MCursor*                        cursor;
 
 			D2D_RECT_U margin;
@@ -1344,9 +1394,13 @@ namespace MetalBone
 
 			// Return true if we changed the widget's size
 			bool setGeometry    (MWidget*);
-			void draw           (ID2D1RenderTarget*,const RECT& widgetRectInRT, const RECT& clipRectInRT);
+			void draw           (ID2D1RenderTarget*,const RECT& widgetRectInRT, const RECT& clipRectInRT, const wstring& text);
 			void drawBackgrounds(const RECT& widgetRectInRT, const RECT& clipRectInRT, ID2D1Geometry*);
 			void drawBorderImage(const RECT& widgetRectInRT, const RECT& clipRectInRT);
+
+			// The rect don't have to const, because we always draw text in the last place.
+			void drawGdiText    (const RECT& widgetRectInRT, const D2D1_RECT_F& borderRectInRT,
+							const RECT& clipRectInRT, const wstring& text);
 
 			// Since we only deal with GUI in the main thread,
 			// we can safely store the renderTarget in a static member for later use.
@@ -1361,7 +1415,7 @@ namespace MetalBone
 	inline RenderRuleData::RenderRuleData():
 		refCount(1), opaqueBackground(false), animated(false),
 		hasMargin(false), hasPadding(false), borderImageRO(0),
-		borderRO(0), geoRO(0),cursor(0)
+		borderRO(0), geoRO(0), textRO(0), cursor(0)
 	{
 		memset(&margin, 0,sizeof(D2D_RECT_U));
 		memset(&padding,0,sizeof(D2D_RECT_U));
@@ -1374,6 +1428,7 @@ namespace MetalBone
 		delete borderRO;
 		delete geoRO;
 		delete cursor;
+		delete textRO;
 	}
 	bool RenderRuleData::setGeometry(MWidget* w)
 	{
@@ -1421,7 +1476,7 @@ namespace MetalBone
 	{
 		ID2D1SolidColorBrush* brush = MSSSPrivate::instance->solidBrushCache[color];
 		if(brush == 0) {
-			workingRT->CreateSolidColorBrush(CssValue::getColor(color),&brush);
+			workingRT->CreateSolidColorBrush(MColor(color),&brush);
 			MSSSPrivate::instance->solidBrushCache[color] = brush;
 		}
 	}
@@ -1628,7 +1683,7 @@ namespace MetalBone
 			return pbs.b[p];
 		}
 	} 
-	void RenderRuleData::draw(ID2D1RenderTarget* rt, const RECT& widgetRectInRT, const RECT& clipRectInRT)
+	void RenderRuleData::draw(ID2D1RenderTarget* rt, const RECT& widgetRectInRT, const RECT& clipRectInRT, const wstring& text)
 	{
 		M_ASSERT(rt != 0);
 		workingRT = rt;
@@ -1679,7 +1734,7 @@ namespace MetalBone
 				borderRect.left   += shrink;
 				borderRect.top    += shrink;
 				borderRect.right  -= shrink;
-				borderRect.bottom -=shrink;
+				borderRect.bottom -= shrink;
 				if(borderRO->type == BorderRenderObject::SimpleBorder)
 					rt->DrawRectangle(borderRect,b,w);
 				else {
@@ -1691,6 +1746,11 @@ namespace MetalBone
 				}
 			}
 		}
+
+		// === Text ===
+		if(!text.empty())
+			drawGdiText(widgetRectInRT,borderRect,clipRectInRT,text);
+		
 		SafeRelease(borderGeo);
 		workingRT = 0;
 	}
@@ -1790,9 +1850,6 @@ namespace MetalBone
 					workingRT->FillGeometry(borderGeo,brush);
 				}
 			}
-
-// 			if(dx != 0 || dy != 0)
-// 				brush->SetTransform(D2D1::Matrix3x2F::Identity());
 		}
 	}
 
@@ -1945,6 +2002,291 @@ namespace MetalBone
 		}
 	}
 
+
+
+
+	double get_time()
+	{
+		LARGE_INTEGER t, f;
+		QueryPerformanceCounter(&t);
+		QueryPerformanceFrequency(&f);
+		return double(t.QuadPart)/double(f.QuadPart);
+	}
+
+	using namespace Gdiplus;
+	void RenderRuleData::drawGdiText(const RECT& widgetRect, const D2D1_RECT_F& borderRect, const RECT& clipRectInRT, const wstring& text)
+	{
+		// TODO: Add support for underline and its line style.
+		MFont defaultFont;
+		TextRenderObject defaultRO(defaultFont);
+		TextRenderObject* tro = textRO == 0 ? &defaultRO : textRO;
+		bool hasOutline = tro->outlineWidth != 0 && !tro->outlineColor.isTransparent();
+		bool hasShadow  = !tro->shadowColor.isTransparent() &&
+			( tro->shadowBlur != 0 || (tro->shadowOffsetX != 0 || tro->shadowOffsetY != 0) );
+
+		// drawText uses GDI to render the Text, because D2D1 have poor performance when rendering text.
+		// Also, GDI(with GDI++ hook) makes text looks really good.
+
+		RECT drawRect = {(LONG)borderRect.left, (LONG)borderRect.top, (LONG)borderRect.right, (LONG)borderRect.bottom };
+		if(hasPadding) {
+			drawRect.left   += padding.left;
+			drawRect.right  -= padding.right;
+			drawRect.top    += padding.top;
+			drawRect.bottom -= padding.bottom;
+		}
+
+		// We need to get the background to which the anti-alias text to be rendered on.
+		workingRT->PopAxisAlignedClip();
+		ID2D1GdiInteropRenderTarget* gdiTarget;
+		HDC textDC;
+		workingRT->QueryInterface(&gdiTarget);
+		gdiTarget->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&textDC);
+
+		HFONT oldFont = (HFONT)::SelectObject(textDC,tro->font.getHandle());
+		HRGN  clipRGN = ::CreateRectRgn(clipRectInRT.left,clipRectInRT.top,clipRectInRT.right,clipRectInRT.bottom);
+		HRGN  oldRgn  = (HRGN)::SelectObject(textDC,clipRGN);
+		::SetBkMode(textDC,TRANSPARENT);
+
+		// Draw the text
+		if(hasOutline) // If we need to draw the outline, we have to use GDI+.
+		{
+			StringFormat sf;
+			if(tro->overflow == Value_Ellipsis) sf.SetTrimming(StringTrimmingEllipsisWord);
+			else sf.SetTrimming(StringTrimmingNone);
+			if(tro->overflow != Value_Wrap) sf.SetFormatFlags(StringFormatFlagsNoWrap);
+			switch(tro->alignX) {
+				case Value_Center: sf.SetAlignment(StringAlignmentCenter); break;
+				case Value_Right:  sf.SetAlignment(StringAlignmentFar);    break;
+				default:           sf.SetAlignment(StringAlignmentNear);   break;
+			}
+			switch(tro->alignY) {
+				case Value_Top:    sf.SetLineAlignment(StringAlignmentNear);   break;
+				case Value_Bottom: sf.SetLineAlignment(StringAlignmentFar);    break;
+				default:           sf.SetLineAlignment(StringAlignmentCenter); break;
+			}
+
+			GraphicsPath textPath;
+			Font f(textDC);
+			FontFamily fm;
+			f.GetFamily(&fm);
+			unsigned int style = FontStyleRegular;
+			if(tro->font.isBold())
+				style = tro->font.isItalic() ? FontStyleBoldItalic : FontStyleBold;
+			else if(tro->font.isItalic())
+				style = FontStyleItalic;
+			int w = drawRect.right  - drawRect.left + tro->shadowBlur * 2;
+			int h = drawRect.bottom - drawRect.top  + tro->shadowBlur * 2;
+			Rect layoutRect(drawRect.left + tro->shadowOffsetX, drawRect.top + tro->shadowOffsetY, w, h);
+			textPath.AddString(text.c_str(), -1, &fm, style, f.GetSize(), layoutRect, &sf);
+
+			Graphics graphics(textDC);
+			if(hasShadow)
+			{
+				Pen shadowPen(tro->shadowColor.getARGB());
+				shadowPen.SetLineJoin(LineJoinRound);
+				shadowPen.SetWidth(tro->outlineWidth);
+				graphics.DrawPath(&shadowPen,&textPath);
+				SolidBrush shadowBrush(tro->shadowColor.getARGB());
+				graphics.FillPath(&shadowBrush,&textPath);
+			}
+			if(tro->shadowOffsetX != 0 || tro->shadowOffsetY != 0)
+			{
+				Matrix matrix;
+				matrix.Translate(-tro->shadowOffsetX,-tro->shadowOffsetY);
+				textPath.Transform(&matrix);
+			}
+			Pen outlinePen(tro->outlineColor.getARGB());
+			outlinePen.SetLineJoin(LineJoinRound);
+			outlinePen.SetWidth(tro->outlineWidth);
+			graphics.DrawPath(&outlinePen,&textPath);
+			SolidBrush textBrush(tro->color.getARGB());
+			graphics.FillPath(&textBrush,&textPath);
+		} else
+		{
+			unsigned int formatParam = tro->overflow == Value_Wrap ? 0 :
+				tro->overflow == Value_Ellipsis ? DT_END_ELLIPSIS : DT_SINGLELINE;
+			switch(tro->alignX) {
+				case Value_Center: formatParam |= DT_CENTER; break;
+				case Value_Right:  formatParam |= DT_RIGHT;  break;
+				default:           formatParam |= DT_LEFT;   break;
+			}
+			switch(tro->alignY) {
+				case Value_Top:    formatParam |= DT_TOP;     break;
+				case Value_Bottom: formatParam |= DT_BOTTOM;  break;
+				default:           formatParam |= DT_VCENTER; break;
+			}
+
+			if(hasShadow)
+			{
+				if(tro->shadowBlur != 0 || tro->shadowColor.getAlpha() != 0xFF)
+				{
+					HDC tempDC = ::CreateCompatibleDC(0);
+					void* pvBits;
+					BITMAPINFO bmi;
+					ZeroMemory(&bmi,sizeof(BITMAPINFO));
+					int width  = drawRect.right  - drawRect.left + tro->shadowBlur * 2;
+					int height = drawRect.bottom - drawRect.top  + tro->shadowBlur * 2;
+					bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+					bmi.bmiHeader.biWidth       = width;
+					bmi.bmiHeader.biHeight      = height;
+					bmi.bmiHeader.biCompression = BI_RGB;
+					bmi.bmiHeader.biPlanes      = 1;
+					bmi.bmiHeader.biBitCount    = 32;
+					HBITMAP tempBMP = ::CreateDIBSection(tempDC, &bmi, DIB_RGB_COLORS, &pvBits, 0, 0);
+					HBITMAP oldBMP  = (HBITMAP)::SelectObject(tempDC, tempBMP);
+					HFONT   oldFont = (HFONT)  ::SelectObject(tempDC, tro->font);
+					::SetTextColor(tempDC, RGB(255,255,255));
+					::SetBkColor  (tempDC, RGB(0,0,0));
+					::SetBkMode   (tempDC, OPAQUE);
+
+					RECT shadowRect = {tro->shadowBlur, tro->shadowBlur,
+							drawRect.right  - drawRect.left, drawRect.bottom - drawRect.top};
+					::DrawTextW(tempDC, (LPWSTR)text.c_str(), -1, &shadowRect, formatParam);
+
+					unsigned int* pixel = (unsigned int*)pvBits;
+					for(int i = width * height - 1; i >= 0; --i)
+					{
+						if(pixel[i] != 0) {
+							if(pixel[i] == 0xFFFFFF)
+								pixel[i] = 0xFF000000 | tro->shadowColor.getRGB();
+							else {
+								BYTE alpha = (pixel[i] >> 24) & 0xFF;
+								BYTE* component = (BYTE*)(pixel+i);
+								unsigned int color = tro->shadowColor.getARGB();
+								component[0] = ( color      & 0xFF) * alpha >> 8; 
+								component[1] = ((color >> 8)& 0xFF) * alpha >> 8;
+								component[2] = ((color >>16)& 0xFF) * alpha >> 8;
+								component[3] = alpha;
+							}
+						}
+					}
+
+					if(tro->shadowBlur == 0)
+					{
+						BLENDFUNCTION bf = { AC_SRC_OVER, 0, tro->shadowColor.getAlpha(), AC_SRC_ALPHA };
+						int xCor = drawRect.left - tro->shadowBlur;
+						int yCor = drawRect.top  - tro->shadowBlur;
+						int tempXCor = xCor; int tempYCor = yCor;
+						if(xCor < clipRectInRT.left) xCor = clipRectInRT.left;
+						if(yCor < clipRectInRT.top ) yCor = clipRectInRT.top;
+						int w = 0 - xCor + (clipRectInRT.right < drawRect.right ? clipRectInRT.right : drawRect.right);
+						int h = 0 - yCor + (clipRectInRT.bottom < drawRect.bottom ? clipRectInRT.bottom : drawRect.bottom);
+						int r = ::GdiAlphaBlend(textDC, xCor + tro->shadowOffsetX, yCor + tro->shadowOffsetY,
+									w, h, tempDC, xCor - tempXCor, yCor - tempYCor, w, h, bf);
+						r = r;
+					} else {
+						// TODO: Implement blur. Don't know why the GDI+ version is still 1.0 on Win7 SDK,
+						// So, we cannot use the gdiplus's blur effect.
+
+// 						Bitmap gdiBMP(width,height,4 * width,PixelFormat32bppPARGB,(BYTE*)pvBits);
+// 						Graphics graphics(textDC);
+// 						RectF srcRect(0.f,0.f,(REAL)width,(REAL)height);
+// 						Matrix matrix;
+// 						Blur blurEffect;
+// 						BlurParams bp;
+// 						bp.expandEdge = true;
+// 						bp.radius = tro->shadowBlur;
+// 						blurEffect.SetParameters(&bp);
+// 						graphics.DrawImage(&gdiBMP,&srcRect,&matrix,&blurEffect,0,UnitPixel);
+					}
+
+					::SelectObject(tempDC,oldBMP);
+					::SelectObject(tempDC,oldFont);
+					::DeleteObject(tempBMP);
+					::DeleteDC(tempDC);
+
+				} else {
+					RECT shadowRect = {drawRect.left + tro->shadowOffsetX, drawRect.top + tro->shadowOffsetY,
+						drawRect.right + tro->shadowOffsetX, drawRect.bottom + tro->shadowOffsetY};
+					::SetTextColor(textDC, tro->shadowColor.getCOLORREF());
+					::DrawTextW(textDC,(LPWSTR)text.c_str(),-1,&shadowRect,formatParam);
+				}
+			}
+			::SetTextColor(textDC,tro->color.getCOLORREF());
+			::DrawTextW(textDC,(LPWSTR)text.c_str(),-1,&drawRect,formatParam);
+		}
+
+		::SelectObject(textDC,oldFont);
+		::SelectObject(textDC,oldRgn);
+		::DeleteObject(clipRGN);
+
+		gdiTarget->ReleaseDC(0);
+		gdiTarget->Release();
+
+		D2D1_RECT_F destRect;
+		destRect.left   = (FLOAT)clipRectInRT.left;
+		destRect.right  = (FLOAT)clipRectInRT.right;
+		destRect.top    = (FLOAT)clipRectInRT.top;
+		destRect.bottom = (FLOAT)clipRectInRT.bottom;
+		workingRT->PushAxisAlignedClip(destRect, D2D1_ANTIALIAS_MODE_ALIASED);
+
+
+		/*
+		 * Second approach, it seems that this approach is even slower than the first.
+		 * Besides, GDI++ doesn't work with these lines of code.
+		 */
+// 		{   
+// 			unsigned int width   = drawRect.right  - drawRect.left;
+// 			unsigned int height  = drawRect.bottom - drawRect.top;
+// 			D2D1_RECT_U copyRect = {drawRect.left,drawRect.top,drawRect.right,drawRect.bottom};
+// 
+// 			ID2D1BitmapRenderTarget*     compatibleRT;
+// 			ID2D1Bitmap*                 compatibleBMP;
+// 			ID2D1GdiInteropRenderTarget* gdiRT;
+// 			HDC textDC;
+// 			D2D1_PIXEL_FORMAT pf   = D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,D2D1_ALPHA_MODE_PREMULTIPLIED);
+// 			D2D1_SIZE_U       size = D2D1::SizeU(width,height);
+// 
+// 			double time = get_time();
+// 			workingRT->PopAxisAlignedClip();
+// 			workingRT->CreateCompatibleRenderTarget(0,&size,&pf,D2D1_COMPATIBLE_RENDER_TARGET_OPTIONS_GDI_COMPATIBLE,&compatibleRT);
+// 			compatibleRT->BeginDraw();
+// 			compatibleRT->GetBitmap(&compatibleBMP);
+// 			compatibleBMP->CopyFromRenderTarget(0,workingRT,&copyRect);
+// 			compatibleRT->QueryInterface(&gdiRT);
+// 
+// 			gdiRT->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&textDC);
+// 
+// 			RECT clipRect = {0,0,width,height};
+// 			if(clipRectInRT.left   > drawRect.left  ) clipRect.left    = clipRectInRT.left - drawRect.left;
+// 			if(clipRectInRT.top    > drawRect.top   ) clipRect.top     = clipRectInRT.top  - drawRect.top;
+// 			if(clipRectInRT.right  < drawRect.right ) clipRect.right  -= (drawRect.right   - clipRectInRT.right );
+// 			if(clipRectInRT.bottom < drawRect.bottom) clipRect.bottom -= (drawRect.bottom  - clipRectInRT.bottom);
+// 			HRGN  clipRGN  = ::CreateRectRgn(clipRect.left,clipRect.top,clipRect.right,clipRect.bottom);
+// 			HRGN  oldRgn  = (HRGN)::SelectObject(textDC,clipRGN);
+// 			HFONT oldFont = (HFONT)::SelectObject(textDC,tro->font.getHandle());
+// 			::SetBkMode(textDC,TRANSPARENT);
+// 			::SetTextColor(textDC,tro->color);
+// 			RECT dr = {0,0,width,height};
+// 			::SelectObject(textDC,::GetStockObject(WHITE_BRUSH));
+// 			BITMAP bmp;
+// 			::GetObjectW(textDC,sizeof(BITMAP),&bmp);
+// 			::DrawTextExW(textDC,(LPWSTR)text.c_str(),-1,&dr,formatParam,0);
+// 			::SelectObject(textDC,oldFont);
+// 			::SelectObject(textDC,oldRgn);
+// 			::DeleteObject(clipRGN);
+// 
+// 			D2D1_RECT_F destRectF = { drawRect.left + clipRect.left,drawRect.top + clipRect.top, 0,0 };
+// 			destRectF.right  = destRectF.left + clipRect.right  - clipRect.left;
+// 			destRectF.bottom = destRectF.top  + clipRect.bottom - clipRect.top;
+// 			workingRT->DrawBitmap(compatibleBMP,destRectF,1.0f,D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,
+// 				D2D1::RectF(clipRect.left,clipRect.top,clipRect.right,clipRect.bottom));
+// 			workingRT->PushAxisAlignedClip(D2D1::RectF((FLOAT)clipRectInRT.left, (FLOAT)clipRectInRT.top,
+// 				(FLOAT)clipRectInRT.right, (FLOAT)clipRectInRT.bottom), D2D1_ANTIALIAS_MODE_ALIASED);
+// 
+// 			gdiRT->ReleaseDC(0);
+// 			gdiRT->Release();
+// 			compatibleRT->EndDraw();
+// 			compatibleBMP->Release();
+// 			compatibleRT->Release();
+// 
+// 			time = get_time() - time;
+// 			std::stringstream s;
+// 			s << "B:" << time << "\n";
+// 			OutputDebugStringA(s.str().c_str());
+// 		}
+	}
+
 	// ********** RenderRule Impl
 	RenderRule::RenderRule(RenderRuleData* d):data(d)
 		{ if(data) ++data->refCount; }
@@ -1952,8 +2294,8 @@ namespace MetalBone
 		{ if(data) ++data->refCount; }
 	bool RenderRule::opaqueBackground() const
 		{ return data == 0 ? false : data->opaqueBackground; }
-	void RenderRule::draw(ID2D1RenderTarget* rt,const RECT& wr, const RECT& cr)
-		{ if(data) data->draw(rt,wr,cr); }
+	void RenderRule::draw(ID2D1RenderTarget* rt,const RECT& wr, const RECT& cr,const wstring& t)
+		{ if(data) data->draw(rt,wr,cr,t); }
 	void RenderRule::init()
 		{ M_ASSERT(data==0); data = new RenderRuleData(); }
 	RenderRule::~RenderRule()
@@ -2015,8 +2357,8 @@ namespace MetalBone
 		{ mImpl->setWidgetSS(w,css); }
 	void MStyleSheetStyle::polish(MWidget* w)
 		{ mImpl->polish(w); }
-	void MStyleSheetStyle::draw(MWidget* w,ID2D1RenderTarget* rt, const RECT& wr, const RECT& cr)
-		{ mImpl->draw(w,rt,wr,cr); } 
+	void MStyleSheetStyle::draw(MWidget* w,ID2D1RenderTarget* rt, const RECT& wr, const RECT& cr, const std::wstring& t)
+		{ mImpl->draw(w,rt,wr,cr,t); } 
 	void MStyleSheetStyle::removeCache(MWidget* w)
 		{ mImpl->removeCache(w); }
 	RenderRule MStyleSheetStyle::getRenderRule(MWidget* w, unsigned int p)
@@ -2035,17 +2377,23 @@ namespace MetalBone
 				w->ssSetOpaque(currRule.opaqueBackground());
 				// Remark: we can update the widget's property here.
 			}
-
 		}
 
 		// We always update the cursor.
 		MCursor* cursor = w->getCursor();
-		if(cursor == 0) cursor = currRule->cursor;
+		if(cursor == 0 && currRule) cursor = currRule->cursor;
 		if(cursor == 0) cursor = &gArrowCursor;
 		cursor->show();
 	}
+	void MStyleSheetStyle::setTextRenderer(TextRenderer t)
+		{ MSSSPrivate::textRenderer = t; }
+	MStyleSheetStyle::TextRenderer MStyleSheetStyle::getTextRenderer()
+		{ return MSSSPrivate::textRenderer; }
+	
+
 	// ********** MSSSPrivate Implementation
 	MSSSPrivate* MSSSPrivate::instance = 0;
+	MStyleSheetStyle::TextRenderer MSSSPrivate::textRenderer = MStyleSheetStyle::Gdi;
 	void getWidgetClassName(const MWidget* w,wstring& name)
 	{
 		wstringstream s;
@@ -2344,10 +2692,10 @@ namespace MetalBone
 	}
 
 	inline void MSSSPrivate::draw(MWidget* w, ID2D1RenderTarget* rt,
-		const RECT& wr, const RECT& cr)
+		const RECT& wr, const RECT& cr, const wstring& t)
 	{
 		CSS::RenderRule rule = getRenderRule(w,w->getWidgetPseudo(true));
-		rule.draw(rt,wr,cr);
+		rule.draw(rt,wr,cr,t);
 	}
 
 	inline void MSSSPrivate::removeCache(MWidget* w)
@@ -2495,7 +2843,6 @@ namespace MetalBone
 	}
 
 	// ********** Create The BackgroundRO
-
 	bool isBrushValueOpaque(const CssValue& value)
 	{
 		if(value.type == CssValue::Color)
@@ -2989,6 +3336,7 @@ namespace MetalBone
 			if(++declIter == declIterEnd) goto END;
 		}
 
+		// --- Cursor ---
 		if(declIter->first == PT_Cursor)
 		{
 			MCursor* cursor = new MCursor();
@@ -3016,9 +3364,115 @@ namespace MetalBone
 					cursor = 0;
 			}
 			renderRule->cursor = cursor;
+			if(++declIter == declIterEnd) goto END;
 		}
 
-		// TODO: Create TextRenderObject
+		// --- Text ---
+		if(declIter->first <= PT_TextShadow)
+		{
+			std::wstring fontFace = L"Arial";
+			bool bold = false;
+			bool italic = false;
+			bool pixelSize = false;
+			unsigned int size = 12;
+			while(declIter != declIterEnd && declIter->first <= PT_FontWeight)
+			{
+				const CssValue& value = declIter->second->values.at(0);
+				switch(declIter->first)
+				{
+					case PT_Font:
+						{
+							const CssValueArray& values = declIter->second->values;
+							for(int i = values.size() - 1; i >= 0; --i)
+							{
+								const CssValue& v = values.at(i);
+								if(v.type == CssValue::String)
+									fontFace = *v.data.vstring;
+								else if(v.type == CssValue::Identifier) {
+									if(v.data.videntifier == Value_Bold)
+										bold = true;
+									else if(v.data.videntifier == Value_Italic || 
+										v.data.videntifier == Value_Oblique)
+										italic = true;
+								} else {
+									size = v.data.vuint;
+									pixelSize = v.type == CssValue::Length;
+								}
+							}
+
+						}
+						break;
+					case PT_FontSize:
+						size = value.data.vuint;
+						// If the value is 12px, the CssValue is Length.
+						// If the value is 16, the CssValue is Number.
+						// We don't support unit 'pt'.
+						pixelSize = (value.type == CssValue::Length);
+						break;
+					case PT_FontStyle: italic = (value.data.videntifier != Value_Normal); break;
+					case PT_FontWeight:  bold = (value.data.videntifier == Value_Bold);   break;
+				}
+				++declIter;
+			}
+
+			MFont font(size,fontFace, bold, italic, pixelSize);
+			TextRenderObject* textRO = new TextRenderObject(font);
+			renderRule->textRO = textRO;
+			if(declIter == declIterEnd) goto END;
+
+			while(declIter != declIterEnd /*&& declIter->first <= PT_TextShadow*/)
+			{
+				const CssValueArray& values = declIter->second->values;
+				switch(declIter->first)
+				{
+					case PT_Color:
+						textRO->color = values.at(0).getColor();
+						break;
+					case PT_TextShadow:
+						if(values.size() < 2)
+							break;
+						textRO->shadowOffsetX = (char)values.at(0).data.vint;
+						textRO->shadowOffsetY = (char)values.at(1).data.vint;
+						for(size_t i = 2; i < values.size(); ++i)
+						{
+							if(values.at(i).type == CssValue::Color)
+								textRO->shadowColor = values.at(i).getColor();
+							else
+								textRO->shadowBlur = values.at(i).data.vuint;
+						}
+						break;
+					case PT_TextOutline:
+						textRO->outlineWidth = (char)values.at(0).data.vuint;
+						textRO->outlineColor = values.at(values.size() - 1).getColor();
+						if(values.size() >= 3)
+							textRO->outlineBlur = (char)values.at(1).data.vuint;
+						break;
+					case PT_TextAlignment:
+						if(values.size()>1)
+						{
+							textRO->alignY = values.at(1).data.videntifier;
+							textRO->alignX = values.at(0).data.videntifier;
+						} else {
+							ValueType vt = values.at(0).data.videntifier;
+							if(vt == Value_Center)
+								textRO->alignX = textRO->alignY = vt;
+							else if(vt == Value_Top || vt == Value_Bottom)
+								textRO->alignY = vt;
+							else
+								textRO->alignX = vt;
+						}
+						break;
+					case PT_TextDecoration:
+						textRO->decoration = values.at(0).data.videntifier; break;
+					case PT_TextUnderlineStyle:
+						textRO->lineStyle  = values.at(0).data.videntifier; break;
+					case PT_TextOverflow:
+						textRO->overflow   = values.at(0).data.videntifier; break;
+				}
+
+				++declIter;
+			}
+		}
 
 		END:// Check if this RenderRule is opaque.
 		int opaqueCount = 0;

@@ -4,6 +4,11 @@
 ChildWidget{
 	background: #FF0000;
 	border: 3px solid #0000FF;
+	font: 36 Î¢ÈíÑÅºÚ;
+font-weight: bold;
+text-align: center;
+text-outline: 6 0 #567890;
+	text-shadow: 0 1 0 #7fFFFFFF;
 }
 #child4{
 	background: #00FF22;
@@ -16,6 +21,12 @@ ChildWidget{
 	cursor: wait;
 }
 ChildWidget Button{
+	color: #112233;
+	font: 12 Î¢ÈíÑÅºÚ;
+font-weight: bold;
+text-align: center;
+	text-shadow: 0 1 0 #9fFFFFFF;
+
 	border-image: url(theme\CustomBtn.png) 4;
 }
 ChildWidget Button:hover{

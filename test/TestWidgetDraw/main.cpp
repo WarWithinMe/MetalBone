@@ -2,6 +2,7 @@
 #include "MApplication.h"
 #include "MWidget.h"
 #include "MResource.h"
+#include "MStyleSheet.h"
 #include "MEvent.h"
 
 #include "vld.h"
@@ -25,21 +26,39 @@ class NewWidget : public MWidget
 		mDebug(ss.str().c_str());
 	}
 };
-class ChildWidget : public NewWidget {};
+class ChildWidget : public NewWidget
+{
+	virtual void doStyleSheetDraw(ID2D1RenderTarget* rt,const RECT& widgetRectInRT, const RECT& clipRectInRT)
+	{
+		std::wstring text = L"Î¢ÈíÑÅºÚ";
+		mApp->getStyleSheet()->draw(this,rt,widgetRectInRT,clipRectInRT,text);
+	}
+};
 class CheckBox    : public NewWidget {};
-class Button      : public NewWidget {};
+class Button      : public NewWidget
+{
+	virtual void doStyleSheetDraw(ID2D1RenderTarget* rt,const RECT& widgetRectInRT, const RECT& clipRectInRT)
+	{
+		std::wstring text = L"Î¢ÈíÑÅºÚ";
+		mApp->getStyleSheet()->draw(this,rt,widgetRectInRT,clipRectInRT,text);
+	}
+};
 
 struct TestWidgetController : public has_slots
 {
 	std::vector<MWidget*> allWidgets;
 
 	TestWidgetController() {}
-	~TestWidgetController(){}
+	~TestWidgetController(){delete sc;delete sc2;delete sc3;}
 	void createWidgets();
 
 	void updateC10();
 	void globalShortCut() { OutputDebugStringW(L"Global ShortCut."); }
 	void localShortCut() { OutputDebugStringW(L"Local ShortCut."); }
+
+	MShortCut* sc;
+	MShortCut* sc2;
+	MShortCut* sc3;
 
 	enum WidgetIndex
 	{
@@ -54,6 +73,7 @@ struct TestWidgetController : public has_slots
 int WINAPI wWinMain(HINSTANCE,HINSTANCE,PTSTR,int)
 {
 	std::wifstream cssReader;
+	cssReader.imbue(std::locale(".936"));
 	cssReader.open("theme.css",std::ios_base::in);
 	std::wstring wss((std::istreambuf_iterator<wchar_t>(cssReader)),std::istreambuf_iterator<wchar_t>());
 	MApplication app;
@@ -74,7 +94,8 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PTSTR,int)
 
 void TestWidgetController::updateC10()
 {
-	allWidgets.at(C10)->repaint(10,10,60,20);
+// 	allWidgets.at(C10)->repaint(10,10,60,20);
+	allWidgets.at(C10)->repaint();
 }
 
 void TestWidgetController::createWidgets()
@@ -118,7 +139,7 @@ void TestWidgetController::createWidgets()
 
 	c0->show();
 	c1->show();
-	c2->show();
+// 	c2->show();
 	c3->show();
 	c4->show();
 
@@ -129,9 +150,9 @@ void TestWidgetController::createWidgets()
 	c10->show();
 	c10->setFocusPolicy(ClickFocus);
 	allWidgets.push_back(c10);
-	MShortCut* sc = new MShortCut(WinModifier | CtrlModifier , 0x53, 0, true);
-	MShortCut* sc2= new MShortCut(CtrlModifier | NoModifier, 0x53, c10, false);
-	MShortCut* sc3= new MShortCut(CtrlModifier | NoModifier, 0x44, 0, false);
+	sc = new MShortCut(WinModifier | CtrlModifier , 0x53, 0, true);
+	sc2= new MShortCut(CtrlModifier | NoModifier, 0x53, c10, false);
+	sc3= new MShortCut(CtrlModifier | NoModifier, 0x44, 0, false);
 	sc->invoked.connect(this,&TestWidgetController::globalShortCut);
 	sc2->invoked.connect(this,&TestWidgetController::localShortCut);
 	sc3->invoked.connect(this,&TestWidgetController::localShortCut);

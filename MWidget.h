@@ -215,6 +215,8 @@ namespace MetalBone
 			virtual void keyUpEvent(MKeyEvent*)         {}
 			virtual void charEvent(MCharEvent*)         {}
 
+			virtual void doStyleSheetDraw(ID2D1RenderTarget*,const RECT& widgetRectInRT, const RECT& clipRectInRT);
+
 		private:
 			MWidget* m_parent;
 			MWidget* m_topLevelParent;

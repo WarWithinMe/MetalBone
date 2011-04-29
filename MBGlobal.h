@@ -22,8 +22,9 @@
 #  endif
 #endif // METALBONE_EXPORT
 
-#pragma comment(lib, "d2d1.lib") // Direct2D
+#pragma comment(lib, "d2d1.lib")          // Direct2D
 #pragma comment(lib, "windowscodecs.lib") // WIC
+#pragma comment(lib, "gdiplus.lib")       // Gdi+
 
 namespace MetalBone{}
 #ifdef STRIP_METALBONE_NAMESPACE

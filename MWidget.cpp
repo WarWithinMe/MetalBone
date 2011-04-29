@@ -6,6 +6,7 @@
 #include "MRegion.h"
 #include "MToolTip.h"
 
+#include <GdiPlus.h>
 #include <list>
 #include <set>
 #include <unordered_map>
@@ -97,7 +98,7 @@ namespace MetalBone
 		MApplicationData(bool hwAccelerated):
 				quitOnLastWindowClosed(true),
 				hardwareAccelerated(hwAccelerated),
-				currentToolTip(0){ instance = this; }
+				currentToolTip(0) { instance = this; }
 		// Window procedure
 		static LRESULT CALLBACK windowProc(HWND, UINT, WPARAM, LPARAM);
 
@@ -116,6 +117,8 @@ namespace MetalBone
 		MStyleSheetStyle    ssstyle;
 		ID2D1Factory*       d2d1Factory;
 		IWICImagingFactory* wicFactory;
+
+		ULONG_PTR gdiPlusToken;
 
 		static MApplication::WinProc customWndProc;
 		static MApplicationData* instance;
@@ -671,14 +674,21 @@ namespace MetalBone
 		s_instance = this;
 		mImpl->appHandle = GetModuleHandleW(NULL);
 
-		// ×¢²á´°¿ÚÀà
+		// DPI
+		HDC dc = ::GetDC(0);
+		windowsDPI = ::GetDeviceCaps(dc,LOGPIXELSY);
+		::ReleaseDC(0,dc);
+
+		// Register Window Class 
 		WNDCLASSW wc;
 		setupRegisterClass(wc);
 		RegisterClassW(&wc);
 
+		// COM
 		HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 		M_ASSERT_X(SUCCEEDED(hr), "Cannot initialize COM!", "MApplicationData()");
 
+		// D2D
 #ifdef MB_DEBUG_D2D
 		D2D1_FACTORY_OPTIONS opts;
 		opts.debugLevel = D2D1_DEBUG_LEVEL_WARNING;
@@ -688,17 +698,24 @@ namespace MetalBone
 #endif
 		M_ASSERT_X(SUCCEEDED(hr), "Cannot create D2D1Factory. This is a fatal problem.", "MApplicationData()");
 		
+		// WIC
 		hr = CoCreateInstance(CLSID_WICImagingFactory,NULL,
 							  CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&(mImpl->wicFactory)));
 		M_ASSERT_X(SUCCEEDED(hr), "Cannot create WIC Component. This is a fatal problem.", "MApplicationData()");
+
+		// GDI+
+		Gdiplus::GdiplusStartupInput input;
+		Gdiplus::GdiplusStartup(&mImpl->gdiPlusToken,&input,0);
 	}
 
 	MApplication::~MApplication()
 	{
+		 Gdiplus::GdiplusShutdown(mImpl->gdiPlusToken);
 		 delete mImpl;
 		 MApplicationData::instance = 0;
 		 CoUninitialize();
 		 s_instance = 0;
+
 	}
 
 	const std::set<MWidget*>& MApplication::topLevelWindows() const { return mImpl->topLevelWindows; }
@@ -1691,6 +1708,9 @@ namespace MetalBone
 		m_windowExtras->clearUpdateQueue();
 	}
 
+	void MWidget::doStyleSheetDraw(ID2D1RenderTarget* rt,const RECT& widgetRectInRT, const RECT& clipRectInRT)
+		{ mApp->getStyleSheet()->draw(this,rt,widgetRectInRT,clipRectInRT); }
+
 	void MWidget::draw(int xOffsetInWnd, int yOffsetInWnd, bool drawMySelf)
 	{
 		WindowExtras* tlpWE = m_topLevelParent->m_windowExtras;
@@ -1715,7 +1735,7 @@ namespace MetalBone
 					widgetRect.right  = widgetRect.left + width;
 					widgetRect.top    = yOffsetInWnd;
 					widgetRect.bottom = widgetRect.top + height;
-					mApp->getStyleSheet()->draw(this,rt,widgetRect,clipRect);
+					doStyleSheetDraw(rt,widgetRect,clipRect);
 					++iter;
 					rt->PopAxisAlignedClip();
 				}
