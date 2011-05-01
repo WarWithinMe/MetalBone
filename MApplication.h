@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <d2d1.h>
 #include <wincodec.h>
+#include <dwrite.h>
 
 #define mApp MetalBone::MApplication::instance()
 
@@ -59,7 +60,8 @@ namespace MetalBone
 			void setStyleSheet(const std::wstring& css);
 			MStyleSheetStyle* getStyleSheet();
 
-			ID2D1Factory* getD2D1Factory();
+			ID2D1Factory*       getD2D1Factory();
+			IDWriteFactory*     getDWriteFactory();
 			IWICImagingFactory* getWICImagingFactory();
 
 			inline unsigned int winDpi() const;

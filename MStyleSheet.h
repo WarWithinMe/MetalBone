@@ -175,9 +175,9 @@ namespace MetalBone
 			// Check if the widget needs to be unpdated.
 			void updateWidgetAppearance(MWidget*);
 
-			// One should set the TextRender BEFORE creating MStyleSheetStyle.
-			static void setTextRenderer(TextRenderer);
-			static TextRenderer getTextRenderer();
+			// If TextRenderer is AutoDetermine, we use GDI to render text when the font size is
+			// no bigger than maxGdiFontPtSize.
+			static void setTextRenderer(TextRenderer, unsigned int maxGdiFontPtSize = 16);
 		private:
 			MSSSPrivate* mImpl;
 	};

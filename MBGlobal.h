@@ -23,6 +23,7 @@
 #endif // METALBONE_EXPORT
 
 #pragma comment(lib, "d2d1.lib")          // Direct2D
+#pragma comment(lib, "dwrite.lib")        // DirectWrite
 #pragma comment(lib, "windowscodecs.lib") // WIC
 #pragma comment(lib, "gdiplus.lib")       // Gdi+
 

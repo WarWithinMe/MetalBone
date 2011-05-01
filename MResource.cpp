@@ -19,6 +19,8 @@ namespace MetalBone
 		int refCount;
 		unsigned int ptSize;
 		unsigned int style;
+		
+		std::wstring faceName;
 
 		typedef std::tr1::unordered_multimap<std::wstring, MFont> FontCache;
 		static FontCache cache;
@@ -48,6 +50,7 @@ namespace MetalBone
 			wcscpy(lf.lfFaceName,L"Arial");
 			defaultData.fontHandle = ::CreateFontIndirectW(&lf);
 			defaultData.refCount = 1;
+			defaultData.faceName = L"Arial";
 			inited = true;
 		}
 
@@ -57,25 +60,11 @@ namespace MetalBone
 
 	MFont::MFont(const LOGFONTW& lf)
 	{
-		data = new MFontData();
-		data->refCount = 1;
-		data->fontHandle = ::CreateFontIndirectW(&lf);
-	}
+		std::wstring faceName(lf.lfFaceName);
+		unsigned int style = lf.lfWeight == FW_BOLD ? MFontData::Bold : MFontData::None;
+		if(lf.lfItalic) style |= MFontData::Italic;
+		unsigned int ptSize = lf.lfHeight * 72 / mApp->winDpi();
 
-	MFont::MFont(const MFont& rhs)
-	{
-		data = rhs.data;
-		++data->refCount;
-	}
-
-	MFont::MFont(unsigned int size, const std::wstring& faceName,
-		bool bold, bool italic, bool pixelUnit)
-	{
-		// Search for sharing.
-		unsigned int style = bold ? MFontData::Bold : MFontData::None;
-		if(italic)
-			style |= MFontData::Italic;
-		unsigned int ptSize = pixelUnit ? size * mApp->winDpi() / 72 : size;
 		std::pair<MFontData::FontCache::iterator, MFontData::FontCache::iterator>
 			cIts = MFontData::cache.equal_range(faceName);
 		MFontData::FontCache::iterator& it = cIts.first;
@@ -92,7 +81,43 @@ namespace MetalBone
 		}
 
 		data = new MFontData();
-		data->style = style;
+		data->fontHandle = ::CreateFontIndirectW(&lf);
+		data->refCount   = 1;
+		data->style      = style;
+		data->ptSize     = ptSize;
+		data->faceName   = faceName;
+		MFontData::cache.insert(MFontData::FontCache::value_type(faceName,*this));
+	}
+
+	MFont::MFont(const MFont& rhs)
+	{
+		data = rhs.data;
+		++data->refCount;
+	}
+
+	MFont::MFont(unsigned int size, const std::wstring& faceName,
+		bool bold, bool italic, bool pixelUnit)
+	{
+		// Search for sharing.
+		unsigned int style = bold ? MFontData::Bold : MFontData::None;
+		if(italic) style |= MFontData::Italic;
+		unsigned int ptSize = pixelUnit ? size * mApp->winDpi() / 72 : size;
+
+		std::pair<MFontData::FontCache::iterator, MFontData::FontCache::iterator>
+			cIts = MFontData::cache.equal_range(faceName);
+		MFontData::FontCache::iterator& it = cIts.first;
+		while(it != cIts.second)
+		{
+			MFontData* d = it->second.data;
+			if(d->style == style && d->ptSize == ptSize)
+			{
+				data = d;
+				++data->refCount;
+				return;
+			}
+			++it;
+		}
+
 		LOGFONTW lf;
 		memset(&lf,0,sizeof(LOGFONTW));
 		lf.lfHeight = 0 - (pixelUnit ? size : size * mApp->winDpi() / 72);
@@ -102,10 +127,13 @@ namespace MetalBone
 		lf.lfQuality = ANTIALIASED_QUALITY;
 		lf.lfPitchAndFamily = DEFAULT_PITCH;
 		wcscpy_s(lf.lfFaceName, faceName.c_str());
+
+		data = new MFontData();
 		data->fontHandle = ::CreateFontIndirectW(&lf);
-		data->refCount = 1;
-		data->ptSize = ptSize;
-		data->style = style;
+		data->faceName   = faceName;
+		data->refCount   = 1;
+		data->style      = style;
+		data->ptSize     = ptSize;
 
 		MFontData::cache.insert(MFontData::FontCache::value_type(faceName,*this));
 	}
@@ -116,6 +144,10 @@ namespace MetalBone
 		{ return (data->style & MFontData::Bold)   != 0; }
 	bool MFont::isItalic() const
 		{ return (data->style & MFontData::Italic) != 0; }
+	const std::wstring& MFont::getFaceName() const
+		{ return data->faceName; }
+	unsigned int MFont::pointSize() const
+		{ return data->ptSize; }
 
 	const MFont& MFont::operator=(const MFont& rhs)
 	{

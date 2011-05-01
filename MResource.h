@@ -27,6 +27,8 @@ namespace MetalBone
 			HFONT getHandle();
 			bool isBold()   const;
 			bool isItalic() const;
+			const std::wstring& getFaceName() const;
+			unsigned int pointSize() const;
 
 			operator HFONT() const;
 			const MFont& operator=(const MFont&);

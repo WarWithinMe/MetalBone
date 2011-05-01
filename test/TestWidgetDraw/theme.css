@@ -8,7 +8,7 @@ ChildWidget{
 font-weight: bold;
 text-align: center;
 text-outline: 6 0 #567890;
-	text-shadow: 0 1 0 #7fFFFFFF;
+	text-shadow: 0 8 0 #7fFFFFFF;
 }
 #child4{
 	background: #00FF22;

@@ -115,7 +115,9 @@ namespace MetalBone
 		bool                hardwareAccelerated;
 		HINSTANCE           appHandle;
 		MStyleSheetStyle    ssstyle;
+
 		ID2D1Factory*       d2d1Factory;
+		IDWriteFactory*     dwriteFactory;
 		IWICImagingFactory* wicFactory;
 
 		ULONG_PTR gdiPlusToken;
@@ -697,6 +699,11 @@ namespace MetalBone
 		hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &(mImpl->d2d1Factory));
 #endif
 		M_ASSERT_X(SUCCEEDED(hr), "Cannot create D2D1Factory. This is a fatal problem.", "MApplicationData()");
+
+		// DWrite
+		DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
+				__uuidof(IDWriteFactory),
+				reinterpret_cast<IUnknown**>(&mImpl->dwriteFactory));
 		
 		// WIC
 		hr = CoCreateInstance(CLSID_WICImagingFactory,NULL,
@@ -711,6 +718,9 @@ namespace MetalBone
 	MApplication::~MApplication()
 	{
 		 Gdiplus::GdiplusShutdown(mImpl->gdiPlusToken);
+		 SafeRelease(mImpl->wicFactory);
+		 SafeRelease(mImpl->d2d1Factory);
+		 SafeRelease(mImpl->dwriteFactory);
 		 delete mImpl;
 		 MApplicationData::instance = 0;
 		 CoUninitialize();
@@ -722,6 +732,7 @@ namespace MetalBone
 	HINSTANCE            MApplication::getAppHandle()         const { return mImpl->appHandle;       }
 	MStyleSheetStyle*    MApplication::getStyleSheet()              { return &(mImpl->ssstyle);      }
 	ID2D1Factory*        MApplication::getD2D1Factory()             { return mImpl->d2d1Factory;     }
+	IDWriteFactory*      MApplication::getDWriteFactory()           { return mImpl->dwriteFactory;   }
 	IWICImagingFactory*  MApplication::getWICImagingFactory()       { return mImpl->wicFactory;      }
 	bool  MApplication::isHardwareAccerated()                 const { return mImpl->hardwareAccelerated; }
 	void  MApplication::setStyleSheet(const std::wstring& css)      { mImpl->ssstyle.setAppSS(css);  }
