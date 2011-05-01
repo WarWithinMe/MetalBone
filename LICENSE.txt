@@ -1,4 +1,4 @@
-This library is released under the LGPL license with these additions:
+ï»¿This library is released under the LGPL license with these additions:
 
 1.If any of these additions is contrary to the LGPL license, follow these additions.
 2.Qihoo 360 Technology Co Ltd and its employees cannot use the whole or part of this library. They're forbidden to use/copy (disguisely) this library for any purpose.
@@ -6,6 +6,6 @@ This library is released under the LGPL license with these additions:
 
 Below are the Chinese version of these additions:
 ==========
-1.Èç¹ûÕâĞ©¸½¼Ó²¿·Ö¸úLGPLĞ­Òé²»Ïà·û£¬ÔòÖ»ĞèÒª×ñÊØÕâĞ©¸½¼Ó²¿·Ö¡£
-2.Ææ»¢360¹«Ë¾¼°ÆäÔ±¹¤²»µÃÊ¹ÓÃÕâ¸ö³ÌĞò¿â£¬Ò»²¿·ÖÒ²²»¿ÉÒÔ¡£Ææ»¢360¹«Ë¾ºÍËûµÄÔ±¹¤²»ÄÜÒÔÈÎºÎÀíÓÉºÍÄ¿µÄÊ¹ÓÃ/¸´ÖÆ£¬»ò±äÏàÊ¹ÓÃ/¸´ÖÆÕâ¸ö³ÌĞò¿âÀïÃæµÄ´úÂë¡£
-3.ÈÎºÎÊ¹ÓÃÁËÕâ¸ö³ÌĞò¿âµÄËù¿ª·¢µÄ³ÌĞò£¬²»µÃ¸úÆæ»¢360¹«Ë¾ÓĞÈÎºÎ¹ØÏµ¡£ÀıÈç£¬Ê¹ÓÃÕâ¸ö³ÌĞò¿â¿ª·¢µÄ³ÌĞò£¬²»µÃÔÚ360×ÀÃæÉÏÉÏÏß¡£
+1.å¦‚æœè¿™äº›é™„åŠ éƒ¨åˆ†è·ŸLGPLåè®®ä¸ç›¸ç¬¦ï¼Œåˆ™åªéœ€è¦éµå®ˆè¿™äº›é™„åŠ éƒ¨åˆ†ã€‚
+2.å¥‡è™360å…¬å¸åŠå…¶å‘˜å·¥ä¸å¾—ä½¿ç”¨è¿™ä¸ªç¨‹åºåº“ï¼Œä¸€éƒ¨åˆ†ä¹Ÿä¸å¯ä»¥ã€‚å¥‡è™360å…¬å¸å’Œä»–çš„å‘˜å·¥ä¸èƒ½ä»¥ä»»ä½•ç†ç”±å’Œç›®çš„ä½¿ç”¨/å¤åˆ¶ï¼Œæˆ–å˜ç›¸ä½¿ç”¨/å¤åˆ¶è¿™ä¸ªç¨‹åºåº“é‡Œé¢çš„ä»£ç ã€‚
+3.ä»»ä½•ä½¿ç”¨äº†è¿™ä¸ªç¨‹åºåº“çš„æ‰€å¼€å‘çš„ç¨‹åºï¼Œä¸å¾—è·Ÿå¥‡è™360å…¬å¸æœ‰ä»»ä½•å…³ç³»ã€‚ä¾‹å¦‚ï¼Œä½¿ç”¨è¿™ä¸ªç¨‹åºåº“å¼€å‘çš„ç¨‹åºï¼Œä¸å¾—åœ¨360æ¡Œé¢ä¸Šä¸Šçº¿ã€‚
