@@ -1,0 +1,11 @@
+This library is released under the LGPL license with these additions:
+
+1.If any of these additions is contrary to the LGPL license, follow these additions.
+2.Qihoo 360 Technology Co Ltd and its employees cannot use the whole or part of this library. They're forbidden to use/copy (disguisely) this library for any purpose.
+3.Anyone who wants to use this library, their application cannot have relations with Qihoo 360 Technology Co Ltd. For example, an application using this library is forbidden to release on Qihoo Desktop.
+
+Below are the Chinese version of these additions:
+==========
+1.如果这些附加部分跟LGPL协议不相符，则只需要遵守这些附加部分。
+2.奇虎360公司及其员工不得使用这个程序库，一部分也不可以。奇虎360公司和他的员工不能以任何理由和目的使用/复制，或变相使用/复制这个程序库里面的代码。
+3.任何使用了这个程序库的所开发的程序，不得跟奇虎360公司有任何关系。例如，使用这个程序库开发的程序，不得在360桌面上上线。
