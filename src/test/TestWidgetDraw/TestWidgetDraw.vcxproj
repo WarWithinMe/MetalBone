@@ -75,6 +75,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\3rd\ContainersInl.h" />
+    <ClInclude Include="..\..\3rd\Delegate.h" />
+    <ClInclude Include="..\..\3rd\Signal.h" />
     <ClInclude Include="..\..\3rd\XUnzip.h" />
     <ClInclude Include="..\..\MApplication.h" />
     <ClInclude Include="..\..\MBGlobal.h" />

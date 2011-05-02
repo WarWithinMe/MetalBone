@@ -106,7 +106,7 @@ namespace MetalBone
 	{
 		public:
 			inline MTimer();
-			~MTimer(){}
+			inline ~MTimer();
 
 			inline bool isActive()         const;
 			inline bool isSingleShot()     const;
@@ -120,12 +120,7 @@ namespace MetalBone
 			void start();
 			void stop();
 
-	#ifdef METALBONE_USE_SIGSLOT
-			Signal0 timeout;
-	#else
-		protected:
-			virtual void timeout(){}
-	#endif
+			Signal0<> timeout;
 		private:
 			static void __stdcall timerProc(HWND, UINT, UINT_PTR, DWORD);
 			// TimerId - Interval
@@ -210,13 +205,8 @@ namespace MetalBone
 			inline MWidget* getTarget() const;
 
 			static std::vector<MShortCut*> getMachedShortCuts(unsigned int modifier, unsigned int virtualKey);
-#ifdef METALBONE_USE_SIGSLOT
-			Signal0 invoked;
-#else
-		protected:
-			virtual void invoked(){}
-#endif
 
+			Signal0<> invoked;
 		private:
 			MShortCut(const MShortCut&);
 			const MShortCut& operator=(const MShortCut&);
@@ -375,6 +365,7 @@ namespace MetalBone
 
 	inline MTimer::MTimer():m_interval(0),m_id(0),
 		b_active(false),b_singleshot(false){}
+	inline MTimer::~MTimer() { stop(); }
 	inline bool MTimer::isActive() const
 		{ return b_active; }
 	inline bool MTimer::isSingleShot() const

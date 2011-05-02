@@ -11,7 +11,7 @@ text-outline: 6 0 #567890;
 	text-shadow: 0 8 0 #7fFFFFFF;
 }
 #child4{
-	background: #00FF22;
+	background: url(theme\ani.gif) no-repeat;
 	border: 3px solid #000000;
 	cursor: no-cursor;
 }
@@ -26,11 +26,11 @@ ChildWidget Button{
 font-weight: bold;
 text-align: center;
 	text-shadow: 0 1 0 #9fFFFFFF;
-
 	border-image: url(theme\CustomBtn.png) 4;
 }
 ChildWidget Button:hover{
-	border-image: url(theme\CustomBtnHover.png) 4;
+	background: url(theme\ani.gif) 4;
+border-image: none;
 	cursor: pointer;
 }
 ChildWidget Button:pressed{

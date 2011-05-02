@@ -112,6 +112,9 @@ namespace MetalBone
 				void skipComment();
 				bool parseSelector(StyleRule*);
 				void parseDeclaration(StyleRule*);
+
+				MCSSParser(const MCSSParser&);
+				const MCSSParser& operator=(const MCSSParser&);
 		};
 
 		struct CSSValuePair { const wchar_t* name; unsigned int value; };
@@ -680,7 +683,7 @@ namespace MetalBone
 		p.clear();
 	}
 
-	// Background:      { Brush Image Repeat Clip Alignment pos-x pos-y }*;
+	// Background:      { Brush/Image frame-count Repeat Clip Alignment pos-x pos-y width height }*;
 	// Border:          none | (Brush LineStyle Lengths)
 	// Border-radius:   Lengths
 	// Border-image:    none | Url Number{4} (stretch | repeat){0,2}
@@ -869,6 +872,10 @@ namespace MetalBone
 		BottomCenter,
 		Conner
 	};
+	struct NewBrushInfo
+	{
+		unsigned int frameCount;
+	};
 	struct BrushHandle
 	{
 		enum  Type { Unknown, Solid, Gradient, Bitmap };
@@ -879,8 +886,12 @@ namespace MetalBone
 		inline BrushHandle(const BrushHandle&);
 		inline const BrushHandle& operator=(const BrushHandle&);
 
+		// Get the recently created brush info.
+		static const NewBrushInfo& getNewBrushInfo();
+
 		// One should never call Release() on the returned ID2D1Brush
 		inline operator ID2D1Brush*() const;
+		inline ID2D1Brush* getBrush() const;
 		ID2D1BitmapBrush* getBorderPotion(BorderImagePortion, const RECT& widths);
 	};
 	class D2D1BrushPool
@@ -901,6 +912,7 @@ namespace MetalBone
 				~PortionBrushes() { for(int i =0; i<5; ++i) SafeRelease(b[i]); }
 				ID2D1BitmapBrush* b[5];
 			};
+			
 			typedef unordered_map<void**, MColor>  SolidColorMap;
 			typedef unordered_map<void**, wstring> BitmapPathMap;
 			typedef unordered_map<MColor,  ID2D1SolidColorBrush*>      SolidBrushMap;
@@ -912,6 +924,8 @@ namespace MetalBone
 			BitmapPathMap   bitmapPathMap;
 			BitmapBrushMap  bitmapBrushCache;
 			PortionBrushMap biPortionCache;
+
+			NewBrushInfo newBrushInfo; // Store the recently created brush infomation.
 
 			void createBrush(const BrushHandle*);
 			void createBorderImageBrush(const BrushHandle*, const RECT&);
@@ -929,7 +943,14 @@ namespace MetalBone
 		type(rhs.type),brushPosition(rhs.brushPosition){}
 	inline const BrushHandle& BrushHandle::operator=(const BrushHandle& rhs) 
 		{ type = rhs.type; brushPosition = rhs.brushPosition; return *this; }
+	const NewBrushInfo& BrushHandle::getNewBrushInfo()
+		{ return D2D1BrushPool::instance->newBrushInfo; }
 	inline BrushHandle::operator ID2D1Brush*() const
+	{
+		if(*brushPosition == 0) D2D1BrushPool::instance->createBrush(this);
+		return reinterpret_cast<ID2D1Brush*>(*brushPosition);
+	}
+	inline ID2D1Brush* BrushHandle::getBrush() const
 	{
 		if(*brushPosition == 0) D2D1BrushPool::instance->createBrush(this);
 		return reinterpret_cast<ID2D1Brush*>(*brushPosition);
@@ -1022,7 +1043,6 @@ namespace MetalBone
 			IWICBitmapDecoder*     decoder	  = 0;
 			IWICBitmapFrameDecode* frame	  = 0;
 			IWICFormatConverter*   converter  = 0;
-			IWICStream*            stream     = 0;
 			ID2D1Bitmap*           bitmap     = 0;
 			wstring& uri = bitmapPathMap[bh->brushPosition];
 
@@ -1032,9 +1052,11 @@ namespace MetalBone
 				MResource res;
 				if(res.open(uri))
 				{
+					IWICStream* stream = 0;
 					wicFactory->CreateStream(&stream);
 					stream->InitializeFromMemory((WICInProcPointer)res.byteBuffer(),res.length());
 					wicFactory->CreateDecoderFromStream(stream,NULL,WICDecodeMetadataCacheOnDemand,&decoder);
+					SafeRelease(stream);
 				} else { hasError = true; }
 			} else {
 				hr = wicFactory->CreateDecoderFromFilename(uri.c_str(),NULL,
@@ -1042,6 +1064,7 @@ namespace MetalBone
 				hasError = FAILED(hr);
 			}
 
+			unsigned int frameCount = 1;
 			if(hasError)
 			{
 				wstring error = L"[D2D1BrushPool] Cannot open image file: ";
@@ -1052,17 +1075,60 @@ namespace MetalBone
 				hr = workingRT->CreateBitmap( D2D1::SizeU(),
 					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,
 					D2D1_ALPHA_MODE_PREMULTIPLIED)), &bitmap);
+
 			} else {
+				decoder->GetFrameCount(&frameCount);
 				decoder->GetFrame(0,&frame);
-				wicFactory->CreateFormatConverter(&converter);
-				converter->Initialize(frame,
-					GUID_WICPixelFormat32bppPBGRA,
-					WICBitmapDitherTypeNone,NULL,
-					0.f,WICBitmapPaletteTypeMedianCut);
-				workingRT->CreateBitmapFromWicBitmap(converter,
-					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, 
-					D2D1_ALPHA_MODE_PREMULTIPLIED)), &bitmap);
+				if(frameCount == 1)
+				{
+					wicFactory->CreateFormatConverter(&converter);
+					converter->Initialize(frame,
+						GUID_WICPixelFormat32bppPBGRA,
+						WICBitmapDitherTypeNone,NULL,
+						0.f,WICBitmapPaletteTypeMedianCut);
+					workingRT->CreateBitmapFromWicBitmap(converter,
+						D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, 
+						D2D1_ALPHA_MODE_PREMULTIPLIED)), &bitmap);
+				} else
+				{
+					D2D1_SIZE_U rtSize;
+					frame->GetSize(&rtSize.width, &rtSize.height);
+					unsigned int frameHeight = rtSize.height;
+					rtSize.height *= frameCount;
+
+					ID2D1BitmapRenderTarget* bitmapRT = 0;
+					workingRT->CreateCompatibleRenderTarget(0, &rtSize, &D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, 
+						D2D1_ALPHA_MODE_PREMULTIPLIED),D2D1_COMPATIBLE_RENDER_TARGET_OPTIONS_NONE,&bitmapRT);
+					bitmapRT->BeginDraw();
+					for(unsigned int i = 0; i < frameCount; ++i)
+					{
+						ID2D1Bitmap* frameBitmap = 0;
+
+						if(i != 0) decoder->GetFrame(i, &frame);
+
+						wicFactory->CreateFormatConverter(&converter);
+						converter->Initialize(frame,
+							GUID_WICPixelFormat32bppPBGRA,
+							WICBitmapDitherTypeNone,NULL,
+							0.f,WICBitmapPaletteTypeMedianCut);
+						workingRT->CreateBitmapFromWicBitmap(converter,
+							D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, 
+							D2D1_ALPHA_MODE_PREMULTIPLIED)), &frameBitmap);
+
+						FLOAT y = FLOAT(frameHeight * i);
+						bitmapRT->DrawBitmap(frameBitmap, D2D1::RectF(0.f, y, (FLOAT)rtSize.width, y + frameHeight));
+
+						SafeRelease(frameBitmap);
+						SafeRelease(frame);
+						SafeRelease(converter);
+					}
+					bitmapRT->EndDraw();
+					bitmapRT->GetBitmap(&bitmap);
+					bitmapRT->Release();
+				}
 			}
+
+			newBrushInfo.frameCount = frameCount;
 
 			ID2D1BitmapBrush* brush;
 			workingRT->CreateBitmapBrush(bitmap,
@@ -1072,7 +1138,6 @@ namespace MetalBone
 
 			SafeRelease(decoder);
 			SafeRelease(frame);
-			SafeRelease(stream);
 			SafeRelease(converter);
 			SafeRelease(bitmap);
 		}
@@ -1166,12 +1231,6 @@ namespace MetalBone
 
 
 	// ********** MStyleSheetStylePrivate
-	namespace CSS {
-		struct BackgroundRenderObject;
-		struct BorderImageRenderObject;
-		struct SimpleBorderRenderObject;
-		struct ComplexBorderRenderObject;
-	}
 	class MSSSPrivate
 	{
 		public:
@@ -1190,7 +1249,7 @@ namespace MetalBone
 			void removeResources();
 
 			inline void polish(MWidget*);
-			inline void draw(MWidget*,ID2D1RenderTarget*,const RECT&,const RECT&, const wstring&);
+			inline void draw(MWidget*,ID2D1RenderTarget*,const RECT&,const RECT&, const wstring&,int);
 			inline void removeCache(MWidget*);
 
 			typedef unordered_map<MWidget*, StyleSheet*> WidgetSSCache;
@@ -1230,12 +1289,6 @@ namespace MetalBone
 
 			void getMachedStyleRules(MWidget*, MatchedStyleRuleVector&);
 			RenderRule getRenderRule(MWidget*, unsigned int);
-			void initRenderRule(RenderRule&, DeclMap&);
-
-			BackgroundRenderObject*  createBackgroundRO (CssValueArray&);
-			BorderImageRenderObject* createBorderImageRO(CssValueArray&);
-			void setSimpleBorderRO (SimpleBorderRenderObject*,  DeclMap::iterator&, DeclMap::iterator);
-			void setComplexBorderRO(ComplexBorderRenderObject*, DeclMap::iterator&, DeclMap::iterator);
 
 			D2D1BrushPool brushPool;
 
@@ -1243,8 +1296,14 @@ namespace MetalBone
 			static MStyleSheetStyle::TextRenderer textRenderer;
 			static unsigned int maxGdiFontPtSize;
 
+			typedef unordered_map<MWidget*, unsigned int> AniWidgetIndexMap;
+			AniWidgetIndexMap widgetAniBGIndexMap;
+			MTimer aniBGTimer;
+			void updateAniWidgets();
+			void addAniWidget(MWidget*);
+			void removeAniWidget(MWidget*);
+
 		friend class MStyleSheetStyle;
-		friend struct ComplexBorderRenderObject;
 	};
 
 
@@ -1286,12 +1345,18 @@ namespace MetalBone
 			inline BackgroundRenderObject();
 
 			unsigned int x, y, width, height;
+			unsigned int userWidth, userHeight;
 			ValueType    clip;
 			ValueType    alignX;
 			ValueType    alignY;
 			ImageRepeat  repeat;
 
-			bool checkedSize;
+			unsigned int frameCount;
+
+			// We remember the brush's pointer, so that if the brush is recreated,
+			// we can recheck the background property again. But if a brush is recreated
+			// at the same position, we won't know.
+			ID2D1Brush* checkedBrush;
 			BrushHandle brush;
 		};
 
@@ -1340,8 +1405,8 @@ namespace MetalBone
 			D2D1_RECT_U styles;
 			D2D1_RECT_U widths;
 			unsigned int radiuses[4]; // TL, TR, BL, BR
-			MColor      colors[4];  // T, R, B, L
-			BrushHandle brushes[4]; // T, R, B, L
+			MColor      colors[4];    // T, R, B, L
+			BrushHandle brushes[4];   // T, R, B, L
 
 			void getBorderWidth(RECT&) const;
 			bool isVisible() const;
@@ -1351,7 +1416,7 @@ namespace MetalBone
 			ID2D1Geometry* createGeometry(const D2D1_RECT_F&);
 			void draw(ID2D1RenderTarget*,ID2D1Geometry*,const D2D1_RECT_F&);
 
-			void setColors(MSSSPrivate*,const CssValueArray&,size_t startIndex,size_t endIndexPlus);
+			void setColors(const CssValueArray&,size_t startIndex,size_t endIndexPlus);
 		};
 
 
@@ -1400,9 +1465,10 @@ namespace MetalBone
 			outlineWidth(0), outlineBlur(0), shadowOffsetX(0),
 			shadowOffsetY(0), shadowBlur(0){}
 		inline BackgroundRenderObject::BackgroundRenderObject():
-			x(0), y(0), width(0), height(0), clip(Value_Margin),
-			alignX(Value_Left), alignY(Value_Top), repeat(NoRepeat),
-			checkedSize(false){}
+			x(0), y(0), width(0), height(0), userWidth(0),
+			userHeight(0), clip(Value_Margin),
+			alignX(Value_Left), alignY(Value_Top),
+			repeat(NoRepeat), frameCount(1), checkedBrush(0){}
 		inline SimpleBorderRenderObject::SimpleBorderRenderObject():
 			width(0),style(Value_Solid) { type = SimpleBorder; }
 		inline RadiusBorderRenderObject::RadiusBorderRenderObject():
@@ -1413,10 +1479,6 @@ namespace MetalBone
 			{ return width; }
 		bool SimpleBorderRenderObject::isVisible() const
 			{ return !(width == 0 || color.isTransparent()); }
-
-
-
-
 		ComplexBorderRenderObject::ComplexBorderRenderObject():uniform(false)
 		{
 			type = ComplexBorder;
@@ -1424,7 +1486,7 @@ namespace MetalBone
 			memset(&widths  , 0, sizeof(RECT));
 			memset(&radiuses, 0, 4 * sizeof(int));
 		}
-		void ComplexBorderRenderObject::setColors(MSSSPrivate* sss, const CssValueArray& values,size_t start,size_t end)
+		void ComplexBorderRenderObject::setColors(const CssValueArray& values,size_t start,size_t end)
 		{
 			int size = end - start;
 			if(size  == 4) {
@@ -1432,20 +1494,20 @@ namespace MetalBone
 				colors[1]  = MColor(values.at(start+1).data.vuint);
 				colors[2]  = MColor(values.at(start+2).data.vuint);
 				colors[3]  = MColor(values.at(start+3).data.vuint);
-				brushes[0] = MSSSPrivate::instance->brushPool.getSolidBrush(colors[0]);
-				brushes[1] = MSSSPrivate::instance->brushPool.getSolidBrush(colors[1]);
-				brushes[2] = MSSSPrivate::instance->brushPool.getSolidBrush(colors[2]);
-				brushes[3] = MSSSPrivate::instance->brushPool.getSolidBrush(colors[3]);
+				brushes[0] = MSSSPrivate::getBrushPool().getSolidBrush(colors[0]);
+				brushes[1] = MSSSPrivate::getBrushPool().getSolidBrush(colors[1]);
+				brushes[2] = MSSSPrivate::getBrushPool().getSolidBrush(colors[2]);
+				brushes[3] = MSSSPrivate::getBrushPool().getSolidBrush(colors[3]);
 			} else if(values.size() == 2) {
 				colors[0]  = colors[2]  = MColor(values.at(start  ).data.vuint);
 				colors[1]  = colors[3]  = MColor(values.at(start+1).data.vuint);
-				brushes[0] = brushes[2] = MSSSPrivate::instance->brushPool.getSolidBrush(colors[0]);
-				brushes[1] = brushes[3] = MSSSPrivate::instance->brushPool.getSolidBrush(colors[1]);
+				brushes[0] = brushes[2] = MSSSPrivate::getBrushPool().getSolidBrush(colors[0]);
+				brushes[1] = brushes[3] = MSSSPrivate::getBrushPool().getSolidBrush(colors[1]);
 			} else {
 				colors[0]  = colors[2]  =
 				colors[1]  = colors[3]  = MColor(values.at(start+1).data.vuint);
 				brushes[0] = brushes[2] = 
-				brushes[1] = brushes[3] = MSSSPrivate::instance->brushPool.getSolidBrush(colors[0]);
+				brushes[1] = brushes[3] = MSSSPrivate::getBrushPool().getSolidBrush(colors[0]);
 			}
 		}
 		void ComplexBorderRenderObject::checkUniform()
@@ -1624,40 +1686,50 @@ namespace MetalBone
 
 
 		// ========== RenderRuleData ==========
-		struct RenderRuleData
+		class RenderRuleData
 		{
-			inline RenderRuleData();
-			~RenderRuleData();
+			public:
+				inline RenderRuleData();
+				~RenderRuleData();
 
-			int  refCount;
+				void init(MSSSPrivate::DeclMap&);
+				// Return true if we changed the widget's size
+				bool setGeometry(MWidget*);
+				void draw(ID2D1RenderTarget*,const RECT&,const RECT&,const wstring&,unsigned int);
 
-			bool opaqueBackground;
-			bool animated; // Remark: We need to know whether the background is GIF animated image.
-			bool hasMargin;
-			bool hasPadding;
+				inline unsigned int getTotalFrameCount();
+			private:
+				void drawBackgrounds(const RECT& widgetRectInRT, const RECT& clipRectInRT,
+							ID2D1Geometry*, unsigned int frameIndex);
+				void drawBorderImage(const RECT& widgetRectInRT, const RECT& clipRectInRT);
+				void drawGdiText    (const RECT& widgetRectInRT, const D2D1_RECT_F& borderRectInRT,
+									const RECT& clipRectInRT, const wstring& text);
+				void drawD2DText    (const RECT& widgetRectInRT, const D2D1_RECT_F& borderRectInRT, const wstring& text);
 
-			vector<BackgroundRenderObject*> backgroundROs;
-			BorderImageRenderObject*        borderImageRO;
-			BorderRenderObject*             borderRO;
-			GeometryRenderObject*           geoRO;
-			TextRenderObject*               textRO;
-			MCursor*                        cursor;
+				BackgroundRenderObject*  createBackgroundRO(CssValueArray&);
+				void createBorderImageRO(CssValueArray&);
+				void setSimpleBorderRO(MSSSPrivate::DeclMap::iterator&, MSSSPrivate::DeclMap::iterator);
+				void setComplexBorderRO(MSSSPrivate::DeclMap::iterator&, MSSSPrivate::DeclMap::iterator);
 
-			D2D_RECT_U margin;
-			D2D_RECT_U padding;
+				int  refCount;
+				bool opaqueBackground;
+				bool hasMargin;
+				bool hasPadding;
+				int  totalFrameCount;
 
-			// Return true if we changed the widget's size
-			bool setGeometry    (MWidget*);
-			void draw           (ID2D1RenderTarget*,const RECT& widgetRectInRT, const RECT& clipRectInRT, const wstring& text);
-			void drawBackgrounds(const RECT& widgetRectInRT, const RECT& clipRectInRT, ID2D1Geometry*);
-			void drawBorderImage(const RECT& widgetRectInRT, const RECT& clipRectInRT);
-			void drawGdiText    (const RECT& widgetRectInRT, const D2D1_RECT_F& borderRectInRT,
-								const RECT& clipRectInRT, const wstring& text);
-			void drawD2DText    (const RECT& widgetRectInRT, const D2D1_RECT_F& borderRectInRT, const wstring& text);
+				vector<BackgroundRenderObject*> backgroundROs;
+				BorderImageRenderObject*        borderImageRO;
+				BorderRenderObject*             borderRO;
+				GeometryRenderObject*           geoRO;
+				TextRenderObject*               textRO;
+				MCursor*                        cursor;
 
-			// Since we only deal with GUI in the main thread,
-			// we can safely store the renderTarget in a static member for later use.
-			static ID2D1RenderTarget* workingRT;
+				D2D_RECT_U margin;
+				D2D_RECT_U padding;
+				// Since we only deal with GUI in the main thread,
+				// we can safely store the renderTarget in a static member for later use.
+				static ID2D1RenderTarget* workingRT;
+			friend class RenderRule;
 		};
 	} // namespace CSS
 
@@ -1666,8 +1738,9 @@ namespace MetalBone
 	// ********** RenderRuleData Impl
 	ID2D1RenderTarget* RenderRuleData::workingRT = 0;
 	inline RenderRuleData::RenderRuleData():
-		refCount(1), opaqueBackground(false), animated(false),
-		hasMargin(false), hasPadding(false), borderImageRO(0),
+		refCount(1), opaqueBackground(false),
+		hasMargin(false), hasPadding(false),
+		totalFrameCount(1), borderImageRO(0),
 		borderRO(0), geoRO(0), textRO(0), cursor(0)
 	{
 		memset(&margin, 0,sizeof(D2D_RECT_U));
@@ -1683,6 +1756,8 @@ namespace MetalBone
 		delete cursor;
 		delete textRO;
 	}
+	inline unsigned int RenderRuleData::getTotalFrameCount()
+		{ return totalFrameCount; }
 	bool RenderRuleData::setGeometry(MWidget* w)
 	{
 		if(geoRO == 0)
@@ -1718,7 +1793,8 @@ namespace MetalBone
 		return true;
 	}
 
-	void RenderRuleData::draw(ID2D1RenderTarget* rt, const RECT& widgetRectInRT, const RECT& clipRectInRT, const wstring& text)
+	void RenderRuleData::draw(ID2D1RenderTarget* rt, const RECT& widgetRectInRT,
+		const RECT& clipRectInRT, const wstring& text, unsigned int frameIndex)
 	{
 		M_ASSERT(rt != 0);
 		workingRT = rt;
@@ -1740,7 +1816,7 @@ namespace MetalBone
 		}
 		// === Backgrounds ===
 		if(backgroundROs.size() > 0)
-			drawBackgrounds(widgetRectInRT, clipRectInRT,borderGeo);
+			drawBackgrounds(widgetRectInRT, clipRectInRT, borderGeo, frameIndex);
 
 		// === BorderImage ===
 		if(borderImageRO != 0)
@@ -1803,14 +1879,15 @@ namespace MetalBone
 		workingRT = 0;
 	}
 
-	void RenderRuleData::drawBackgrounds(const RECT& wr, const RECT& cr,ID2D1Geometry* borderGeo)
+	void RenderRuleData::drawBackgrounds(const RECT& wr, const RECT& cr, ID2D1Geometry* borderGeo, unsigned int frameIndex)
 	{
 		for(unsigned int i = 0; i < backgroundROs.size(); ++i)
 		{
 			RECT contentRect = wr;
 
-			ID2D1Geometry*          bgGeo = 0;
 			BackgroundRenderObject* bgro  = backgroundROs.at(i);
+			if(frameIndex >= bgro->frameCount)
+				frameIndex = frameIndex % bgro->frameCount;
 
 			if(bgro->clip != Value_Margin)
 			{
@@ -1840,23 +1917,36 @@ namespace MetalBone
 			}
 
 			ID2D1Brush* brush = bgro->brush;
-			if(!bgro->checkedSize)
+			if(brush != bgro->checkedBrush)
 			{
-				bgro->checkedSize = true;
-				if(bgro->brush.type == BrushHandle::Bitmap) {
-					// A bitmap brush
+				bgro->checkedBrush = brush;
+				bgro->frameCount   = BrushHandle::getNewBrushInfo().frameCount;
+				// Check the size.
+				if(bgro->brush.type == BrushHandle::Bitmap)
+				{
 					ID2D1BitmapBrush* bb = (ID2D1BitmapBrush*)brush;
 					ID2D1Bitmap* bmp;
 					bb->GetBitmap(&bmp);
 					D2D1_SIZE_F size = bmp->GetSize();
 					unsigned int& w = bgro->width;
 					unsigned int& h = bgro->height;
-					// If the user doesn't specify the size of the background,
-					// we need to make sure the size is valid.
+					// Set to use specific size first.
+					w = bgro->userWidth;
+					h = bgro->userHeight;
+					// Make sure the size is valid.
 					if(w == 0 || w + bgro->x > (unsigned int)size.width )
 						w = (unsigned int)size.width  - bgro->x;
 					if(h == 0 || h + bgro->y > (unsigned int)size.height)
 						h = (unsigned int)size.height - bgro->y;
+					h /= bgro->frameCount;
+
+					if(bgro->frameCount != 1)
+					{
+						if(totalFrameCount % bgro->frameCount != 0)
+							totalFrameCount *= bgro->frameCount;
+						bgro->repeat = NoRepeat;
+					}
+					
 				}
 			}
 
@@ -1893,6 +1983,7 @@ namespace MetalBone
 
 			dx += (int)contentRect.left;
 			dy += (int)contentRect.top;
+			dy -= frameIndex * bgro->height;
 			if(dx != 0 || dy != 0)
 				brush->SetTransform(D2D1::Matrix3x2F::Translation((FLOAT)dx,(FLOAT)dy));
 
@@ -2069,9 +2160,6 @@ namespace MetalBone
 		}
 	}
 
-
-
-
 	double get_time()
 	{
 		LARGE_INTEGER t, f;
@@ -2101,7 +2189,7 @@ namespace MetalBone
 			HRESULT __stdcall DrawInlineObject(void*,FLOAT,FLOAT,IDWriteInlineObject*,BOOL,BOOL,IUnknown*) { return E_NOTIMPL; }
 			unsigned long __stdcall AddRef() { return 0; }
 			unsigned long __stdcall Release(){ return 0; }
-			HRESULT __stdcall QueryInterface(IID const& riid, void** ppvObject) { return E_NOTIMPL; }
+			HRESULT __stdcall QueryInterface(IID const&, void**) { return E_NOTIMPL; }
 		private:
 			ID2D1RenderTarget* rt;
 			ID2D1Brush* obrush;
@@ -2164,7 +2252,7 @@ namespace MetalBone
 		return S_OK;
 	}
 
-	void RenderRuleData::drawD2DText(const RECT& widgetRect, const D2D1_RECT_F& borderRect, const wstring& text)
+	void RenderRuleData::drawD2DText(const RECT&, const D2D1_RECT_F& borderRect, const wstring& text)
 	{
 		MFont defaultFont;
 		TextRenderObject defaultRO(defaultFont);
@@ -2211,6 +2299,7 @@ namespace MetalBone
 			if(hasShadow) sbrush = MSSSPrivate::getBrushPool().getSolidBrush(tro->shadowColor);
 			D2DOutlineTextRenderer renderer(workingRT,textRO,obrush,tbrush,sbrush);
 			textLayout->Draw(0,&renderer,drawRect.left,drawRect.top);
+			textLayout->Release();
 		} else
 		{
 			if(hasShadow)
@@ -2232,7 +2321,7 @@ namespace MetalBone
 	}
 
 	using namespace Gdiplus;
-	void RenderRuleData::drawGdiText(const RECT& widgetRect, const D2D1_RECT_F& borderRect, const RECT& clipRectInRT, const wstring& text)
+	void RenderRuleData::drawGdiText(const RECT&, const D2D1_RECT_F& borderRect, const RECT& clipRectInRT, const wstring& text)
 	{
 		// TODO: Add support for underline and its line style.
 		MFont defaultFont;
@@ -2440,6 +2529,731 @@ namespace MetalBone
 		workingRT->PushAxisAlignedClip(destRect, D2D1_ANTIALIAS_MODE_ALIASED);
 	}
 
+
+	enum BorderType { BT_Simple, BT_Radius, BT_Complex };
+	enum BackgroundOpaqueType {
+		NonOpaque,
+		OpaqueClipMargin,
+		OpaqueClipBorder,
+		OpaqueClipPadding
+	};
+	BorderType testBorderObjectType(const MSSSPrivate::DeclMap::iterator& declIter,
+		const MSSSPrivate::DeclMap::iterator& declIterEnd)
+	{
+		MSSSPrivate::DeclMap::iterator seeker = declIter;
+		while(seeker != declIterEnd && seeker->first <= PT_BorderRadius)
+		{
+			switch(seeker->first) {
+			case PT_Border:
+				{
+					CssValueArray& values = seeker->second->values;
+					// If there're more than 3 values in PT_Border, it must be complex.
+					if(values.size() > 3)
+						return BT_Complex;
+					for(unsigned int i = 1; i < values.size() ; ++i)
+					{ // If there are the same type values, it's complex.
+						if(values.at(i - 1).type == values.at(i).type)
+							return BT_Complex;
+					}
+				}
+				break;
+			case PT_BorderWidth:
+			case PT_BorderColor:
+			case PT_BorderStyles:
+				if(seeker->second->values.size() > 1)
+					return BT_Complex;
+				break;
+			case PT_BorderRadius:	return seeker->second->values.size() > 1 ? BT_Complex : BT_Radius;
+			default: return BT_Complex;
+			}
+			++seeker;
+		}
+		return BT_Simple;
+	}
+
+	// ********** Create The BackgroundRO
+	bool isBrushValueOpaque(const CssValue& value)
+	{
+		if(value.type == CssValue::Color) return true;
+
+		M_ASSERT_X(value.type == CssValue::Uri,"The brush value must be neither Color or Uri(for now)","isBrushValueOpaque()");
+		const wstring* uri = value.data.vstring;
+		wstring ex = uri->substr(uri->size() - 3);
+		transform(ex.begin(),ex.end(),ex.begin(),::tolower);
+		if(ex.find(L"png") == 0 || ex.find(L"gif") == 0)
+			return false;
+		return true;
+	}
+	// Return true if the "prop" affects alignX
+	bool setBGROProperty(BackgroundRenderObject* object, ValueType prop, bool isPrevPropAlignX)
+	{
+		switch(prop) {
+
+		case Value_NoRepeat: object->repeat = CSS::NoRepeat; break;
+		case Value_RepeatX:  object->repeat = CSS::RepeatX;  break;
+		case Value_RepeatY:  object->repeat = CSS::RepeatY;  break;
+		case Value_Repeat:   object->repeat = CSS::RepeatXY; break;
+
+		case Value_Padding:
+		case Value_Content:
+		case Value_Border:
+		case Value_Margin:   object->clip = prop; break;
+
+		case Value_Left:
+		case Value_Right:	 object->alignX = prop; return true;
+		case Value_Top:
+		case Value_Bottom:   object->alignY = prop; break;
+			// We both set alignment X & Y, because one may only specific a alignment value.
+		case Value_Center:
+			object->alignY = prop;
+			if(!isPrevPropAlignX) { object->alignX= prop; return true; }
+		}
+		return false;
+	}
+	void batchSetBGROProps(vector<BackgroundRenderObject*>& bgros,
+		ValueType prop, bool isPrevPropAlignX = false)
+	{
+		vector<BackgroundRenderObject*>::iterator iter = bgros.begin();
+		vector<BackgroundRenderObject*>::iterator iterEnd = bgros.end();
+		while(iter != iterEnd) { setBGROProperty(*iter,prop,isPrevPropAlignX); ++iter; }
+	}
+	// Background: { Brush/Image frame-count Repeat Clip Alignment pos-x pos-y width height }*;
+	// If we want to make it more like CSS3 syntax,
+	// we can parse a CSS3 syntax background into multiple Background Declarations.
+	BackgroundRenderObject* RenderRuleData::createBackgroundRO(CssValueArray& values)
+	{
+		const CssValue& brushValue = values.at(0);
+		BackgroundRenderObject* newObject = new BackgroundRenderObject();
+		if(brushValue.type == CssValue::Uri)
+			newObject->brush = MSSSPrivate::getBrushPool().getBitmapBrush(*brushValue.data.vstring);
+		else
+			newObject->brush = MSSSPrivate::getBrushPool().getSolidBrush(MColor(brushValue.data.vuint));
+
+		size_t index = 1;
+		if(values.size() > 1 && values.at(1).type == CssValue::Number)
+		{
+			int frameCount = values.at(1).data.vint;
+			if(frameCount > 1) newObject->frameCount = frameCount;
+			++index;
+		}
+		size_t valueCount = values.size();
+		bool isPropAlignX = false;
+		while(index < valueCount)
+		{
+			const CssValue& v = values.at(index);
+			if(v.type == CssValue::Identifier) {
+				isPropAlignX = setBGROProperty(newObject, static_cast<ValueType>(v.data.vuint), isPropAlignX);
+			} else {
+				mWarning(v.type == CssValue::Length || v.type == CssValue::Number,
+					L"The rest of background css value should be of type 'length' or 'number'");
+
+				newObject->x = v.data.vuint;
+
+				if(++index >= values.size()) { break; }
+				if(values.at(index).type == CssValue::Identifier) { continue; }
+				newObject->y = v.data.vuint;
+
+				if(++index >= values.size()) { break; }
+				if(values.at(index).type == CssValue::Identifier) { continue; }
+				newObject->userWidth = v.data.vuint;
+
+				if(++index >= values.size()) { break; }
+				if(values.at(index).type == CssValue::Identifier) { continue; }
+				newObject->userHeight = v.data.vuint;
+			}
+			++index;
+		}
+		return newObject;
+	}
+
+	// ********** Create the BorderImageRO
+	void RenderRuleData::createBorderImageRO(CssValueArray& values)
+	{
+		borderImageRO = new BorderImageRenderObject();
+		borderImageRO->brush = MSSSPrivate::getBrushPool().getBitmapBrush(*values.at(0).data.vstring);
+
+		int endIndex = values.size() - 1;
+		// Repeat or Stretch
+		if(values.at(endIndex).type == CssValue::Identifier)
+		{
+			if(values.at(endIndex-1).type == CssValue::Identifier) {
+				if(values.at(endIndex).data.vuint != Value_Stretch)
+					borderImageRO->repeat = RepeatY;
+				if(values.at(endIndex-1).data.vuint != Value_Stretch)
+					borderImageRO->repeat = (borderImageRO->repeat == RepeatY) ? RepeatXY : RepeatY;
+				endIndex -= 2;
+			} else {
+				if(values.at(endIndex).data.vuint != Value_Stretch)
+					borderImageRO->repeat = RepeatXY;
+				--endIndex;
+			}
+		}
+		// Border
+		if(endIndex == 4) {
+			borderImageRO->widths.top    = values.at(1).data.vuint;
+			borderImageRO->widths.right  = values.at(2).data.vuint;
+			borderImageRO->widths.bottom = values.at(3).data.vuint;
+			borderImageRO->widths.left   = values.at(4).data.vuint;
+		} else if(endIndex == 2) {
+			borderImageRO->widths.bottom = borderImageRO->widths.top  = values.at(1).data.vuint;
+			borderImageRO->widths.right  = borderImageRO->widths.left = values.at(2).data.vuint;
+		} else {
+			borderImageRO->widths.left   = borderImageRO->widths.right =
+			borderImageRO->widths.bottom = borderImageRO->widths.top   = values.at(1).data.vuint;
+		}
+	}
+
+	// ********** Set the SimpleBorderRO
+	void RenderRuleData::setSimpleBorderRO(MSSSPrivate::DeclMap::iterator& iter,
+		MSSSPrivate::DeclMap::iterator iterEnd)
+	{
+		SimpleBorderRenderObject* obj = reinterpret_cast<SimpleBorderRenderObject*>(borderRO);
+		CssValue colorValue(CssValue::Color);
+		while(iter != iterEnd)
+		{
+			vector<CssValue>& values = iter->second->values;
+			switch(iter->first) {
+			case PT_Border:
+				for(unsigned int i = 0; i < values.size(); ++i) {
+					CssValue& v = values.at(i);
+					switch(v.type) {
+					case CssValue::Identifier: obj->style = v.data.videntifier; break;
+					case CssValue::Color:      colorValue = v;                  break;
+					default:                   obj->width = v.data.vuint;       break;
+					}
+				}
+				break;
+			case PT_BorderWidth:  obj->width = values.at(0).data.vuint;       break;
+			case PT_BorderStyles: obj->style = values.at(0).data.videntifier; break;
+			case PT_BorderColor:  colorValue = values.at(0);                  break;
+			}
+
+			++iter;
+		}
+
+		obj->color = MColor(colorValue.data.vuint);
+		obj->brush = MSSSPrivate::getBrushPool().getSolidBrush(obj->color);
+	}
+
+	// ********** Create the ComplexBorderRO
+	void setGroupUintValue(unsigned int (&intArray)[4], vector<CssValue>& values,
+		int startValueIndex = 0, int endValueIndex = -1)
+	{
+		int size = (endValueIndex == -1 ? values.size() : endValueIndex + 1) - startValueIndex;
+		if(size == 4) {
+			intArray[0] = values.at(startValueIndex    ).data.vuint;
+			intArray[1] = values.at(startValueIndex + 1).data.vuint;
+			intArray[2] = values.at(startValueIndex + 2).data.vuint;
+			intArray[3] = values.at(startValueIndex + 3).data.vuint;
+		} else if(size == 2) {
+			intArray[0] = intArray[2] = values.at(startValueIndex    ).data.vuint;
+			intArray[1] = intArray[3] = values.at(startValueIndex + 1).data.vuint;
+		} else {
+			intArray[0] = intArray[1] =
+			intArray[2] = intArray[3] = values.at(startValueIndex).data.vuint;
+		}
+	}
+	void setD2DRectValue(D2D_RECT_U& rect, vector<CssValue>& values,
+		int startValueIndex = 0, int endValueIndex = -1)
+	{
+		int size = (endValueIndex == -1 ? values.size() : endValueIndex + 1) - startValueIndex;
+		if(size == 4) {
+			rect.top    = values.at(startValueIndex    ).data.vuint;
+			rect.right  = values.at(startValueIndex + 1).data.vuint;
+			rect.bottom = values.at(startValueIndex + 2).data.vuint;
+			rect.left   = values.at(startValueIndex + 3).data.vuint;
+		} else if(size == 2) {
+			rect.top    = rect.bottom = values.at(startValueIndex    ).data.vuint;
+			rect.right  = rect.left   = values.at(startValueIndex + 1).data.vuint;
+		} else {
+			rect.top    = rect.bottom =
+			rect.right  = rect.left   = values.at(startValueIndex).data.vuint;
+		}
+	}
+	void setD2DRectValue(D2D_RECT_U& rect, int border, unsigned int value)
+	{
+		if(border == 0) { rect.top    = value; return; }
+		if(border == 1) { rect.right  = value; return; }
+		if(border == 2) { rect.bottom = value; return; }
+		rect.left = value;
+	}
+	void RenderRuleData::setComplexBorderRO(MSSSPrivate::DeclMap::iterator& declIter,
+		MSSSPrivate::DeclMap::iterator declIterEnd)
+	{
+		ComplexBorderRenderObject* obj = reinterpret_cast<ComplexBorderRenderObject*>(borderRO);
+		while(declIter != declIterEnd)
+		{
+			vector<CssValue>& values = declIter->second->values;
+			switch(declIter->first)
+			{
+			case PT_Border:
+				{
+					int rangeStartIndex = 0;
+					CssValue::Type valueType = values.at(0).type;
+					unsigned int index = 1;
+					while(index <= values.size())
+					{
+						if(index == values.size() || values.at(index).type != valueType)
+						{
+							switch(valueType) {
+							case CssValue::Identifier:
+								setD2DRectValue(obj->styles,values,rangeStartIndex,index - 1);
+								break;
+							case CssValue::Color:
+								obj->setColors(values,rangeStartIndex,index);
+								break;
+							default:
+								setD2DRectValue(obj->widths,values,rangeStartIndex,index-1);
+							}
+							rangeStartIndex = index;
+							if(index < values.size())
+								valueType = values.at(index).type;
+						}
+						++index;
+					}
+				}
+				break;
+
+			case PT_BorderRadius:  setGroupUintValue(obj->radiuses, values); break;
+			case PT_BorderWidth:   setD2DRectValue(obj->widths, values);     break;
+			case PT_BorderStyles:  setD2DRectValue(obj->styles, values);     break;
+			case PT_BorderColor:   obj->setColors(values,0,values.size());   break;
+
+			case PT_BorderTop:
+			case PT_BorderRight:
+			case PT_BorderBottom:
+			case PT_BorderLeft:
+				{
+					int index = declIter->first - PT_BorderTop;
+					for(unsigned int i = 0; i < values.size(); ++i)
+					{
+						if(values.at(i).type == CssValue::Color) {
+							obj->colors[index]  = MColor(values.at(0).data.vuint);
+							obj->brushes[index] = MSSSPrivate::getBrushPool().getSolidBrush(obj->colors[index]);
+
+						} else if(values.at(i).type == CssValue::Identifier)
+						{
+							ValueType vi = values.at(0).data.videntifier;
+							if(index == 0)      obj->styles.top    = vi;
+							else if(index == 1) obj->styles.right  = vi;
+							else if(index == 2) obj->styles.bottom = vi;
+							else obj->styles.left = vi;
+						} else
+							setD2DRectValue(obj->widths,index,values.at(i).data.vuint);
+					}
+				}
+				break;
+			case PT_BorderTopColor:
+			case PT_BorderRightColor:
+			case PT_BorderBottomColor:
+			case PT_BorderLeftColor: 
+				{
+					int index = declIter->first - PT_BorderTopColor;
+					obj->colors[index]  = MColor(values.at(0).data.vuint);
+					obj->brushes[index] = MSSSPrivate::getBrushPool().getSolidBrush(obj->colors[index]);
+				}
+				break;
+			case PT_BorderTopWidth:
+			case PT_BorderRightWidth:
+			case PT_BorderBottomWidth:
+			case PT_BorderLeftWidth:
+				setD2DRectValue(obj->widths, declIter->first - PT_BorderTopWidth, values.at(0).data.vuint);
+				break;
+			case PT_BorderTopStyle:
+			case PT_BorderRightStyle:
+			case PT_BorderBottomStyle:
+			case PT_BorderLeftStyle:
+				setD2DRectValue(obj->styles, declIter->first - PT_BorderTopStyle, values.at(0).data.videntifier);
+				break;
+			case PT_BorderTopLeftRadius:
+			case PT_BorderTopRightRadius:
+			case PT_BorderBottomLeftRadius:
+			case PT_BorderBottomRightRadius:
+				obj->radiuses[declIter->first - PT_BorderTopLeftRadius] = values.at(0).data.vuint;
+				break;
+			}
+			++declIter;
+		}
+		obj->checkUniform();
+	}
+
+
+	void RenderRuleData::init(MSSSPrivate::DeclMap& declarations)
+	{
+		// Remark: If the declaration have values in wrong order, it might crash the program.
+		// Maybe we should add some logic to avoid this flaw.
+		MSSSPrivate::DeclMap::iterator declIter    = declarations.begin();
+		MSSSPrivate::DeclMap::iterator declIterEnd = declarations.end();
+
+		vector<BackgroundOpaqueType> bgOpaqueTypes;
+		bool opaqueBorderImage = false;
+		BorderType bt = BT_Simple;
+
+		// --- Backgrounds ---
+		while(declIter->first == PT_Background)
+		{
+			CssValueArray& values = declIter->second->values;
+			if(values.at(0).type == CssValue::Identifier &&
+				values.at(0).data.videntifier == Value_None)
+			{
+				do {
+					++declIter;
+					if(declIter == declIterEnd) goto END;
+				} while(declIter->first <= PT_BackgroundAlignment);
+			} else
+			{
+				BackgroundOpaqueType bgOpaqueType = NonOpaque;
+				BackgroundRenderObject* o = createBackgroundRO(values);
+				if(isBrushValueOpaque(values.at(0)))
+				{
+					switch(o->clip) {
+					case Value_Margin: bgOpaqueType = OpaqueClipMargin; break;
+					case Value_Border: bgOpaqueType = OpaqueClipBorder; break;
+					default:           bgOpaqueType = OpaqueClipPadding;
+					}
+				}
+
+				backgroundROs.push_back(o);
+				bgOpaqueTypes.push_back(bgOpaqueType);
+
+				if(++declIter == declIterEnd) goto END;
+			}
+			
+		}
+		while(declIter->first < PT_BackgroundPosition)
+		{
+			batchSetBGROProps(backgroundROs, declIter->second->values.at(0).data.videntifier);
+			if(++declIter == declIterEnd) goto END;
+		}
+		if(declIter->first == PT_BackgroundPosition)
+		{
+			vector<CssValue>& values = declIter->second->values;
+			int propx = values.at(0).data.vint;
+			int propy = values.size() == 1 ? propx : values.at(1).data.vint;
+
+			vector<BackgroundRenderObject*>::iterator it    = backgroundROs.begin();
+			vector<BackgroundRenderObject*>::iterator itEnd = backgroundROs.end();
+			while(it != itEnd) {
+				(*it)->x = propx;
+				(*it)->y = propy;
+				++it;
+			}
+			if(++declIter == declIterEnd) goto END;
+		}
+		if(declIter->first == PT_BackgroundSize)
+		{
+			vector<CssValue>& values = declIter->second->values;
+			int propw = values.at(0).data.vuint;
+			int proph = values.size() == 1 ? propw : values.at(1).data.vuint;
+
+			vector<BackgroundRenderObject*>::iterator it    = backgroundROs.begin();
+			vector<BackgroundRenderObject*>::iterator itEnd = backgroundROs.end();
+			while(it != itEnd) {
+				(*it)->width  = propw;
+				(*it)->height = proph;
+				++it;
+			}
+			if(++declIter == declIterEnd) goto END;
+		}
+		if(declIter->first == PT_BackgroundAlignment)
+		{
+			vector<CssValue>& values = declIter->second->values;
+			batchSetBGROProps(backgroundROs,values.at(0).data.videntifier);
+			if(values.size() == 2)
+				batchSetBGROProps(backgroundROs,values.at(1).data.videntifier,true);
+
+			if(++declIter == declIterEnd) goto END;
+		}
+
+		// --- BorderImage --- 
+		if(declIter->first == PT_BorderImage)
+		{
+			CssValueArray& values = declIter->second->values;
+			if(values.at(0).type == CssValue::Uri)
+			{
+				opaqueBorderImage = isBrushValueOpaque(values.at(0));
+				createBorderImageRO(declIter->second->values);
+			}
+			if(++declIter == declIterEnd) goto END;
+		}
+
+		// --- Border ---
+		if(declIter->first == PT_Border)
+		{
+			CssValue& v = declIter->second->values.at(0);
+			if(v.type == CssValue::Identifier  && v.data.vuint == Value_None)
+			{ // User specifies no border. Skip everything related to border.
+				do {
+					if(++declIter == declIterEnd) goto END;
+				} while (declIter->first <= PT_BorderRadius);
+			}
+		}
+
+		if(declIter->first <= PT_BorderRadius)
+		{
+			bt = testBorderObjectType(declIter,declIterEnd);
+
+			MSSSPrivate::DeclMap::iterator declIter2 = declIter;
+			if(bt == BT_Simple)
+			{
+				while(declIter2 != declIterEnd && declIter2->first <= PT_BorderStyles)
+					++declIter2;
+				borderRO = new SimpleBorderRenderObject();
+				setSimpleBorderRO(declIter,declIter2);
+
+			} else if(bt == BT_Radius)
+			{
+				while(declIter2 != declIterEnd && declIter2->first <= PT_BorderStyles)
+					++declIter2;
+				RadiusBorderRenderObject* obj = new RadiusBorderRenderObject();
+				obj->radius = declIter->second->values.at(0).data.vuint;
+				borderRO = obj;
+				setSimpleBorderRO(declIter,declIter2);
+
+			} else
+			{
+				while(declIter2 != declIterEnd && declIter2->first <= PT_BorderRadius)
+					++declIter2;
+				borderRO = new ComplexBorderRenderObject();
+				setComplexBorderRO(declIter, declIterEnd);
+			}
+
+			if(declIter == declIterEnd) goto END;
+		}
+
+		// --- Margin & Padding --- 
+		while(declIter->first <= PT_PaddingLeft)
+		{
+			vector<CssValue>& values = declIter->second->values;
+			if(values.at(0).type != CssValue::Identifier ||
+				values.at(0).data.videntifier != Value_None)
+			{
+				switch(declIter->first)
+				{
+					case PT_Margin:
+						setD2DRectValue(margin,values);
+						hasMargin = true;
+						break;
+					case PT_MarginTop:
+					case PT_MarginRight:
+					case PT_MarginBottom:
+					case PT_MarginLeft:
+						setD2DRectValue(margin, declIter->first - PT_MarginTop,
+							values.at(0).data.vuint);
+						hasMargin = true;
+						break;
+					case PT_Padding:
+						setD2DRectValue(padding,values);
+						hasPadding = true;
+						break;
+					case PT_PaddingTop:
+					case PT_PaddingRight:
+					case PT_PaddingBottom:
+					case PT_PaddingLeft:
+						setD2DRectValue(padding, declIter->first - PT_PaddingTop,
+							values.at(0).data.vuint);
+						hasPadding = true;
+						break;
+				}
+			}
+			if(++declIter == declIterEnd) goto END;
+		}
+
+		// --- Geometry ---
+		if(declIter->first <= PT_MaximumHeight)
+		{
+			geoRO = new GeometryRenderObject();
+			do {
+				CssValueArray& values = declIter->second->values;
+				if(values.at(0).type != CssValue::Identifier ||
+					values.at(0).data.videntifier != Value_None)
+				{
+					int data = values.at(0).data.vint;
+					switch(declIter->first)
+					{
+						case PT_Width:        geoRO->width     = data; break;
+						case PT_Height:       geoRO->height    = data; break;
+						case PT_MinimumWidth: geoRO->minWidth  = data; break;
+						case PT_MinimumHeight:geoRO->minHeight = data; break;
+						case PT_MaximumWidth: geoRO->maxWidth  = data; break;
+						case PT_MaximumHeight:geoRO->maxHeight = data; break;
+					}
+				}
+				
+			} while(++declIter != declIterEnd);
+			if(++declIter == declIterEnd) goto END;
+		}
+
+		// --- Cursor ---
+		if(declIter->first == PT_Cursor)
+		{
+			cursor = new MCursor();
+			const CssValue& value = declIter->second->values.at(0);
+			switch(value.type)
+			{
+				case CssValue::Identifier:
+					if(value.data.videntifier < Value_Default || value.data.videntifier > Value_Blank)
+					{
+						delete cursor;
+						cursor = 0;
+					} else {
+						cursor->setType(static_cast<MCursor::CursorType>
+							(value.data.videntifier - Value_Default));
+					}
+					break;
+				case CssValue::Uri:
+					cursor->loadCursorFromFile(*value.data.vstring);
+					break;
+				case CssValue::Number:
+					cursor->loadCursorFromRes(MAKEINTRESOURCEW(value.data.vint));
+					break;
+				default:
+					delete cursor;
+					cursor = 0;
+			}
+			if(++declIter == declIterEnd) goto END;
+		}
+
+		// --- Text ---
+		if(declIter->first <= PT_TextShadow)
+		{
+			wstring fontFace = L"Arial";
+			bool bold      = false;
+			bool italic    = false;
+			bool pixelSize = false;
+			unsigned int size = 12;
+			while(declIter != declIterEnd && declIter->first <= PT_FontWeight)
+			{
+				const CssValue& value = declIter->second->values.at(0);
+				switch(declIter->first)
+				{
+				case PT_Font:
+					{
+						const CssValueArray& values = declIter->second->values;
+						for(int i = values.size() - 1; i >= 0; --i)
+						{
+							const CssValue& v = values.at(i);
+							if(v.type == CssValue::String)
+								fontFace = *v.data.vstring;
+							else if(v.type == CssValue::Identifier) {
+								if(v.data.videntifier == Value_Bold)
+									bold = true;
+								else if(v.data.videntifier == Value_Italic || 
+									v.data.videntifier == Value_Oblique)
+									italic = true;
+							} else {
+								size = v.data.vuint;
+								pixelSize = v.type == CssValue::Length;
+							}
+						}
+
+					}
+					break;
+				case PT_FontSize:
+					size = value.data.vuint;
+					// If the value is 12px, the CssValue is Length.
+					// If the value is 16, the CssValue is Number.
+					// We don't support unit 'pt'.
+					pixelSize = (value.type == CssValue::Length);
+					break;
+				case PT_FontStyle: italic = (value.data.videntifier != Value_Normal); break;
+				case PT_FontWeight:  bold = (value.data.videntifier == Value_Bold);   break;
+				}
+				++declIter;
+			}
+
+			MFont font(size,fontFace, bold, italic, pixelSize);
+			textRO = new TextRenderObject(font);
+			if(declIter == declIterEnd) goto END;
+
+			while(declIter != declIterEnd /*&& declIter->first <= PT_TextShadow*/)
+			{
+				const CssValueArray& values = declIter->second->values;
+				switch(declIter->first)
+				{
+					case PT_Color:
+						textRO->color = values.at(0).getColor();
+						break;
+					case PT_TextShadow:
+						if(values.size() < 2)
+							break;
+						textRO->shadowOffsetX = (char)values.at(0).data.vint;
+						textRO->shadowOffsetY = (char)values.at(1).data.vint;
+						for(size_t i = 2; i < values.size(); ++i)
+						{
+							if(values.at(i).type == CssValue::Color)
+								textRO->shadowColor = values.at(i).getColor();
+							else
+								textRO->shadowBlur = (char)values.at(i).data.vuint;
+						}
+						break;
+					case PT_TextOutline:
+						textRO->outlineWidth = (char)values.at(0).data.vuint;
+						textRO->outlineColor = values.at(values.size() - 1).getColor();
+						if(values.size() >= 3)
+							textRO->outlineBlur = (char)values.at(1).data.vuint;
+						break;
+					case PT_TextAlignment:
+						if(values.size()>1)
+						{
+							textRO->alignY = values.at(1).data.videntifier;
+							textRO->alignX = values.at(0).data.videntifier;
+						} else {
+							ValueType vt = values.at(0).data.videntifier;
+							if(vt == Value_Center)
+								textRO->alignX = textRO->alignY = vt;
+							else if(vt == Value_Top || vt == Value_Bottom)
+								textRO->alignY = vt;
+							else
+								textRO->alignX = vt;
+						}
+						break;
+					case PT_TextDecoration:
+						textRO->decoration = values.at(0).data.videntifier; break;
+					case PT_TextUnderlineStyle:
+						textRO->lineStyle  = values.at(0).data.videntifier; break;
+					case PT_TextOverflow:
+						textRO->overflow   = values.at(0).data.videntifier; break;
+				}
+				++declIter;
+			}
+		}
+
+		END:// Check if this RenderRule is opaque.
+		int  opaqueCount  = 0;
+		bool opaqueBorder = (!hasMargin && bt == BT_Simple);
+		for(int i = bgOpaqueTypes.size() - 1; i >= 0 && opaqueCount == 0; --i)
+		{
+			switch(bgOpaqueTypes.at(i)) {
+				case OpaqueClipMargin:  ++opaqueCount; break;
+				case OpaqueClipBorder:  if(opaqueBorder) ++opaqueCount; break;
+				case OpaqueClipPadding:
+					if(opaqueBorder && !hasPadding)
+						++opaqueCount;
+					break;
+			}
+		}
+		if(opaqueBorderImage) ++opaqueCount;
+		opaqueBackground = opaqueCount > 0;
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	// ********** RenderRule Impl
 	RenderRule::RenderRule(RenderRuleData* d):data(d)
 		{ if(data) ++data->refCount; }
@@ -2447,28 +3261,23 @@ namespace MetalBone
 		{ if(data) ++data->refCount; }
 	bool RenderRule::opaqueBackground() const
 		{ return data == 0 ? false : data->opaqueBackground; }
-	void RenderRule::draw(ID2D1RenderTarget* rt,const RECT& wr, const RECT& cr,const wstring& t)
-		{ if(data) data->draw(rt,wr,cr,t); }
+	void RenderRule::draw(ID2D1RenderTarget* rt,const RECT& wr, const RECT& cr,
+		const wstring& t,unsigned int i)
+		{ if(data) data->draw(rt,wr,cr,t,i); }
 	void RenderRule::init()
 		{ M_ASSERT(data==0); data = new RenderRuleData(); }
+	MCursor* RenderRule::getCursor()
+		{ return data ? data->cursor : 0; }
 	RenderRule::~RenderRule()
-	{
-		if(data) {
-			if(--data->refCount == 0)
-				delete data;
-		}
+	{ 
+		if(data && --data->refCount == 0)
+			delete data;
 	}
 	const RenderRule& RenderRule::operator=(const RenderRule& rhs)
 	{
-		if(&rhs != this)
-		{
-			if(data) {
-				if(--data->refCount == 0)
-					delete data;
-			}
-			if((data = rhs.data) != 0)
-				++data->refCount;
-		}
+		if(data == rhs.data) return rhs;
+		if(data && --data->refCount == 0) { delete data; }
+		if((data = rhs.data) != 0) ++data->refCount;
 		return *this;
 	}
 
@@ -2510,12 +3319,15 @@ namespace MetalBone
 		{ mImpl->setWidgetSS(w,css); }
 	void MStyleSheetStyle::polish(MWidget* w)
 		{ mImpl->polish(w); }
-	void MStyleSheetStyle::draw(MWidget* w,ID2D1RenderTarget* rt, const RECT& wr, const RECT& cr, const std::wstring& t)
-		{ mImpl->draw(w,rt,wr,cr,t); } 
+	void MStyleSheetStyle::draw(MWidget* w,ID2D1RenderTarget* rt,
+		const RECT& wr, const RECT& cr, const std::wstring& t,int i)
+		{ mImpl->draw(w,rt,wr,cr,t,i); }
 	void MStyleSheetStyle::removeCache(MWidget* w)
 		{ mImpl->removeCache(w); }
 	RenderRule MStyleSheetStyle::getRenderRule(MWidget* w, unsigned int p)
 		{return mImpl->getRenderRule(w,p); }
+	void MStyleSheetStyle::setTextRenderer(TextRenderer t, unsigned int maxSize)
+		{ MSSSPrivate::textRenderer = t; MSSSPrivate::maxGdiFontPtSize = maxSize; }
 	void MStyleSheetStyle::updateWidgetAppearance(MWidget* w)
 	{
 		unsigned int lastP = w->getLastWidgetPseudo();
@@ -2528,24 +3340,93 @@ namespace MetalBone
 			{
 				w->repaint();
 				w->ssSetOpaque(currRule.opaqueBackground());
+				// Mark if the widget has a animated background.
+				if(currRule->getTotalFrameCount() > 1)
+				{
+					if(lastRule->getTotalFrameCount() == 1)
+						mImpl->addAniWidget(w);
+				} else if(lastRule->getTotalFrameCount() > 1)
+					mImpl->removeAniWidget(w);
+
 				// Remark: we can update the widget's property here.
 			}
 		}
 
 		// We always update the cursor.
 		MCursor* cursor = w->getCursor();
-		if(cursor == 0 && currRule) cursor = currRule->cursor;
+		if(cursor == 0 && currRule) cursor = currRule.getCursor();
 		if(cursor == 0) cursor = &gArrowCursor;
 		cursor->show();
 	}
-	void MStyleSheetStyle::setTextRenderer(TextRenderer t, unsigned int maxSize)
-		{ MSSSPrivate::textRenderer = t; MSSSPrivate::maxGdiFontPtSize = maxSize; }
-	
 
 	// ********** MSSSPrivate Implementation
 	MSSSPrivate* MSSSPrivate::instance = 0;
 	MStyleSheetStyle::TextRenderer MSSSPrivate::textRenderer = MStyleSheetStyle::AutoDetermine;
 	unsigned int MSSSPrivate::maxGdiFontPtSize = 16;
+	inline void MSSSPrivate::polish(MWidget* w)
+	{
+		RenderRule rule = getRenderRule(w, PC_Default);
+		if(rule) rule->setGeometry(w);
+
+		RenderRule hoverRule = getRenderRule(w, PC_Hover);
+		if(hoverRule && hoverRule != rule)
+			w->setAttributes(WA_Hover);
+
+		w->ssSetOpaque(rule.opaqueBackground());
+	}
+
+	inline void MSSSPrivate::draw(MWidget* w, ID2D1RenderTarget* rt,
+		const RECT& wr, const RECT& cr, const wstring& t,int frameIndex)
+	{
+		brushPool.setWorkingRT(rt);
+		RenderRule rule = getRenderRule(w,w->getWidgetPseudo(true));
+		if(rule)
+		{
+			unsigned int ruleFrameCount = rule->getTotalFrameCount();
+			unsigned int index = frameIndex >= 0 ? frameIndex : 0;
+			if(ruleFrameCount > 1 && frameIndex == -1)
+			{
+				unsigned int& i = widgetAniBGIndexMap[w];
+				if(i >= ruleFrameCount) i = 0;
+				index = i;
+				++i;
+			}
+
+			rule->draw(rt,wr,cr,t,index);
+			if(ruleFrameCount != rule->getTotalFrameCount())
+			{
+				// The total frame count might change after calling draw();
+				if(rule->getTotalFrameCount() > 1)
+					addAniWidget(w);
+				else
+					removeAniWidget(w);
+			}
+		}
+		brushPool.setWorkingRT(0);
+	}
+	void MSSSPrivate::updateAniWidgets()
+	{
+		AniWidgetIndexMap::iterator it    = widgetAniBGIndexMap.begin();
+		AniWidgetIndexMap::iterator itEnd = widgetAniBGIndexMap.end();
+
+		while(it != itEnd)
+		{
+			it->first->repaint();
+			++it;
+		}
+	}
+	void MSSSPrivate::addAniWidget(MWidget* w)
+	{
+		widgetAniBGIndexMap[w] = 0;
+		if(!aniBGTimer.isActive())
+			aniBGTimer.start(200);
+	}
+	void MSSSPrivate::removeAniWidget(MWidget* w)
+	{
+		widgetAniBGIndexMap.erase(w);
+		if(widgetAniBGIndexMap.size() == 0)
+			aniBGTimer.stop();
+	}
 	inline unsigned int MSSSPrivate::gdiRenderMaxFontSize()
 		{ return maxGdiFontPtSize; }
 	inline MStyleSheetStyle::TextRenderer MSSSPrivate::getTextRenderer()
@@ -2638,7 +3519,7 @@ namespace MetalBone
 	void MSSSPrivate::getMachedStyleRules(MWidget* widget, MatchedStyleRuleVector& srs)
 	{
 		// Get all possible stylesheets
-		vector<CSS::StyleSheet*> sheets;
+		vector<StyleSheet*> sheets;
 		for(MWidget* p = widget; p != 0; p = p->parent())
 		{
 			WidgetSSCache::const_iterator wssIter = widgetSSCache.find(p);
@@ -2698,7 +3579,6 @@ namespace MetalBone
 		}
 	}
 
-	// Remark. We should make gif animation possible.
 	RenderRule MSSSPrivate::getRenderRule(MWidget* w, unsigned int pseudo)
 	{
 		// == 1.Find RenderRule for MWidget w from Widget-RenderRule cache.
@@ -2833,29 +3713,9 @@ namespace MetalBone
 			return renderRule;
 
 		// == 5.Create RenderRule
-		initRenderRule(renderRule,declarations);
+		renderRule.init();
+		renderRule->init(declarations);
 		return renderRule;
-	}
-
-	inline void MSSSPrivate::polish(MWidget* w)
-	{
-		RenderRule rule = getRenderRule(w, PC_Default);
-		if(rule) rule->setGeometry(w);
-
-		RenderRule hoverRule = getRenderRule(w, PC_Hover);
-		if(hoverRule && hoverRule != rule)
-			w->setAttributes(WA_Hover);
-
-		w->ssSetOpaque(rule.opaqueBackground());
-	}
-
-	inline void MSSSPrivate::draw(MWidget* w, ID2D1RenderTarget* rt,
-		const RECT& wr, const RECT& cr, const wstring& t)
-	{
-		brushPool.setWorkingRT(rt);
-		CSS::RenderRule rule = getRenderRule(w,w->getWidgetPseudo(true));
-		rule.draw(rt,wr,cr,t);
-		brushPool.setWorkingRT(0);
 	}
 
 	inline void MSSSPrivate::removeCache(MWidget* w)
@@ -2864,10 +3724,14 @@ namespace MetalBone
 		// renderRuleCollection, because some of them might be using by others.
 		widgetStyleRuleCache.erase(w);
 		widgetRenderRuleCache.erase(w);
+		widgetAniBGIndexMap.erase(w);
 	}
 
 	inline MSSSPrivate::MSSSPrivate():appStyleSheet(new StyleSheet())
-		{ instance = this; }
+	{ 
+		instance = this;
+		aniBGTimer.timeout.Connect(this,&MSSSPrivate::updateAniWidgets);
+	}
 	void MSSSPrivate::removeResources()
 		{ brushPool.removeCache(); }
 	MSSSPrivate::~MSSSPrivate()
@@ -2935,696 +3799,4 @@ namespace MetalBone
 			++it;
 		}
 	}
-
-	enum BorderType { BT_Simple, BT_Radius, BT_Complex };
-	enum BackgroundOpaqueType {
-		NonOpaque,
-		OpaqueClipMargin,
-		OpaqueClipBorder,
-		OpaqueClipPadding
-	};
-	BorderType testBorderObjectType(CssValueArray& values,
-		const MSSSPrivate::DeclMap::iterator& declIter,
-		const MSSSPrivate::DeclMap::iterator& declIterEnd)
-	{
-		MSSSPrivate::DeclMap::iterator seeker = declIter;
-		while(seeker != declIterEnd && seeker->first <= PT_BorderRadius)
-		{
-			switch(seeker->first) {
-			case PT_Border:
-				{
-					CssValueArray& values = seeker->second->values;
-					// If there're more than 3 values in PT_Border, it must be complex.
-					if(values.size() > 3)
-						return BT_Complex;
-					for(unsigned int i = 1; i < values.size() ; ++i)
-					{ // If there are the same type values, it's complex.
-						if(values.at(i - 1).type == values.at(i).type)
-							return BT_Complex;
-					}
-				}
-				break;
-			case PT_BorderWidth:
-			case PT_BorderColor:
-			case PT_BorderStyles:
-				if(seeker->second->values.size() > 1)
-					return BT_Complex;
-				break;
-			case PT_BorderRadius:	return seeker->second->values.size() > 1 ? BT_Complex : BT_Radius;
-			default: return BT_Complex;
-			}
-			++seeker;
-		}
-		return BT_Simple;
-	}
-
-	// ********** Create The BackgroundRO
-	bool isBrushValueOpaque(const CssValue& value)
-	{
-		if(value.type == CssValue::Color)
-			return true;
-
-		M_ASSERT_X(value.type == CssValue::Uri,"The brush value must be neither Color or Uri(for now)","isBrushValueOpaque()");
-		const std::wstring* uri = value.data.vstring;
-		std::wstring ex = uri->substr(uri->size() - 3);
-		std::transform(ex.begin(),ex.end(),ex.begin(),::tolower);
-		if(ex.find(L"png") == 0 || ex.find(L"gif") == 0)
-			return false;
-		return true;
-	}
-	// Return true if the "prop" affects alignX
-	bool setBGROProperty(BackgroundRenderObject* object, ValueType prop, bool isPrevPropAlignX)
-	{
-		switch(prop) {
-
-		case Value_NoRepeat: object->repeat = CSS::NoRepeat; break;
-		case Value_RepeatX:  object->repeat = CSS::RepeatX;  break;
-		case Value_RepeatY:  object->repeat = CSS::RepeatY;  break;
-		case Value_Repeat:   object->repeat = CSS::RepeatXY; break;
-
-		case Value_Padding:
-		case Value_Content:
-		case Value_Border:
-		case Value_Margin:   object->clip = prop; break;
-
-		case Value_Left:
-		case Value_Right:	 object->alignX = prop; return true;
-		case Value_Top:
-		case Value_Bottom:   object->alignY = prop; break;
-		// We both set alignment X & Y, because one may only specific a alignment value.
-		case Value_Center:
-			object->alignY = prop;
-			if(!isPrevPropAlignX) { object->alignX= prop; return true; }
-		}
-		return false;
-	}
-	void batchSetBGROProps(std::vector<BackgroundRenderObject*>& bgros, ValueType prop, bool isPrevPropAlignX = false)
-	{
-		std::vector<BackgroundRenderObject*>::iterator iter = bgros.begin();
-		std::vector<BackgroundRenderObject*>::iterator iterEnd = bgros.end();
-		while(iter != iterEnd) { setBGROProperty(*iter,prop,isPrevPropAlignX); ++iter; }
-	}
-	// Background: { Brush/Image Repeat Clip Alignment pos-x pos-y }*;
-	// If we want to make it more like CSS3 syntax,
-	// we can parse a CSS3 syntax background into multiple Background Declarations.
-	BackgroundRenderObject* MSSSPrivate::createBackgroundRO(CssValueArray& values)
-	{
-		const CssValue& brushValue = values.at(0);
-		BackgroundRenderObject* newObject = new BackgroundRenderObject();
-		// We tell the BGRO that the position of the brush. We don't care if the brush
-		// is created right now.
-		if(brushValue.type == CssValue::Uri)
-			newObject->brush = brushPool.getBitmapBrush(*brushValue.data.vstring);
-		else
-			newObject->brush = brushPool.getSolidBrush(MColor(brushValue.data.vuint));
-
-		size_t index = 1;
-		size_t valueCount = values.size();
-		bool isPropAlignX = false;
-		while(index < valueCount)
-		{
-			const CssValue& v = values.at(index);
-			if(v.type == CssValue::Identifier) {
-				isPropAlignX = setBGROProperty(newObject, static_cast<ValueType>(v.data.vuint), isPropAlignX);
-			} else {
-				mWarning(v.type == CssValue::Length || v.type == CssValue::Number, L"The rest of background css value should be of type 'length' or 'number'");
-
-				newObject->x = v.data.vuint;
-
-				if(++index >= values.size()) { break; }
-				if(values.at(index).type == CssValue::Identifier) { continue; }
-				newObject->y = v.data.vuint;
-
-				if(++index >= values.size()) { break; }
-				if(values.at(index).type == CssValue::Identifier) { continue; }
-				newObject->width = v.data.vuint;
-
-				if(++index >= values.size()) { break; }
-				if(values.at(index).type == CssValue::Identifier) { continue; }
-				newObject->height = v.data.vuint;
-			}
-			++index;
-		}
-
-		return newObject;
-	}
-
-	// ********** Set the SimpleBorderRO
-	void MSSSPrivate::setSimpleBorderRO(SimpleBorderRenderObject* obj,
-		DeclMap::iterator& iter, DeclMap::iterator iterEnd)
-	{
-		CssValue colorValue(CssValue::Color);
-		while(iter != iterEnd)
-		{
-			vector<CssValue>& values = iter->second->values;
-			switch(iter->first) {
-				case PT_Border:
-					for(unsigned int i = 0; i < values.size(); ++i) {
-						CssValue& v = values.at(i);
-						switch(v.type) {
-							case CssValue::Identifier: obj->style = v.data.videntifier; break;
-							case CssValue::Color:      colorValue = v;                  break;
-							default:                   obj->width = v.data.vuint;       break;
-						}
-					}
-					break;
-				case PT_BorderWidth:  obj->width = values.at(0).data.vuint;       break;
-				case PT_BorderStyles: obj->style = values.at(0).data.videntifier; break;
-				case PT_BorderColor:  colorValue = values.at(0);                  break;
-			}
-
-			++iter;
-		}
-
-		obj->color = MColor(colorValue.data.vuint);
-		obj->brush = brushPool.getSolidBrush(obj->color);
-	}
-
-	// ********** Create the ComplexBorderRO
-	void setGroupUintValue(unsigned int (&intArray)[4], std::vector<CssValue>& values,
-		int startValueIndex = 0, int endValueIndex = -1)
-	{
-		int size = (endValueIndex == -1 ? values.size() : endValueIndex + 1) - startValueIndex;
-		if(size == 4) {
-			intArray[0] = values.at(startValueIndex    ).data.vuint;
-			intArray[1] = values.at(startValueIndex + 1).data.vuint;
-			intArray[2] = values.at(startValueIndex + 2).data.vuint;
-			intArray[3] = values.at(startValueIndex + 3).data.vuint;
-		} else if(size == 2) {
-			intArray[0] = intArray[2] = values.at(startValueIndex    ).data.vuint;
-			intArray[1] = intArray[3] = values.at(startValueIndex + 1).data.vuint;
-		} else {
-			intArray[0] = intArray[1] =
-			intArray[2] = intArray[3] = values.at(startValueIndex).data.vuint;
-		}
-	}
-	void setD2DRectValue(D2D_RECT_U& rect, std::vector<CssValue>& values,
-		int startValueIndex = 0, int endValueIndex = -1)
-	{
-		int size = (endValueIndex == -1 ? values.size() : endValueIndex + 1) - startValueIndex;
-		if(size == 4) {
-			rect.top    = values.at(startValueIndex    ).data.vuint;
-			rect.right  = values.at(startValueIndex + 1).data.vuint;
-			rect.bottom = values.at(startValueIndex + 2).data.vuint;
-			rect.left   = values.at(startValueIndex + 3).data.vuint;
-		} else if(size == 2) {
-			rect.top    = rect.bottom = values.at(startValueIndex    ).data.vuint;
-			rect.right  = rect.left   = values.at(startValueIndex + 1).data.vuint;
-		} else {
-			rect.top    = rect.bottom =
-			rect.right  = rect.left   = values.at(startValueIndex).data.vuint;
-		}
-	}
-	void setD2DRectValue(D2D_RECT_U& rect, int border, unsigned int value)
-	{
-		if(border == 0) { rect.top    = value; return; }
-		if(border == 1) { rect.right  = value; return; }
-		if(border == 2) { rect.bottom = value; return; }
-		rect.left = value;
-	}
-	void MSSSPrivate::setComplexBorderRO(ComplexBorderRenderObject* obj,
-		DeclMap::iterator& declIter, DeclMap::iterator declIterEnd)
-	{
-		while(declIter != declIterEnd)
-		{
-			vector<CssValue>& values = declIter->second->values;
-			switch(declIter->first)
-			{
-			case PT_Border:
-				{
-					int rangeStartIndex = 0;
-					CssValue::Type valueType = values.at(0).type;
-					unsigned int index = 1;
-					while(index <= values.size())
-					{
-						if(index == values.size() || values.at(index).type != valueType)
-						{
-							switch(valueType) {
-								case CssValue::Identifier:
-									setD2DRectValue(obj->styles,values,rangeStartIndex,index - 1);
-									break;
-								case CssValue::Color:
-									obj->setColors(this,values,rangeStartIndex,index);
-									break;
-								default:
-									setD2DRectValue(obj->widths,values,rangeStartIndex,index-1);
-							}
-							rangeStartIndex = index;
-							if(index < values.size())
-								valueType = values.at(index).type;
-						}
-						++index;
-					}
-				}
-				break;
-
-			case PT_BorderRadius:  setGroupUintValue(obj->radiuses, values);    break;
-			case PT_BorderWidth:   setD2DRectValue(obj->widths, values);        break;
-			case PT_BorderStyles:  setD2DRectValue(obj->styles, values);        break;
-			case PT_BorderColor:   obj->setColors(this,values,0,values.size()); break;
-
-			case PT_BorderTop:
-			case PT_BorderRight:
-			case PT_BorderBottom:
-			case PT_BorderLeft:
-				{
-					int index = declIter->first - PT_BorderTop;
-					for(unsigned int i = 0; i < values.size(); ++i)
-					{
-						if(values.at(i).type == CssValue::Color) {
-							obj->colors[index]  = MColor(values.at(0).data.vuint);
-							obj->brushes[index] = brushPool.getSolidBrush(obj->colors[index]);
-						} else if(values.at(i).type == CssValue::Identifier) {
-							ValueType vi = values.at(0).data.videntifier;
-							if(index == 0)      obj->styles.top = vi;
-							else if(index == 1) obj->styles.right = vi;
-							else if(index == 2) obj->styles.bottom = vi;
-							else obj->styles.left = vi;
-						} else
-							setD2DRectValue(obj->widths,index,values.at(i).data.vuint);
-					}
-				}
-				break;
-			case PT_BorderTopColor:
-			case PT_BorderRightColor:
-			case PT_BorderBottomColor:
-			case PT_BorderLeftColor: 
-				{
-					int index = declIter->first - PT_BorderTopColor;
-					obj->colors[index]  = MColor(values.at(0).data.vuint);
-					obj->brushes[index] = brushPool.getSolidBrush(obj->colors[index]);
-				}
-				break;
-			case PT_BorderTopWidth:
-			case PT_BorderRightWidth:
-			case PT_BorderBottomWidth:
-			case PT_BorderLeftWidth:
-				setD2DRectValue(obj->widths, declIter->first - PT_BorderTopWidth, values.at(0).data.vuint);
-				break;
-			case PT_BorderTopStyle:
-			case PT_BorderRightStyle:
-			case PT_BorderBottomStyle:
-			case PT_BorderLeftStyle:
-				setD2DRectValue(obj->styles, declIter->first - PT_BorderTopStyle, values.at(0).data.videntifier);
-				break;
-			case PT_BorderTopLeftRadius:
-			case PT_BorderTopRightRadius:
-			case PT_BorderBottomLeftRadius:
-			case PT_BorderBottomRightRadius:
-				obj->radiuses[declIter->first - PT_BorderTopLeftRadius] = values.at(0).data.vuint;
-				break;
-			}
-			++declIter;
-		}
-		obj->checkUniform();
-	}
-
-
-	// ********** Create the BorderImageRO
-	BorderImageRenderObject* MSSSPrivate::createBorderImageRO(CssValueArray& values)
-	{
-		BorderImageRenderObject* biro = new BorderImageRenderObject();
-		biro->brush = brushPool.getBitmapBrush(*values.at(0).data.vstring);
-
-		int endIndex = values.size() - 1;
-		// Repeat or Stretch
-		if(values.at(endIndex).type == CssValue::Identifier)
-		{
-			if(values.at(endIndex-1).type == CssValue::Identifier) {
-				if(values.at(endIndex).data.vuint != Value_Stretch)
-					biro->repeat = RepeatY;
-				if(values.at(endIndex-1).data.vuint != Value_Stretch)
-					biro->repeat = (biro->repeat == RepeatY) ? RepeatXY : RepeatY;
-				endIndex -= 2;
-			} else {
-				if(values.at(endIndex).data.vuint != Value_Stretch)
-					biro->repeat = RepeatXY;
-				--endIndex;
-			}
-		}
-		// Border
-		if(endIndex == 4) {
-			biro->widths.top    = values.at(1).data.vuint;
-			biro->widths.right  = values.at(2).data.vuint;
-			biro->widths.bottom = values.at(3).data.vuint;
-			biro->widths.left   = values.at(4).data.vuint;
-		} else if(endIndex == 2) {
-			biro->widths.bottom = biro->widths.top  = values.at(1).data.vuint;
-			biro->widths.right  = biro->widths.left = values.at(2).data.vuint;
-		} else {
-			biro->widths.left   = biro->widths.right =
-			biro->widths.bottom = biro->widths.top   = values.at(1).data.vuint;
-		}
-
-		return biro;
-	}
-
-	void MSSSPrivate::initRenderRule(RenderRule& renderRule, DeclMap& declarations)
-	{
-		// Remark: If the declaration have values in wrong order, it might crash the program.
-		// Maybe we should add some logic to avoid this flaw.
-		renderRule.init();
-		DeclMap::iterator declIter    = declarations.begin();
-		DeclMap::iterator declIterEnd = declarations.end();
-
-		vector<BackgroundOpaqueType> bgOpaqueTypes;
-		bool opaqueBorderImage = false;
-		BorderType bt = BT_Simple;
-
-		// --- Backgrounds ---
-		while(declIter->first == PT_Background)
-		{
-			BackgroundOpaqueType bgOpaqueType = NonOpaque;
-			CssValueArray& values = declIter->second->values;
-			BackgroundRenderObject* o = createBackgroundRO(values);
-			if(isBrushValueOpaque(values.at(0)))
-			{
-				if(o->clip == Value_Margin)
-					bgOpaqueType = OpaqueClipMargin;
-				else if(o->clip == Value_Border)
-					bgOpaqueType = OpaqueClipBorder;
-				else
-					bgOpaqueType = OpaqueClipPadding;
-			}
-
-			renderRule->backgroundROs.push_back(o);
-			bgOpaqueTypes.push_back(bgOpaqueType);
-
-			if(++declIter == declIterEnd) goto END;
-		}
-		while(declIter->first < PT_BackgroundPosition)
-		{
-			batchSetBGROProps(renderRule->backgroundROs, declIter->second->values.at(0).data.videntifier);
-
-			if(++declIter == declIterEnd) goto END;
-		}
-		if(declIter->first == PT_BackgroundPosition)
-		{
-			vector<CssValue>& values = declIter->second->values;
-			int propx = values.at(0).data.vint;
-			int propy = values.size() == 1 ? propx : values.at(1).data.vint;
-
-			vector<BackgroundRenderObject*>::iterator it    = renderRule->backgroundROs.begin();
-			vector<BackgroundRenderObject*>::iterator itEnd = renderRule->backgroundROs.end();
-			while(it != itEnd) {
-				(*it)->x = propx;
-				(*it)->y = propy;
-				++it;
-			}
-			if(++declIter == declIterEnd) goto END;
-		}
-		if(declIter->first == PT_BackgroundSize)
-		{
-			vector<CssValue>& values = declIter->second->values;
-			int propw = values.at(0).data.vuint;
-			int proph = values.size() == 1 ? propw : values.at(1).data.vuint;
-
-			vector<BackgroundRenderObject*>::iterator it    = renderRule->backgroundROs.begin();
-			vector<BackgroundRenderObject*>::iterator itEnd = renderRule->backgroundROs.end();
-			while(it != itEnd) {
-				(*it)->width  = propw;
-				(*it)->height = proph;
-				++it;
-			}
-			if(++declIter == declIterEnd) goto END;
-		}
-		if(declIter->first == PT_BackgroundAlignment)
-		{
-			vector<CssValue>& values = declIter->second->values;
-			batchSetBGROProps(renderRule->backgroundROs,values.at(0).data.videntifier);
-			if(values.size() == 2)
-				batchSetBGROProps(renderRule->backgroundROs,values.at(1).data.videntifier,true);
-
-			if(++declIter == declIterEnd) goto END;
-		}
-
-		// --- BorderImage --- 
-		if(declIter->first == PT_BorderImage)
-		{
-			CssValueArray& values = declIter->second->values;
-			if(values.at(0).type == CssValue::Uri)
-			{
-				opaqueBorderImage = isBrushValueOpaque(values.at(0));
-				renderRule->borderImageRO = createBorderImageRO(declIter->second->values);
-			}
-			if(++declIter == declIterEnd) goto END;
-		}
-
-		// --- Border ---
-		if(declIter->first == PT_Border)
-		{
-			CssValue& v = declIter->second->values.at(0);
-			if(v.type == CssValue::Identifier  && v.data.vuint == Value_None)
-			{ // User specifies no border. Skip everything related to border.
-				do {
-					if(++declIter == declIterEnd) goto END;
-				} while (declIter->first <= PT_BorderRadius);
-			}
-		}
-
-		if(declIter->first <= PT_BorderRadius)
-		{
-			bt = testBorderObjectType(declIter->second->values,declIter,declIterEnd);
-
-			DeclMap::iterator declIter2 = declIter;
-			if(bt == BT_Simple)
-			{
-				while(declIter2 != declIterEnd && declIter2->first <= PT_BorderStyles)
-					++declIter2;
-				SimpleBorderRenderObject* obj = new SimpleBorderRenderObject();
-				renderRule->borderRO = obj;
-				setSimpleBorderRO(obj,declIter,declIter2);
-			} else if(bt == BT_Radius)
-			{
-				while(declIter2 != declIterEnd && declIter2->first <= PT_BorderStyles)
-					++declIter2;
-				RadiusBorderRenderObject* obj = new RadiusBorderRenderObject();
-				renderRule->borderRO = obj;
-				setSimpleBorderRO(obj,declIter,declIter2);
-				obj->radius = declIter->second->values.at(0).data.vuint;
-			} else {
-				while(declIter2 != declIterEnd && declIter2->first <= PT_BorderRadius)
-					++declIter2;
-				ComplexBorderRenderObject* obj = new ComplexBorderRenderObject();
-				renderRule->borderRO = obj;
-				setComplexBorderRO(obj, declIter, declIterEnd);
-			}
-
-			if(declIter == declIterEnd) goto END;
-		}
-
-		// --- Margin & Padding --- 
-		while(declIter->first <= PT_PaddingLeft)
-		{
-			std::vector<CssValue>& values = declIter->second->values;
-			switch(declIter->first)
-			{
-			case PT_Margin:
-				setD2DRectValue(renderRule->margin,values);
-				renderRule->hasMargin = true;
-				break;
-			case PT_MarginTop:
-			case PT_MarginRight:
-			case PT_MarginBottom:
-			case PT_MarginLeft:
-				setD2DRectValue(renderRule->margin,declIter->first - PT_MarginTop, values.at(0).data.vuint);
-				renderRule->hasMargin = true;
-				break;
-			case PT_Padding:
-				setD2DRectValue(renderRule->padding,values);
-				renderRule->hasPadding = true;
-				break;
-			case PT_PaddingTop:
-			case PT_PaddingRight:
-			case PT_PaddingBottom:
-			case PT_PaddingLeft:
-				setD2DRectValue(renderRule->padding,declIter->first - PT_PaddingTop, values.at(0).data.vuint);
-				renderRule->hasPadding = true;
-				break;
-			}
-
-			if(++declIter == declIterEnd) goto END;
-		}
-
-		// --- Geometry ---
-		if(declIter->first <= PT_MaximumHeight)
-		{
-			GeometryRenderObject* geoData = new GeometryRenderObject();
-			renderRule->geoRO = geoData;
-			do {
-				int data = declIter->second->values.at(0).data.vint;
-				switch(declIter->first)
-				{
-				case PT_Width:        geoData->width     = data; break;
-				case PT_Height:       geoData->height    = data; break;
-				case PT_MinimumWidth: geoData->minWidth  = data; break;
-				case PT_MinimumHeight:geoData->minHeight = data; break;
-				case PT_MaximumWidth: geoData->maxWidth  = data; break;
-				case PT_MaximumHeight:geoData->maxHeight = data; break;
-				}
-			}while(++declIter != declIterEnd);
-			if(++declIter == declIterEnd) goto END;
-		}
-
-		// --- Cursor ---
-		if(declIter->first == PT_Cursor)
-		{
-			MCursor* cursor = new MCursor();
-			const CssValue& value = declIter->second->values.at(0);
-			switch(value.type)
-			{
-				case CssValue::Identifier:
-					if(value.data.videntifier < Value_Default || value.data.videntifier > Value_Blank)
-					{
-						delete cursor;
-						cursor = 0;
-					} else {
-						cursor->setType(static_cast<MCursor::CursorType>
-							(value.data.videntifier - Value_Default));
-					}
-					break;
-				case CssValue::Uri:
-					cursor->loadCursorFromFile(*value.data.vstring);
-					break;
-				case CssValue::Number:
-					cursor->loadCursorFromRes(MAKEINTRESOURCEW(value.data.vint));
-					break;
-				default:
-					delete cursor;
-					cursor = 0;
-			}
-			renderRule->cursor = cursor;
-			if(++declIter == declIterEnd) goto END;
-		}
-
-		// --- Text ---
-		if(declIter->first <= PT_TextShadow)
-		{
-			std::wstring fontFace = L"Arial";
-			bool bold = false;
-			bool italic = false;
-			bool pixelSize = false;
-			unsigned int size = 12;
-			while(declIter != declIterEnd && declIter->first <= PT_FontWeight)
-			{
-				const CssValue& value = declIter->second->values.at(0);
-				switch(declIter->first)
-				{
-					case PT_Font:
-						{
-							const CssValueArray& values = declIter->second->values;
-							for(int i = values.size() - 1; i >= 0; --i)
-							{
-								const CssValue& v = values.at(i);
-								if(v.type == CssValue::String)
-									fontFace = *v.data.vstring;
-								else if(v.type == CssValue::Identifier) {
-									if(v.data.videntifier == Value_Bold)
-										bold = true;
-									else if(v.data.videntifier == Value_Italic || 
-										v.data.videntifier == Value_Oblique)
-										italic = true;
-								} else {
-									size = v.data.vuint;
-									pixelSize = v.type == CssValue::Length;
-								}
-							}
-
-						}
-						break;
-					case PT_FontSize:
-						size = value.data.vuint;
-						// If the value is 12px, the CssValue is Length.
-						// If the value is 16, the CssValue is Number.
-						// We don't support unit 'pt'.
-						pixelSize = (value.type == CssValue::Length);
-						break;
-					case PT_FontStyle: italic = (value.data.videntifier != Value_Normal); break;
-					case PT_FontWeight:  bold = (value.data.videntifier == Value_Bold);   break;
-				}
-				++declIter;
-			}
-
-			MFont font(size,fontFace, bold, italic, pixelSize);
-			TextRenderObject* textRO = new TextRenderObject(font);
-			renderRule->textRO = textRO;
-			if(declIter == declIterEnd) goto END;
-
-			while(declIter != declIterEnd /*&& declIter->first <= PT_TextShadow*/)
-			{
-				const CssValueArray& values = declIter->second->values;
-				switch(declIter->first)
-				{
-					case PT_Color:
-						textRO->color = values.at(0).getColor();
-						break;
-					case PT_TextShadow:
-						if(values.size() < 2)
-							break;
-						textRO->shadowOffsetX = (char)values.at(0).data.vint;
-						textRO->shadowOffsetY = (char)values.at(1).data.vint;
-						for(size_t i = 2; i < values.size(); ++i)
-						{
-							if(values.at(i).type == CssValue::Color)
-								textRO->shadowColor = values.at(i).getColor();
-							else
-								textRO->shadowBlur = values.at(i).data.vuint;
-						}
-						break;
-					case PT_TextOutline:
-						textRO->outlineWidth = (char)values.at(0).data.vuint;
-						textRO->outlineColor = values.at(values.size() - 1).getColor();
-						if(values.size() >= 3)
-							textRO->outlineBlur = (char)values.at(1).data.vuint;
-						break;
-					case PT_TextAlignment:
-						if(values.size()>1)
-						{
-							textRO->alignY = values.at(1).data.videntifier;
-							textRO->alignX = values.at(0).data.videntifier;
-						} else {
-							ValueType vt = values.at(0).data.videntifier;
-							if(vt == Value_Center)
-								textRO->alignX = textRO->alignY = vt;
-							else if(vt == Value_Top || vt == Value_Bottom)
-								textRO->alignY = vt;
-							else
-								textRO->alignX = vt;
-						}
-						break;
-					case PT_TextDecoration:
-						textRO->decoration = values.at(0).data.videntifier; break;
-					case PT_TextUnderlineStyle:
-						textRO->lineStyle  = values.at(0).data.videntifier; break;
-					case PT_TextOverflow:
-						textRO->overflow   = values.at(0).data.videntifier; break;
-				}
-
-				++declIter;
-			}
-		}
-
-		END:// Check if this RenderRule is opaque.
-		int opaqueCount = 0;
-		bool opaqueBorder = (!renderRule->hasMargin && bt == BT_Simple);
-		for(int i = bgOpaqueTypes.size() - 1; i >= 0 && opaqueCount == 0; --i)
-		{
-			switch(bgOpaqueTypes.at(i)) {
-				case OpaqueClipMargin:
-					++opaqueCount;
-					break;
-				case OpaqueClipBorder:
-					if(opaqueBorder)
-						++opaqueCount;
-					break;
-				case OpaqueClipPadding:
-					if(opaqueBorder && !renderRule->hasPadding)
-						++opaqueCount;
-					break;
-			}
-		}
-		if(opaqueBorderImage) ++opaqueCount;
-		renderRule->opaqueBackground = opaqueCount > 0;
-	}
-	
 } // namespace MetalBone

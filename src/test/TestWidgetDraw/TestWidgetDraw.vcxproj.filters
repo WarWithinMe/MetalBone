@@ -77,5 +77,11 @@
     <ClInclude Include="..\..\MToolTip.h">
       <Filter>ExternMB\Header</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\3rd\Delegate.h">
+      <Filter>ExternMB\Header\3rd</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rd\Signal.h">
+      <Filter>ExternMB\Header\3rd</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

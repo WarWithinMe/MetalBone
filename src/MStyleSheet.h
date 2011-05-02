@@ -124,7 +124,7 @@ namespace MetalBone
 			bool operator<(const RenderRuleCacheKey& rhs) const;
 			RenderRuleCacheKey& operator=(RenderRuleCacheKey& rhs) { styleRules = rhs.styleRules; }
 		};
-		struct RenderRuleData;
+		class RenderRuleData;
 		class RenderRule
 		{
 			// RenderRule is not thread-safe and it haven't to be.
@@ -140,7 +140,8 @@ namespace MetalBone
 				inline bool isValid() const;
 				bool opaqueBackground() const;
 				void draw(ID2D1RenderTarget*,const RECT& widgetRectInRT, const RECT& clipRectInRT,
-					 const std::wstring& text = std::wstring());
+					 const std::wstring& text = std::wstring(),unsigned int frameIndex = 0);
+				MCursor* getCursor();
 				inline bool operator==(const RenderRule&) const;
 				inline bool operator!=(const RenderRule&) const;
 			private:
@@ -169,7 +170,7 @@ namespace MetalBone
 			void polish(MWidget* w);
 			// clipRect should be equal to or inside the widgetRect.
 			void draw(MWidget* w,ID2D1RenderTarget* rt, const RECT& widgetRectInRT, const RECT& clipRectInRT,
-					const std::wstring& text = std::wstring());
+					const std::wstring& text = std::wstring(), int frameIndex = -1);
 			void removeCache(MWidget* w);
 			CSS::RenderRule getRenderRule(MWidget* w, unsigned int p = CSS::PC_Default);
 			// Check if the widget needs to be unpdated.

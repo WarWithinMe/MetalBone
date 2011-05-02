@@ -66,12 +66,7 @@ namespace MetalBone
 
 			inline unsigned int winDpi() const;
 
-#ifdef METALBONE_USE_SIGSLOT
-			Signal0 aboutToQuit;		// 当MApplication退出Message Loop的时候发送aboutToQuit信号
-#else
-		protected: virtual void aboutToQuit(){}
-#endif
-
+			Signal0<> aboutToQuit;		// 当MApplication退出Message Loop的时候发送aboutToQuit信号
 		protected:
 			// MApplication注册窗口类前调用这个函数获取要注册的窗口类
 			virtual void setupRegisterClass(WNDCLASSW&);

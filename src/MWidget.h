@@ -4,6 +4,7 @@
 
 #include <string>
 #include <d2d1.h>
+#include <list>
 
 namespace MetalBone
 {

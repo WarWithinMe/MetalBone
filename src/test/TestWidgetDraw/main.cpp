@@ -44,8 +44,7 @@ class Button      : public NewWidget
 	}
 };
 
-struct TestWidgetController : public has_slots
-{
+struct TestWidgetController {
 	std::vector<MWidget*> allWidgets;
 
 	TestWidgetController() {}
@@ -84,7 +83,7 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PTSTR,int)
 	controller.createWidgets();
 
 	MTimer timer;
-	timer.timeout.connect(&controller,&TestWidgetController::updateC10);
+	timer.timeout.Connect(&controller,&TestWidgetController::updateC10);
 	timer.start(5000);
 
 
@@ -94,8 +93,7 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PTSTR,int)
 
 void TestWidgetController::updateC10()
 {
-// 	allWidgets.at(C10)->repaint(10,10,60,20);
-	allWidgets.at(C10)->repaint();
+// 	allWidgets.at(C10)->repaint();
 }
 
 void TestWidgetController::createWidgets()
@@ -153,9 +151,9 @@ void TestWidgetController::createWidgets()
 	sc = new MShortCut(WinModifier | CtrlModifier , 0x53, 0, true);
 	sc2= new MShortCut(CtrlModifier | NoModifier, 0x53, c10, false);
 	sc3= new MShortCut(CtrlModifier | NoModifier, 0x44, 0, false);
-	sc->invoked.connect(this,&TestWidgetController::globalShortCut);
-	sc2->invoked.connect(this,&TestWidgetController::localShortCut);
-	sc3->invoked.connect(this,&TestWidgetController::localShortCut);
+	sc->invoked.Connect(this,&TestWidgetController::globalShortCut);
+	sc2->invoked.Connect(this,&TestWidgetController::localShortCut);
+	sc3->invoked.Connect(this,&TestWidgetController::localShortCut);
 
 	mainWindow->setMaximumSize(500,500);
 	mainWindow->setMinimumSize(500,500);

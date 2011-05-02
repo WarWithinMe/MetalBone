@@ -47,7 +47,7 @@ namespace MetalBone
 			lf.lfHeight = mApp->winDpi() / 72 * 9;
 			lf.lfWeight = FW_NORMAL;
 			lf.lfQuality = ANTIALIASED_QUALITY;
-			wcscpy(lf.lfFaceName,L"Arial");
+			wcscpy_s(lf.lfFaceName,L"Arial");
 			defaultData.fontHandle = ::CreateFontIndirectW(&lf);
 			defaultData.refCount = 1;
 			defaultData.faceName = L"Arial";
@@ -314,12 +314,17 @@ namespace MetalBone
 				range = timerHash.equal_range(interval);
 			} else
 				++range.first;
-#ifdef METALBONE_USE_SIGSLOT
-			timer->timeout.emit();
-#else
 			timer->timeout();
-#endif
 		}
+	}
+
+	void MTimer::setInterval(unsigned int msec)
+	{
+		m_interval = msec;
+		if(!b_active)
+			return;
+		stop();
+		start();
 	}
 
 	void MTimer::cleanUp()
@@ -338,18 +343,13 @@ namespace MetalBone
 		{
 			tit->second->b_active = false;
 			tit->second->m_id = 0;
+			++tit;
 		}
 		timerHash.clear();
 	}
+	struct MTimerCleanUpHelper { ~MTimerCleanUpHelper() { MTimer::cleanUp(); } };
+	MTimerCleanUpHelper timerCleanUpHelper;
 
-	void MTimer::setInterval(unsigned int msec)
-	{
-		m_interval = msec;
-		if(!b_active)
-			return;
-		stop();
-		start();
-	}
 
 
 

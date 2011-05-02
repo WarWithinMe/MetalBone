@@ -384,13 +384,7 @@ namespace MetalBone
 					}
 				}
 				if(invoker)
-				{
-#ifdef METALBONE_USE_SIGSLOT
-					invoker->invoked.emit();
-#else
 					invoker->invoked();
-#endif
-				}
 			}
 			if(msg == WM_SYSKEYDOWN)
 				return DefWindowProcW(hwnd,msg,wparam,lparam);
@@ -717,15 +711,14 @@ namespace MetalBone
 
 	MApplication::~MApplication()
 	{
-		 Gdiplus::GdiplusShutdown(mImpl->gdiPlusToken);
-		 SafeRelease(mImpl->wicFactory);
-		 SafeRelease(mImpl->d2d1Factory);
-		 SafeRelease(mImpl->dwriteFactory);
-		 delete mImpl;
-		 MApplicationData::instance = 0;
-		 CoUninitialize();
-		 s_instance = 0;
-
+		Gdiplus::GdiplusShutdown(mImpl->gdiPlusToken);
+		SafeRelease(mImpl->wicFactory);
+		SafeRelease(mImpl->d2d1Factory);
+		SafeRelease(mImpl->dwriteFactory);
+		delete mImpl;
+		MApplicationData::instance = 0;
+		CoUninitialize();
+		s_instance = 0;
 	}
 
 	const std::set<MWidget*>& MApplication::topLevelWindows() const { return mImpl->topLevelWindows; }
@@ -759,7 +752,7 @@ namespace MetalBone
 
 		while( (result = GetMessageW(&msg, 0, 0, 0)) != 0)
 		{
-			if(result == -1) // GetMessage ³ö´í
+			if(result == -1) // GetMessage Error 
 				break;
 
 			if(msg.message == WM_HOTKEY)
@@ -768,11 +761,7 @@ namespace MetalBone
 					LOWORD(msg.lParam),HIWORD(msg.lParam));
 				for(int i = scs.size() - 1; i >= 0; --i)
 				{
-#ifdef METALBONE_USE_SIGSLOT
-					scs.at(i)->invoked.emit();
-#else
 					scs.at(i)->invoked();
-#endif
 				}
 			} else
 			{
@@ -781,11 +770,7 @@ namespace MetalBone
 			}
 		}
 
-#ifdef METALBONE_USE_SIGSLOT
-		aboutToQuit.emit();
-#else
 		aboutToQuit();
-#endif
 		return result;
 	}
 
@@ -1782,7 +1767,7 @@ namespace MetalBone
 
 				if(childRegion.isEmpty()) {
 					if(tlpWE->passiveUpdateWidgets.find(child) != tlpWE->passiveUpdateWidgets.end())
-						child->draw(childRectInWnd.left,childRectInWnd.right,true);
+						child->draw(childRectInWnd.left,childRectInWnd.top,true);
 				} else {
 					tlpWE->passiveUpdateWidgets[child].combine(childRegion);
 					child->draw(childRectInWnd.left,childRectInWnd.top,true);
