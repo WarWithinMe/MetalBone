@@ -1246,7 +1246,7 @@ namespace MetalBone
 			void setWidgetSS (MWidget*, const wstring&);
 			void clearRRCacheRecursively(MWidget*);
 
-			void removeResources();
+			void discardResource(ID2D1RenderTarget* = 0);
 
 			inline void polish(MWidget*);
 			inline void draw(MWidget*,ID2D1RenderTarget*,const RECT&,const RECT&, const wstring&,int);
@@ -3328,6 +3328,8 @@ namespace MetalBone
 		{return mImpl->getRenderRule(w,p); }
 	void MStyleSheetStyle::setTextRenderer(TextRenderer t, unsigned int maxSize)
 		{ MSSSPrivate::textRenderer = t; MSSSPrivate::maxGdiFontPtSize = maxSize; }
+	void MStyleSheetStyle::discardResource(ID2D1RenderTarget* w)
+		{ mImpl->discardResource(w); }
 	void MStyleSheetStyle::updateWidgetAppearance(MWidget* w)
 	{
 		unsigned int lastP = w->getLastWidgetPseudo();
@@ -3732,7 +3734,7 @@ namespace MetalBone
 		instance = this;
 		aniBGTimer.timeout.Connect(this,&MSSSPrivate::updateAniWidgets);
 	}
-	void MSSSPrivate::removeResources()
+	void MSSSPrivate::discardResource(ID2D1RenderTarget*)
 		{ brushPool.removeCache(); }
 	MSSSPrivate::~MSSSPrivate()
 	{
@@ -3745,7 +3747,7 @@ namespace MetalBone
 			++it;
 		}
 
-		removeResources();
+		discardResource();
 	}
 
 	void MSSSPrivate::setAppSS(const wstring& css)
@@ -3755,7 +3757,7 @@ namespace MetalBone
 		widgetStyleRuleCache.clear();
 		widgetRenderRuleCache.clear();
 
-		removeResources();
+		discardResource();
 
 		appStyleSheet = new StyleSheet();
 		MCSSParser parser(css);

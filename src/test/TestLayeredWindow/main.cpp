@@ -52,8 +52,8 @@ struct TestWidgetController {
 	void createWidgets();
 
 	void updateC10();
-	void globalShortCut() { OutputDebugStringW(L"Global ShortCut."); }
-	void localShortCut() { OutputDebugStringW(L"Local ShortCut."); }
+	void globalShortCut() { OutputDebugStringW(L"Global ShortCut."); allWidgets[0]->show(); }
+	void localShortCut() { OutputDebugStringW(L"Local ShortCut."); allWidgets[0]->hide(); }
 
 	MShortCut* sc;
 	MShortCut* sc2;
@@ -78,7 +78,6 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PTSTR,int)
 	MApplication app;
 	app.setStyleSheet(wss);
 
-
 	TestWidgetController controller;
 	controller.createWidgets();
 
@@ -99,7 +98,9 @@ void TestWidgetController::updateC10()
 void TestWidgetController::createWidgets()
 {
 	MWidget* mainWindow = new MWidget();
+	mainWindow->setObjectName(L"mainWindow");
 	mainWindow->setGeometry(100,100,500,500);
+	mainWindow->setWindowFlags(WF_AllowTransparency);
 	mainWindow->setAttributes(WA_DeleteOnClose);
 	mainWindow->setAttributes(WA_NonChildOverlap,false);
 	allWidgets.push_back(mainWindow);
@@ -154,7 +155,8 @@ void TestWidgetController::createWidgets()
 	sc2->invoked.Connect(this,&TestWidgetController::localShortCut);
 	sc3->invoked.Connect(this,&TestWidgetController::localShortCut);
 
-	mainWindow->setMaximumSize(500,500);
-	mainWindow->setMinimumSize(500,500);
+// 	mainWindow->setMinimumSize(500,500);
+// 	mainWindow->setMaximumSize(500,500);
+
 	mainWindow->show();
 }

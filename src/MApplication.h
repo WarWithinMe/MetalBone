@@ -22,21 +22,19 @@ namespace MetalBone
 			virtual ~MApplication();
 			inline static MApplication* instance();
 
-			// 进入主Event Loop
+			// Enter Main Event Loop
 			int exec();
 
-			// 导致退出Message Loop。程序即将结束。
+			// To exit the application.
 			inline void exit(int returnCode);
-			// 设置是否在最后一个窗口被关闭（不是隐藏，是被删除）时，调用exit(0);
-			// 默认为true。
+			// If true (by default), when the last window is closed, it will call exit(0);
 			void setQuitOnLastWindowClosed(bool);
 
-			// 返回指向本程序的HINSTANCE
+			// Get the HINSTANCE of this app.
 			HINSTANCE getAppHandle() const;
 
-			// 设置自定义的Window Procedure，当收到窗口消息时，
-			// 首先调用Custom Window Procedure，如果它返回true，
-			// 则表明消息已经处理。否则，则采用默认的处理方式。
+			// Set a custom Window Procedure. If the custom winproc doesn't
+			// handle the message, it should return false.
 			typedef bool (*WinProc)(HWND, UINT, WPARAM, LPARAM, LRESULT*);
 			void setCustomWindowProc(WinProc);
 
@@ -44,19 +42,19 @@ namespace MetalBone
 
 			bool isHardwareAccerated() const;
 
-			// 设置应用于整个程序的样式表。
-			// 选择器
-			// .ClassA	匹配类型为ClassA的widget
-			// ClassB	匹配ClassB，和继承自ClassB的widget
-			// #MyClass	匹配id为MyClass的widget
-			// 组合选择器
-			// .ClassA .ClassB 匹配ClassA的子孙，类型为ClassB的widget
-			// .ClassA >.ClassB 匹配父亲为ClassA，类型为ClassB的widget
-			// 不支持
-			// .ClassA.ClassB // Widget里面没有这个概念
-			// .ClassA#AAA#BBB // Widget只有一个Id
-			// 数值没有单位（单位默认是px）
-			// 不支持颜色名
+			// ===== Supports : 
+			// .ClassA	   // Matches widgets whose type is ClassA
+			// ClassB	   // The same as .ClassA
+			// #MyClass	   // Matches widgets whose objectName is MyClass
+			// .ClassA .ClassB  // Mathces widgets whose tye is ClassB and one of its parent is ClassA widget.
+			// .ClassA >.ClassB // Matches widgets whose type is ClassB 
+								// and has a ClassA widget as its parent.
+			// ===== Do not support : 
+			// .ClassA.ClassB  // Widget has only one type 
+			// .ClassA#AAA#BBB // Widget has only one objectName(ID)
+
+			// ===== Only support 'px' unit. If a unit is not 'px', it's considered to be 'pt'
+			// ===== Do not support Color Name 
 			void setStyleSheet(const std::wstring& css);
 			MStyleSheetStyle* getStyleSheet();
 
@@ -66,9 +64,10 @@ namespace MetalBone
 
 			inline unsigned int winDpi() const;
 
-			Signal0<> aboutToQuit;		// 当MApplication退出Message Loop的时候发送aboutToQuit信号
+			// When MApplication quits the Message Loop. This signal is emitted.
+			Signal0<> aboutToQuit;
 		protected:
-			// MApplication注册窗口类前调用这个函数获取要注册的窗口类
+			// Override this function to register a custom Window Class
 			virtual void setupRegisterClass(WNDCLASSW&);
 
 

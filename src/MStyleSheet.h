@@ -179,6 +179,8 @@ namespace MetalBone
 			// If TextRenderer is AutoDetermine, we use GDI to render text when the font size is
 			// no bigger than maxGdiFontPtSize.
 			static void setTextRenderer(TextRenderer, unsigned int maxGdiFontPtSize = 16);
+
+			void discardResource(ID2D1RenderTarget*);
 		private:
 			MSSSPrivate* mImpl;
 	};

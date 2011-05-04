@@ -501,7 +501,7 @@ namespace MetalBone
 	{
 		Iterator it;
 		it.ynode = m_yCoorTree.FindMin();
-		it.xnode = it.ynode->m_xCoorTree.FindMin();
+		if(it.ynode != 0) it.xnode = it.ynode->m_xCoorTree.FindMin();
 		return it;
 	}
 

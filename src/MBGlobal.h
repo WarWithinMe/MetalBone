@@ -26,6 +26,8 @@
 #pragma comment(lib, "dwrite.lib")        // DirectWrite
 #pragma comment(lib, "windowscodecs.lib") // WIC
 #pragma comment(lib, "gdiplus.lib")       // Gdi+
+#pragma comment(lib, "d3d10_1.lib")       // D3D 10.1
+#pragma comment(lib, "dwmapi.lib")        // DWM
 
 namespace MetalBone{}
 #ifdef STRIP_METALBONE_NAMESPACE

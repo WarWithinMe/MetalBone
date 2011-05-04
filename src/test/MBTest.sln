@@ -7,6 +7,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestWidgetDraw", "TestWidge
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestSignal", "TestSignal\TestSignal.vcxproj", "{E7F2DD63-644C-4D3A-9DC9-B072102F2C2E}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestLayeredWindow", "TestLayeredWindow\TestLayeredWindow.vcxproj", "{092965D8-9753-42B9-9060-0226370D9330}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -25,6 +27,10 @@ Global
 		{E7F2DD63-644C-4D3A-9DC9-B072102F2C2E}.Debug|Win32.Build.0 = Debug|Win32
 		{E7F2DD63-644C-4D3A-9DC9-B072102F2C2E}.Release|Win32.ActiveCfg = Release|Win32
 		{E7F2DD63-644C-4D3A-9DC9-B072102F2C2E}.Release|Win32.Build.0 = Release|Win32
+		{092965D8-9753-42B9-9060-0226370D9330}.Debug|Win32.ActiveCfg = Debug|Win32
+		{092965D8-9753-42B9-9060-0226370D9330}.Debug|Win32.Build.0 = Debug|Win32
+		{092965D8-9753-42B9-9060-0226370D9330}.Release|Win32.ActiveCfg = Release|Win32
+		{092965D8-9753-42B9-9060-0226370D9330}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

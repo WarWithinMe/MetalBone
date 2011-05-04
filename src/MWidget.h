@@ -25,7 +25,7 @@ namespace MetalBone
 		WF_Border           = 0x2000,
 		WF_ThinBorder       = 0x4000,
 
-		WF_AllowTransparency= 0x10000,// This will create a window with style WS_EX_LAYERED.
+		WF_AllowTransparency= 0x10000,
 
 		WF_AlwaysOnTop      = 0x20000,
 		WF_AlwaysOnBottom   = 0x40000,
@@ -54,7 +54,9 @@ namespace MetalBone
 									  // event, as if they do not exist.
 		WA_NoMousePropagation = 0x100,// If a MouseEvent is not accpeted, and this attribute is not set,
 									  // it will by default propagete to its parent.
-		WA_TrackMouseMove     = 0x200 // If set, the widget will receive MouseMoveEvent.
+		WA_TrackMouseMove     = 0x200,// If set, the widget will receive MouseMoveEvent.
+
+		WA_DontShowOnScreen   = 0x400 // If set, the widget won't do any painting. But it still receives mouse event.
 	};
 
 	enum WindowStates
@@ -74,6 +76,7 @@ namespace MetalBone
 	};
 
 	class MEvent;
+	class MResizeEvent;
 	class MPaintEvent;
 	class MMouseEvent;
 	class MKeyEvent;
@@ -90,9 +93,10 @@ namespace MetalBone
 	{
 		public:
 			MWidget(MWidget* parent = 0);
-			virtual ~MWidget(); // We will delete very child of this widget when desctruction.
+			// We will delete very child of this widget when desctruction.
+			virtual ~MWidget(); 
 
-			inline void setObjectName (const std::wstring&);
+			inline void setObjectName(const std::wstring&);
 			inline const std::wstring& objectName()  const;
 			void setWindowTitle(const std::wstring&);
 			const std::wstring& windowTitle() const;
@@ -178,11 +182,11 @@ namespace MetalBone
 			inline D2D_SIZE_U maxSize()  const;
 			inline POINT      pos()      const;
 			inline RECT       geometry() const; 
-			inline void move(int x, int y);
-			inline void resize(unsigned int width, unsigned int height);
-			void setGeometry(int x, int y, unsigned int width, unsigned int height);
-			void setMinimumSize(unsigned int minWidth, unsigned int minHeight);
-			void setMaximumSize(unsigned int maxWidth, unsigned int maxHeight);
+			inline void move   (long x, long y);
+			inline void resize (long width, long height);
+			void setGeometry   (long x, long y, long width, long height);
+			void setMinimumSize(long minWidth, long minHeight);
+			void setMaximumSize(long maxWidth, long maxHeight);
 
 
 			// These function SHOULD only be used by StyleSheetStyle.
@@ -198,7 +202,7 @@ namespace MetalBone
 			// be destroyed which makes the widget hidden.
 			// If the widget has the attribute WA_DeleteOnClose,
 			// the widget is also be deleted.
-			virtual void closeEvent(MEvent*     )       {}
+			virtual void closeEvent(MEvent*)            {}
 			// If MPaintEvent is not accepted, its children won't be painted.
 			virtual void focusEvent()                   {}
 			virtual void paintEvent(MPaintEvent*)       {}
@@ -215,6 +219,8 @@ namespace MetalBone
 			virtual void keyPressEvent(MKeyEvent*)      {}
 			virtual void keyUpEvent(MKeyEvent*)         {}
 			virtual void charEvent(MCharEvent*)         {}
+			
+			virtual void resizeEvent(MResizeEvent*)     {}
 
 			virtual void doStyleSheetDraw(ID2D1RenderTarget*,const RECT& widgetRectInRT, const RECT& clipRectInRT);
 
@@ -226,14 +232,14 @@ namespace MetalBone
 			// children[0] is the bottom-most child.
 			MWidgetList m_children;
 
-			int x;
-			int y;
-			unsigned int width;
-			unsigned int height;
-			unsigned int minWidth;
-			unsigned int minHeight;
-			unsigned int maxWidth;
-			unsigned int maxHeight;
+			long x;
+			long y;
+			long width;
+			long height;
+			long minWidth;
+			long minHeight;
+			long maxWidth;
+			long maxHeight;
 
 			unsigned int m_attributes;
 			unsigned int m_windowFlags;
@@ -288,9 +294,9 @@ namespace MetalBone
 	inline void         MWidget::setObjectName(const std::wstring& n) { m_objectName = n;          }
 	inline bool         MWidget::testAttributes(WidgetAttributes a) const { return (m_attributes & a) != 0; }
 	inline bool         MWidget::testWidgetState(unsigned int s)    const { return (m_widgetState & s) != 0; }
-	inline void MWidget::move(int xpos, int ypos)
+	inline void MWidget::move(long xpos, long ypos)
 		{ if(xpos != x && ypos != y) setGeometry(xpos,ypos,width,height); }
-	inline void MWidget::resize(unsigned int w, unsigned int h)
+	inline void MWidget::resize(long w, long h)
 		{ if(w != width && h != height) setGeometry(x,y,w,h); }
 	inline void MWidget::setAttributes(WidgetAttributes attr, bool on)
 		{ on ? (m_attributes |= attr) : (m_attributes &= (~attr)); }

@@ -27,6 +27,17 @@ namespace MetalBone
 			const MRegion& region;
 	};
 
+	class MResizeEvent : public MEvent
+	{
+		public:
+			inline MResizeEvent(long oldWidth, long oldHeight, long newWidth, long newHeight);
+			inline SIZE getOldSize() const;
+			inline SIZE getNewSize() const;
+		private:
+			SIZE oldSize;
+			SIZE newSize;
+	};
+
 
 	enum MouseButton
 	{
@@ -91,6 +102,18 @@ namespace MetalBone
 	inline MPaintEvent::MPaintEvent(const MRegion& r):region(r){}
 	inline const MRegion& MPaintEvent::getUpdateRegion() const
 		{ return region; }
+
+	inline MResizeEvent::MResizeEvent(long ow, long oh, long nw, long nh)
+	{
+		oldSize.cx = ow;
+		oldSize.cy = oh;
+		newSize.cx = nw;
+		newSize.cy = nh;
+	}
+	inline SIZE MResizeEvent::getOldSize() const
+		{ return oldSize; }
+	inline SIZE MResizeEvent::getNewSize() const
+		{ return newSize; }
 
 	inline MMouseEvent::MMouseEvent(int x, int y, int gx, int gy,MouseButton b):
 		ix(x),iy(y),igx(gx),igy(gy),btn(b){}
