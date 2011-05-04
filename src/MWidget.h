@@ -63,8 +63,7 @@ namespace MetalBone
 	{
 		WindowNoState = 0,
 		WindowMinimized,
-		WindowMaximized,
-		WindowActive
+		WindowMaximized
 	};
 
 	enum FocusPolicy

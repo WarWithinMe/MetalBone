@@ -243,6 +243,7 @@ namespace MetalBone
 		{ L"repeat-x",     Value_RepeatX     },
 		{ L"repeat-y",     Value_RepeatY     },
 		{ L"right",        Value_Right       },
+		{ L"single-loop",  Value_SingleLoop  },
 		{ L"solid",        Value_Solid       },
 		{ L"stretch",      Value_Stretch     },
 		{ L"text",         Value_IBeam       },
@@ -1352,6 +1353,7 @@ namespace MetalBone
 			ImageRepeat  repeat;
 
 			unsigned int frameCount;
+			bool infiniteLoop;
 
 			// We remember the brush's pointer, so that if the brush is recreated,
 			// we can recheck the background property again. But if a brush is recreated
@@ -1468,7 +1470,8 @@ namespace MetalBone
 			x(0), y(0), width(0), height(0), userWidth(0),
 			userHeight(0), clip(Value_Margin),
 			alignX(Value_Left), alignY(Value_Top),
-			repeat(NoRepeat), frameCount(1), checkedBrush(0){}
+			repeat(NoRepeat), frameCount(1),
+			infiniteLoop(true), checkedBrush(0){}
 		inline SimpleBorderRenderObject::SimpleBorderRenderObject():
 			width(0),style(Value_Solid) { type = SimpleBorder; }
 		inline RadiusBorderRenderObject::RadiusBorderRenderObject():
@@ -1698,6 +1701,7 @@ namespace MetalBone
 				void draw(ID2D1RenderTarget*,const RECT&,const RECT&,const wstring&,unsigned int);
 
 				inline unsigned int getTotalFrameCount();
+				bool isBGSingleLoop();
 			private:
 				void drawBackgrounds(const RECT& widgetRectInRT, const RECT& clipRectInRT,
 							ID2D1Geometry*, unsigned int frameIndex);
@@ -1758,6 +1762,15 @@ namespace MetalBone
 	}
 	inline unsigned int RenderRuleData::getTotalFrameCount()
 		{ return totalFrameCount; }
+	bool RenderRuleData::isBGSingleLoop()
+	{
+		for(unsigned int i = 0; i < backgroundROs.size(); ++i)
+		{
+			if(backgroundROs.at(i)->infiniteLoop)
+				return false;
+		}
+		return true;
+	}
 	bool RenderRuleData::setGeometry(MWidget* w)
 	{
 		if(geoRO == 0)
@@ -2642,7 +2655,14 @@ namespace MetalBone
 		{
 			const CssValue& v = values.at(index);
 			if(v.type == CssValue::Identifier) {
-				isPropAlignX = setBGROProperty(newObject, static_cast<ValueType>(v.data.vuint), isPropAlignX);
+				if(v.data.videntifier == Value_SingleLoop)
+				{
+					newObject->infiniteLoop = false;
+				} else
+				{
+					isPropAlignX = setBGROProperty(newObject,
+						static_cast<ValueType>(v.data.vuint), isPropAlignX);
+				}
 			} else {
 				mWarning(v.type == CssValue::Length || v.type == CssValue::Number,
 					L"The rest of background css value should be of type 'length' or 'number'");
@@ -3388,10 +3408,26 @@ namespace MetalBone
 			unsigned int index = frameIndex >= 0 ? frameIndex : 0;
 			if(ruleFrameCount > 1 && frameIndex == -1)
 			{
-				unsigned int& i = widgetAniBGIndexMap[w];
-				if(i >= ruleFrameCount) i = 0;
-				index = i;
-				++i;
+				AniWidgetIndexMap::iterator it = widgetAniBGIndexMap.find(w);
+				AniWidgetIndexMap::iterator itEnd = widgetAniBGIndexMap.end();
+
+				if(it != itEnd)
+				{
+					index = it->second;
+					if(index >= ruleFrameCount)
+					{
+						if(rule->isBGSingleLoop())
+						{
+							index = ruleFrameCount - 1;
+							removeAniWidget(w);
+						} else {
+							index = 0;
+							widgetAniBGIndexMap[w] = 1;
+						}
+					} else { widgetAniBGIndexMap[w] = index + 1; }
+				} else {
+					index = ruleFrameCount - 1;
+				}
 			}
 
 			rule->draw(rt,wr,cr,t,index);

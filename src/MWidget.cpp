@@ -812,6 +812,24 @@ namespace MetalBone
 					wparam == TRUE ? window->show() : window->hide();
 				return DefWindowProcW(hwnd,msg,wparam,lparam);
 			}
+		case WM_SYSCOMMAND:
+			// Only intercept this message when the window is layered window.
+			if(window->m_windowFlags & WF_AllowTransparency)
+			{
+				switch(wparam)
+				{
+				case SC_MINIMIZE:
+					window->showMinimized();
+					return 0;
+				case SC_MAXIMIZE:
+					window->showMaximized();
+					return 0;
+				case SC_RESTORE:
+					window->show();
+					return 0;
+				}
+			}
+			return DefWindowProcW(hwnd,msg,wparam,lparam);
 		default: return DefWindowProcW(hwnd,msg,wparam,lparam);
 		}
 
@@ -1021,12 +1039,13 @@ namespace MetalBone
 		if(flags & WF_AllowTransparency)
 		{
 			winExStyle |= WS_EX_LAYERED;
-			flags      |= WF_Popup;
 		}
 
 		if((flags & 0xFE) == 0)
 		{ // WF_Widget
-			if(!customized)
+			if(flags & WF_AllowTransparency)
+				winStyle |= (WS_POPUP | WS_MINIMIZEBOX);
+			else if(!customized)
 				winStyle |= WS_TILEDWINDOW;
 		}else if(flags & WF_Popup)
 			winStyle |= WS_POPUP;
@@ -1288,6 +1307,7 @@ namespace MetalBone
 	{
 		if(hasWindow() && m_windowState != WindowMinimized) {
 			m_windowState = WindowMinimized;
+			setWidgetState(MWS_Hidden,true);
 			::ShowWindow(m_windowExtras->m_wndHandle, SW_MINIMIZE);
 		}
 	}
@@ -1296,6 +1316,7 @@ namespace MetalBone
 	{
 		if(isWindow() && m_windowState != WindowMaximized) {
 			m_windowState = WindowMaximized;
+			setWidgetState(MWS_Hidden,false);
 			::ShowWindow(m_windowExtras->m_wndHandle, SW_MAXIMIZE);
 		}
 	}
@@ -1307,13 +1328,14 @@ namespace MetalBone
 		// When polishing stylesheet, this is still hidden,
 		// so even if this widget's size changed, it won't repaint itself.
 		ensurePolished();
-		m_widgetState &= (~MWS_Hidden);
+		setWidgetState(MWS_Hidden,false);
 
 		// If has window handle (i.e. WF_Window or parentless shown WF_Widget )
 		if(hasWindow())
 		{
-			if(m_windowState == WindowMinimized)
+			if(m_windowState == WindowMinimized || m_windowState == WindowMaximized)
 			{
+				m_windowState = WindowNoState;
 				::ShowWindow(m_windowExtras->m_wndHandle, SW_SHOWNORMAL);
 				return;
 			}

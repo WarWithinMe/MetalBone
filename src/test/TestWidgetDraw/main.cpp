@@ -73,7 +73,7 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PTSTR,int)
 {
 	std::wifstream cssReader;
 	cssReader.imbue(std::locale(".936"));
-	cssReader.open("theme.css",std::ios_base::in);
+	cssReader.open("twdtheme.css",std::ios_base::in);
 	std::wstring wss((std::istreambuf_iterator<wchar_t>(cssReader)),std::istreambuf_iterator<wchar_t>());
 	MApplication app;
 	app.setStyleSheet(wss);
@@ -100,6 +100,7 @@ void TestWidgetController::createWidgets()
 {
 	MWidget* mainWindow = new MWidget();
 	mainWindow->setGeometry(100,100,500,500);
+	mainWindow->setObjectName(L"mainWindow");
 	mainWindow->setAttributes(WA_DeleteOnClose);
 	mainWindow->setAttributes(WA_NonChildOverlap,false);
 	allWidgets.push_back(mainWindow);

@@ -3,15 +3,19 @@
 #include "MApplication.h"
 namespace MetalBone
 {
-// 	bool MToolTip::bInited = false;
-	void MToolTip::setText(const std::wstring& text)
+	MToolTip::MToolTip(const std::wstring& tip, MWidget* w, HidePolicy h)
+		:tipString(tip),customWidget(w),hp(h)
 	{
-		if(tipString.empty())
-		{
-			style = mApp->getStyleSheet()->hasRenderRuleForClass((void*)this) ?
-				CustomText : SystemText;
-		}
 
-		tipString = text; 
+	}
+
+	void MToolTip::hide()
+	{
+
+	}
+
+	void MToolTip::show(long x, long y)
+	{
+
 	}
 }

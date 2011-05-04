@@ -16,6 +16,7 @@ namespace MetalBone
 	class MSSSPrivate;
 	class MStyleSheetStyle;
 	class MWidget;
+	class MCursor;
 	namespace CSS
 	{
 		enum PseudoClassType {
@@ -94,6 +95,8 @@ namespace MetalBone
 			Value_Default,   Value_AppStarting, Value_Cross,   Value_Hand,    Value_Help,    Value_IBeam,
 			Value_Wait,      Value_Forbidden,   Value_UpArrow, Value_SizeAll, Value_SizeVer, Value_SizeHor,
 			Value_SizeBDiag, Value_SizeFDiag,   Value_Blank,
+
+			Value_SingleLoop,
 
 			KnownValueCount
 		};
