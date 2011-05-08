@@ -19,6 +19,9 @@
     <Filter Include="Source">
       <UniqueIdentifier>{ca25f9d5-9117-4705-a5db-ad78064acc8c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="My Inspector Results">
+      <UniqueIdentifier>{cf3102e5-6e37-4490-bde5-ff82799f5530}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\MApplication.h">
@@ -86,5 +89,16 @@
     <ClCompile Include="..\..\MToolTip.cpp">
       <Filter>ExternMB\Source</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="My Inspector Results\r001mi1\r001mi1.insp">
+      <Filter>My Inspector Results</Filter>
+    </None>
+    <None Include="My Inspector Results\r002mi1\r002mi1.insp">
+      <Filter>My Inspector Results</Filter>
+    </None>
+    <None Include="My Inspector Results\r003mi1\r003mi1.insp">
+      <Filter>My Inspector Results</Filter>
+    </None>
   </ItemGroup>
 </Project>

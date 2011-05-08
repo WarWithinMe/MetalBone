@@ -36,3 +36,13 @@ ChildWidget Button:hover{
 ChildWidget Button:pressed{
 	border-image: url(theme\CustomBtnDisabled.png) 4;
 }
+ToolTipWidget {
+	border-image: url(theme\ToastBG.png) 4 3 5 3;
+	border: 4 3 5 3;
+	padding: 0 5 0 5;
+	color:#9b6a13;
+	font: 9 Î¢ÈíÑÅºÚ;
+	text-align: left center;
+	text-shadow: 0 1 #ffffff;
+	text-overflow: wrap;
+}

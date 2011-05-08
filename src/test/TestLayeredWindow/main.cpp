@@ -5,7 +5,9 @@
 #include "MStyleSheet.h"
 #include "MEvent.h"
 
+#ifdef DEBUG
 #include "vld.h"
+#endif
 
 #include <iostream>
 #include <sstream>
@@ -100,7 +102,7 @@ void TestWidgetController::createWidgets()
 	MWidget* mainWindow = new MWidget();
 	mainWindow->setObjectName(L"mainWindow");
 	mainWindow->setGeometry(100,100,500,500);
-	mainWindow->setWindowFlags(WF_AllowTransparency);
+	mainWindow->setWindowFlags(WF_AllowTransparency | WF_MinimizeButton);
 	mainWindow->setAttributes(WA_DeleteOnClose);
 	mainWindow->setAttributes(WA_NonChildOverlap,false);
 	allWidgets.push_back(mainWindow);
@@ -148,6 +150,7 @@ void TestWidgetController::createWidgets()
 	c10->show();
 	c10->setFocusPolicy(ClickFocus);
 	allWidgets.push_back(c10);
+	c10->setToolTip(L"This is Button10. Test very long tooltip. Test very long tooltip. Test very long tooltip. Test very long tooltip.");
 	sc = new MShortCut(WinModifier | CtrlModifier , 0x53, 0, true);
 	sc2= new MShortCut(CtrlModifier | NoModifier, 0x53, c10, false);
 	sc3= new MShortCut(CtrlModifier | NoModifier, 0x44, 0, false);
@@ -159,4 +162,10 @@ void TestWidgetController::createWidgets()
 // 	mainWindow->setMaximumSize(500,500);
 
 	mainWindow->show();
+
+	MWidget* mainWindow2 = new MWidget();
+	mainWindow2->setObjectName(L"mainWindow");
+	mainWindow2->setGeometry(200,200,500,500);
+	mainWindow2->setWindowFlags(WF_AllowTransparency | WF_MinimizeButton);
+	mainWindow2->show();
 }

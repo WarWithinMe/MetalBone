@@ -903,7 +903,7 @@ namespace MetalBone
 			BrushHandle getSolidBrush(MColor);
 			BrushHandle getBitmapBrush(const wstring&);
 
-			inline void setWorkingRT(ID2D1RenderTarget*);
+			inline void static setWorkingRT(ID2D1RenderTarget*);
 
 			void removeCache();
 		private:
@@ -931,7 +931,7 @@ namespace MetalBone
 			void createBrush(const BrushHandle*);
 			void createBorderImageBrush(const BrushHandle*, const RECT&);
 
-			ID2D1RenderTarget* workingRT;
+			static ID2D1RenderTarget* workingRT;
 			static D2D1BrushPool* instance;
 
 		friend struct BrushHandle;
@@ -972,7 +972,8 @@ namespace MetalBone
 	}
 
 	D2D1BrushPool* D2D1BrushPool::instance = 0;
-	D2D1BrushPool::D2D1BrushPool():workingRT(0) { M_ASSERT(instance == 0); instance = this; }
+	ID2D1RenderTarget* D2D1BrushPool::workingRT = 0;
+	D2D1BrushPool::D2D1BrushPool(){ M_ASSERT(instance == 0); instance = this; }
 	D2D1BrushPool::~D2D1BrushPool()
 	{
 		instance = 0;
@@ -1252,6 +1253,7 @@ namespace MetalBone
 			inline void polish(MWidget*);
 			inline void draw(MWidget*,ID2D1RenderTarget*,const RECT&,const RECT&, const wstring&,int);
 			inline void removeCache(MWidget*);
+			inline void removeCache(RenderRuleQuerier*);
 
 			typedef unordered_map<MWidget*, StyleSheet*> WidgetSSCache;
 			WidgetSSCache widgetSSCache; // Widget specific StyleSheets
@@ -1284,12 +1286,22 @@ namespace MetalBone
 			typedef map<RenderRuleCacheKey, PseudoRenderRuleMap>      RenderRuleMap;
 			typedef unordered_map<MWidget*, MatchedStyleRuleVector>   WidgetStyleRuleMap;
 			typedef unordered_map<MWidget*, PseudoRenderRuleMap*>     WidgetRenderRuleMap;
-			RenderRuleMap       renderRuleCollection;
-			WidgetStyleRuleMap  widgetStyleRuleCache;
-			WidgetRenderRuleMap widgetRenderRuleCache;
+			typedef unordered_map<RenderRuleQuerier*, MatchedStyleRuleVector> QuerierStyleRuleMap;
+			typedef unordered_map<RenderRuleQuerier*, PseudoRenderRuleMap*>   QuerierRenderRuleMap;
+
+			RenderRuleMap        renderRuleCollection;
+			WidgetStyleRuleMap   widgetStyleRuleCache;
+			WidgetRenderRuleMap  widgetRenderRuleCache;
+			QuerierStyleRuleMap  querierStyleRuleCache;
+			QuerierRenderRuleMap querierRenderRuleCache;
 
 			void getMachedStyleRules(MWidget*, MatchedStyleRuleVector&);
-			RenderRule getRenderRule(MWidget*, unsigned int);
+			void getMachedStyleRules(RenderRuleQuerier*, MatchedStyleRuleVector&);
+
+			inline RenderRule getRenderRule(MWidget*, unsigned int);
+			inline RenderRule getRenderRule(RenderRuleQuerier*, unsigned int);
+			template<class Querier, class QuerierRRMap, class QuerierSRMap>
+			RenderRule getRenderRule(Querier*, unsigned int, QuerierRRMap&, QuerierSRMap&);
 
 			D2D1BrushPool brushPool;
 
@@ -1464,8 +1476,8 @@ namespace MetalBone
 		inline TextRenderObject::TextRenderObject(const MFont& f):
 			font(f), alignX(Value_Left), alignY(Value_Center),
 			decoration(Value_None), lineStyle(Value_Solid), 
-			outlineWidth(0), outlineBlur(0), shadowOffsetX(0),
-			shadowOffsetY(0), shadowBlur(0){}
+			outlineWidth(0), outlineBlur(0), outlineColor(0), shadowOffsetX(0),
+			shadowOffsetY(0), shadowBlur(0), shadowColor(0){}
 		inline BackgroundRenderObject::BackgroundRenderObject():
 			x(0), y(0), width(0), height(0), userWidth(0),
 			userHeight(0), clip(Value_Margin),
@@ -1488,6 +1500,8 @@ namespace MetalBone
 			styles.left = styles.top = styles.right = styles.bottom = Value_Solid;
 			memset(&widths  , 0, sizeof(RECT));
 			memset(&radiuses, 0, 4 * sizeof(int));
+			for(int i = 0; i < 4; ++i)
+				colors[i].setAlpha(0);
 		}
 		void ComplexBorderRenderObject::setColors(const CssValueArray& values,size_t start,size_t end)
 		{
@@ -1702,6 +1716,8 @@ namespace MetalBone
 
 				inline unsigned int getTotalFrameCount();
 				bool isBGSingleLoop();
+				SIZE getStringSize(const std::wstring&, int maxWidth);
+				void getContentMargin(RECT&);
 			private:
 				void drawBackgrounds(const RECT& widgetRectInRT, const RECT& clipRectInRT,
 							ID2D1Geometry*, unsigned int frameIndex);
@@ -1771,6 +1787,126 @@ namespace MetalBone
 		}
 		return true;
 	}
+	SIZE RenderRuleData::getStringSize(const std::wstring& s, int maxWidth)
+	{
+		SIZE size = {};
+
+		MFont defaultFont;
+		TextRenderObject defaultRO(defaultFont);
+		TextRenderObject* tro = textRO == 0 ? &defaultRO : textRO;
+		
+		bool useGDI = false;
+		if(MSSSPrivate::getTextRenderer() == MStyleSheetStyle::AutoDetermine)
+		{
+			unsigned int fontPtSize = tro->font.pointSize();
+			if(fontPtSize <= MSSSPrivate::gdiRenderMaxFontSize())
+				useGDI = true;
+		}
+
+		if(useGDI || MSSSPrivate::getTextRenderer() == MStyleSheetStyle::Gdi)
+		{
+			HDC dc = ::GetDC(NULL);
+			HFONT oldFont = (HFONT)::SelectObject(dc, tro->font.getHandle());
+
+			unsigned int formatParam = tro->overflow == Value_Wrap ? DT_WORDBREAK :
+				tro->overflow == Value_Ellipsis ? DT_END_ELLIPSIS : DT_SINGLELINE;
+			switch(tro->alignX) {
+				case Value_Center: formatParam |= DT_CENTER; break;
+				case Value_Right:  formatParam |= DT_RIGHT;  break;
+				default:           formatParam |= DT_LEFT;   break;
+			}
+			switch(tro->alignY) {
+				case Value_Top:    formatParam |= DT_TOP;     break;
+				case Value_Bottom: formatParam |= DT_BOTTOM;  break;
+				default:           formatParam |= DT_VCENTER; break;
+			}
+
+			formatParam |= DT_CALCRECT;
+			RECT rect;
+			rect.left = rect.top = 0;
+			rect.right = maxWidth;
+			rect.bottom = 0;
+			size.cy = ::DrawTextW(dc, s.c_str(), s.size(), &rect, formatParam);
+			size.cx = rect.right;
+
+			::SelectObject(dc, oldFont);
+			::ReleaseDC(NULL,dc);
+		} else
+		{
+			D2D1_RECT_F drawRect = {};
+			drawRect.right = maxWidth;
+			IDWriteTextFormat* textFormat;
+			mApp->getDWriteFactory()->CreateTextFormat(tro->font.getFaceName().c_str(),0,
+				tro->font.isBold()   ? DWRITE_FONT_WEIGHT_BOLD  : DWRITE_FONT_WEIGHT_NORMAL,
+				tro->font.isItalic() ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
+				DWRITE_FONT_STRETCH_NORMAL,
+				96.f * tro->font.pointSize() / 72.f, // 12 points = 1/6 logical inch = 96/6 DIPs (96 DIPs = 1 ich)
+				L"en-US",&textFormat); // Remark: don't know what the locale does.
+			switch(tro->alignX) {
+				case Value_Center: textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);   break;
+				case Value_Right:  textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING); break;
+				default:           textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);  break;
+			}
+			switch(tro->alignY) {
+				case Value_Top:    textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);   break;
+				case Value_Bottom: textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_FAR);    break;
+				default:           textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER); break;
+			}
+
+			IDWriteFactory* dwFactory = mApp->getDWriteFactory();
+			IDWriteTextLayout* textLayout;
+			dwFactory->CreateTextLayout(s.c_str(), s.size(), textFormat, maxWidth,0.f,&textLayout);
+
+			DWRITE_TEXT_METRICS metrics;
+			textLayout->GetMetrics(&metrics);
+
+			size.cx = metrics.width;
+			size.cy = metrics.height;
+
+			SafeRelease(textLayout);
+			SafeRelease(textFormat);
+		}
+
+		return size;
+	}
+	void RenderRuleData::getContentMargin(RECT& r)
+	{
+		if(hasMargin)
+		{
+			r.left   = margin.left;
+			r.right  = margin.right;
+			r.top    = margin.top;
+			r.bottom = margin.bottom;
+		} else
+			memset(&r,0,sizeof(RECT));
+
+		if(hasPadding)
+		{
+			r.left   += padding.left;
+			r.right  += padding.right;
+			r.top    += padding.top;
+			r.bottom += padding.bottom;
+		}
+
+		if(borderRO)
+		{
+			if(borderRO->type == BorderRenderObject::ComplexBorder)
+			{
+				ComplexBorderRenderObject* cbro = reinterpret_cast<ComplexBorderRenderObject*>(borderRO);
+				r.left   += cbro->widths.left;
+				r.right  += cbro->widths.right;
+				r.top    += cbro->widths.top;
+				r.bottom += cbro->widths.bottom;
+			} else
+			{
+				SimpleBorderRenderObject* sbro = reinterpret_cast<SimpleBorderRenderObject*>(borderRO);
+				r.left   += sbro->width;
+				r.right  += sbro->width;
+				r.top    += sbro->width;
+				r.bottom += sbro->width;
+			}
+		}
+	}
 	bool RenderRuleData::setGeometry(MWidget* w)
 	{
 		if(geoRO == 0)
@@ -1811,6 +1947,7 @@ namespace MetalBone
 	{
 		M_ASSERT(rt != 0);
 		workingRT = rt;
+		D2D1BrushPool::setWorkingRT(workingRT);
 		// We have to get the border geometry first if there's any.
 		// Because drawing the background may depends on the border geometry.
 		ID2D1Geometry* borderGeo = 0;
@@ -1836,32 +1973,51 @@ namespace MetalBone
 			drawBorderImage(widgetRectInRT, clipRectInRT);
 
 		// === Border ===
-		if(borderRO != 0 && borderRO->isVisible())
+		if(borderRO != 0)
 		{
 			if(borderRO->type == BorderRenderObject::ComplexBorder)
 			{
 				// Check the ComplexBorderRO's brushes here, so that it don't depend on
 				// RenderRuleData.
 				ComplexBorderRenderObject* cbro = reinterpret_cast<ComplexBorderRenderObject*>(borderRO);
-				cbro->draw(rt, borderGeo, borderRect);
+				if(borderRO->isVisible())
+					cbro->draw(rt, borderGeo, borderRect);
+
+				borderRect.left  += cbro->widths.left;
+				borderRect.top   += cbro->widths.top;
+				borderRect.right -= cbro->widths.right;
+				borderRect.bottom-= cbro->widths.bottom;
 			} else {
 				SimpleBorderRenderObject* sbro = reinterpret_cast<SimpleBorderRenderObject*>(borderRO);
 				FLOAT w = (FLOAT)sbro->width;
-				// MS said that the rectangle stroke is centered on the outline. So we
-				// need to shrink a half of the borderWidth.
-				FLOAT shrink = w / 2;
-				borderRect.left   += shrink;
-				borderRect.top    += shrink;
-				borderRect.right  -= shrink;
-				borderRect.bottom -= shrink;
-				if(borderRO->type == BorderRenderObject::SimpleBorder)
-					rt->DrawRectangle(borderRect, sbro->brush, w);
-				else {
-					RadiusBorderRenderObject* rbro = reinterpret_cast<RadiusBorderRenderObject*>(borderRO);
-					D2D1_ROUNDED_RECT rr;
-					rr.rect = borderRect;
-					rr.radiusX = rr.radiusY = (FLOAT)rbro->radius;
-					rt->DrawRoundedRectangle(rr, sbro->brush, w);
+				if(borderRO->isVisible())
+				{
+					// MS said that the rectangle stroke is centered on the outline. So we
+					// need to shrink a half of the borderWidth.
+					FLOAT shrink = w / 2;
+					borderRect.left   += shrink;
+					borderRect.top    += shrink;
+					borderRect.right  -= shrink;
+					borderRect.bottom -= shrink;
+					if(borderRO->type == BorderRenderObject::SimpleBorder)
+						rt->DrawRectangle(borderRect, sbro->brush, w);
+					else {
+						RadiusBorderRenderObject* rbro = reinterpret_cast<RadiusBorderRenderObject*>(borderRO);
+						D2D1_ROUNDED_RECT rr;
+						rr.rect = borderRect;
+						rr.radiusX = rr.radiusY = (FLOAT)rbro->radius;
+						rt->DrawRoundedRectangle(rr, sbro->brush, w);
+					}
+					borderRect.left   += shrink;
+					borderRect.top    += shrink;
+					borderRect.right  -= shrink;
+					borderRect.bottom -= shrink;
+				} else
+				{
+					borderRect.left   += w;
+					borderRect.right  -= w;
+					borderRect.top    += w;
+					borderRect.bottom -= w;
 				}
 			}
 		}
@@ -1869,6 +2025,13 @@ namespace MetalBone
 		// === Text ===
 		if(!text.empty())
 		{
+			if(hasPadding)
+			{
+				borderRect.left   += padding.left;
+				borderRect.top    += padding.top;
+				borderRect.right  -= padding.right;
+				borderRect.bottom -= padding.bottom;
+			}
 			switch(MSSSPrivate::getTextRenderer())
 			{
 				case MStyleSheetStyle::Gdi:
@@ -1890,6 +2053,7 @@ namespace MetalBone
 		
 		SafeRelease(borderGeo);
 		workingRT = 0;
+		D2D1BrushPool::setWorkingRT(0);
 	}
 
 	void RenderRuleData::drawBackgrounds(const RECT& wr, const RECT& cr, ID2D1Geometry* borderGeo, unsigned int frameIndex)
@@ -2173,14 +2337,6 @@ namespace MetalBone
 		}
 	}
 
-	double get_time()
-	{
-		LARGE_INTEGER t, f;
-		QueryPerformanceCounter(&t);
-		QueryPerformanceFrequency(&f);
-		return double(t.QuadPart)/double(f.QuadPart);
-	}
-
 	class D2DOutlineTextRenderer : public IDWriteTextRenderer
 	{
 		public:
@@ -2265,7 +2421,7 @@ namespace MetalBone
 		return S_OK;
 	}
 
-	void RenderRuleData::drawD2DText(const RECT&, const D2D1_RECT_F& borderRect, const wstring& text)
+	void RenderRuleData::drawD2DText(const RECT&, const D2D1_RECT_F& drawRect, const wstring& text)
 	{
 		MFont defaultFont;
 		TextRenderObject defaultRO(defaultFont);
@@ -2274,13 +2430,6 @@ namespace MetalBone
 		bool hasShadow  = !tro->shadowColor.isTransparent() &&
 			( tro->shadowBlur != 0 || (tro->shadowOffsetX != 0 || tro->shadowOffsetY != 0) );
 
-		D2D1_RECT_F drawRect = borderRect;
-		if(hasPadding) {
-			drawRect.left   += padding.left;
-			drawRect.right  -= padding.right;
-			drawRect.top    += padding.top;
-			drawRect.bottom -= padding.bottom;
-		}
 		IDWriteTextFormat* textFormat;
 		mApp->getDWriteFactory()->CreateTextFormat(tro->font.getFaceName().c_str(),0,
 			tro->font.isBold()   ? DWRITE_FONT_WEIGHT_BOLD  : DWRITE_FONT_WEIGHT_NORMAL,
@@ -2309,7 +2458,8 @@ namespace MetalBone
 			ID2D1Brush* obrush = MSSSPrivate::getBrushPool().getSolidBrush(tro->outlineColor);
 			ID2D1Brush* tbrush = MSSSPrivate::getBrushPool().getSolidBrush(tro->color);
 			ID2D1Brush* sbrush = 0;
-			if(hasShadow) sbrush = MSSSPrivate::getBrushPool().getSolidBrush(tro->shadowColor);
+			if(hasShadow)
+				MSSSPrivate::getBrushPool().getSolidBrush(tro->shadowColor);
 			D2DOutlineTextRenderer renderer(workingRT,textRO,obrush,tbrush,sbrush);
 			textLayout->Draw(0,&renderer,drawRect.left,drawRect.top);
 			textLayout->Release();
@@ -2318,7 +2468,7 @@ namespace MetalBone
 			if(hasShadow)
 			{
 				ID2D1Brush* shadowBrush = MSSSPrivate::getBrushPool().getSolidBrush(tro->shadowColor);
-				D2D1_RECT_F shadowRect = borderRect;
+				D2D1_RECT_F shadowRect = drawRect;
 				shadowRect.left   += tro->shadowOffsetX;
 				shadowRect.right  += tro->shadowOffsetX;
 				shadowRect.top    += tro->shadowOffsetY;
@@ -2344,23 +2494,22 @@ namespace MetalBone
 		bool hasShadow  = !tro->shadowColor.isTransparent() &&
 			( tro->shadowBlur != 0 || (tro->shadowOffsetX != 0 || tro->shadowOffsetY != 0) );
 
-		// drawText uses GDI to render the Text, because D2D1 have poor performance when rendering text.
-		// Also, GDI(with GDI++ hook) makes text looks really good.
-
 		RECT drawRect = {(LONG)borderRect.left, (LONG)borderRect.top, (LONG)borderRect.right, (LONG)borderRect.bottom };
-		if(hasPadding) {
-			drawRect.left   += padding.left;
-			drawRect.right  -= padding.right;
-			drawRect.top    += padding.top;
-			drawRect.bottom -= padding.bottom;
-		}
-
+		HRESULT result = workingRT->Flush();
+		if(result != S_OK)
+			return;
 		// We need to get the background to which the anti-alias text to be rendered on.
-		workingRT->PopAxisAlignedClip();
 		ID2D1GdiInteropRenderTarget* gdiTarget;
 		HDC textDC;
+		bool hasClip = false;
 		workingRT->QueryInterface(&gdiTarget);
-		gdiTarget->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&textDC);
+		result = gdiTarget->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&textDC);
+		if(result == D2DERR_RENDER_TARGET_HAS_LAYER_OR_CLIPRECT)
+		{
+			hasClip = true;
+			workingRT->PopAxisAlignedClip();
+			gdiTarget->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&textDC);
+		}
 
 		HFONT oldFont = (HFONT)::SelectObject(textDC,tro->font.getHandle());
 		HRGN  clipRGN = ::CreateRectRgn(clipRectInRT.left,clipRectInRT.top,clipRectInRT.right,clipRectInRT.bottom);
@@ -2424,7 +2573,7 @@ namespace MetalBone
 			graphics.FillPath(&textBrush,&textPath);
 		} else
 		{
-			unsigned int formatParam = tro->overflow == Value_Wrap ? 0 :
+			unsigned int formatParam = tro->overflow == Value_Wrap ? DT_WORDBREAK :
 				tro->overflow == Value_Ellipsis ? DT_END_ELLIPSIS : DT_SINGLELINE;
 			switch(tro->alignX) {
 				case Value_Center: formatParam |= DT_CENTER; break;
@@ -2492,9 +2641,8 @@ namespace MetalBone
 						if(yCor < clipRectInRT.top ) yCor = clipRectInRT.top;
 						int w = 0 - xCor + (clipRectInRT.right < drawRect.right ? clipRectInRT.right : drawRect.right);
 						int h = 0 - yCor + (clipRectInRT.bottom < drawRect.bottom ? clipRectInRT.bottom : drawRect.bottom);
-						int r = ::GdiAlphaBlend(textDC, xCor + tro->shadowOffsetX, yCor + tro->shadowOffsetY,
+						::GdiAlphaBlend(textDC, xCor + tro->shadowOffsetX, yCor + tro->shadowOffsetY,
 									w, h, tempDC, xCor - tempXCor, yCor - tempYCor, w, h, bf);
-						r = r;
 					} else {
 						// TODO: Implement blur. Don't know why the GDI+ version is still 1.0 on Win7 SDK,
 						// So, we cannot use the gdiplus's blur effect.
@@ -2527,6 +2675,38 @@ namespace MetalBone
 			::DrawTextW(textDC,(LPWSTR)text.c_str(),-1,&drawRect,formatParam);
 		}
 
+		bool fixAlpha = true;
+		if(fixAlpha)
+		{
+			HDC tempDC = ::CreateCompatibleDC(0);
+			void* pvBits;
+			BITMAPINFO bmi = {};
+			int width  = drawRect.right  - drawRect.left;
+			int height = drawRect.bottom - drawRect.top;
+			bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+			bmi.bmiHeader.biWidth       = width;
+			bmi.bmiHeader.biHeight      = height;
+			bmi.bmiHeader.biCompression = BI_RGB;
+			bmi.bmiHeader.biPlanes      = 1;
+			bmi.bmiHeader.biBitCount    = 32;
+			HBITMAP tempBMP = ::CreateDIBSection(tempDC, &bmi, DIB_RGB_COLORS, &pvBits, 0, 0);
+			HBITMAP oldBMP  = (HBITMAP)::SelectObject(tempDC, tempBMP);
+
+			::BitBlt(tempDC,0,0,width,height, textDC,drawRect.left,drawRect.top,SRCCOPY);
+
+			unsigned int* pixel = (unsigned int*)pvBits;
+			for(int i = width * height - 1; i >= 0; --i)
+			{
+				BYTE* component = (BYTE*)(pixel + i); 
+				component[3] = 0xFF;
+			}
+
+			::SetDIBitsToDevice(textDC, drawRect.left, drawRect.top, width, height, 0, 0, 0, height, pvBits, &bmi, DIB_RGB_COLORS);
+			::SelectObject(tempDC, oldBMP);
+			::DeleteObject(tempBMP);
+			::DeleteDC(tempDC);
+		}
+
 		::SelectObject(textDC,oldFont);
 		::SelectObject(textDC,oldRgn);
 		::DeleteObject(clipRGN);
@@ -2534,12 +2714,15 @@ namespace MetalBone
 		gdiTarget->ReleaseDC(0);
 		gdiTarget->Release();
 
-		D2D1_RECT_F destRect;
-		destRect.left   = (FLOAT)clipRectInRT.left;
-		destRect.right  = (FLOAT)clipRectInRT.right;
-		destRect.top    = (FLOAT)clipRectInRT.top;
-		destRect.bottom = (FLOAT)clipRectInRT.bottom;
-		workingRT->PushAxisAlignedClip(destRect, D2D1_ANTIALIAS_MODE_ALIASED);
+		if(hasClip)
+		{
+			D2D1_RECT_F destRect;
+			destRect.left   = (FLOAT)clipRectInRT.left;
+			destRect.right  = (FLOAT)clipRectInRT.right;
+			destRect.top    = (FLOAT)clipRectInRT.top;
+			destRect.bottom = (FLOAT)clipRectInRT.bottom;
+			workingRT->PushAxisAlignedClip(destRect, D2D1_ANTIALIAS_MODE_ALIASED);
+		}
 	}
 
 
@@ -2739,7 +2922,8 @@ namespace MetalBone
 					switch(v.type) {
 					case CssValue::Identifier: obj->style = v.data.videntifier; break;
 					case CssValue::Color:      colorValue = v;                  break;
-					default:                   obj->width = v.data.vuint;       break;
+					case CssValue::Length:
+					case CssValue::Number:     obj->width = v.data.vuint;       break;
 					}
 				}
 				break;
@@ -3035,7 +3219,7 @@ namespace MetalBone
 				while(declIter2 != declIterEnd && declIter2->first <= PT_BorderRadius)
 					++declIter2;
 				borderRO = new ComplexBorderRenderObject();
-				setComplexBorderRO(declIter, declIterEnd);
+				setComplexBorderRO(declIter, declIter2);
 			}
 
 			if(declIter == declIterEnd) goto END;
@@ -3288,6 +3472,10 @@ namespace MetalBone
 		{ M_ASSERT(data==0); data = new RenderRuleData(); }
 	MCursor* RenderRule::getCursor()
 		{ return data ? data->cursor : 0; }
+	SIZE RenderRule::getStringSize(const std::wstring& s, int maxWidth)
+		{ return data ? data->getStringSize(s, maxWidth) : SIZE(); }
+	void RenderRule::getContentMargin(RECT& r)
+		{ if(data) data->getContentMargin(r); }
 	RenderRule::~RenderRule()
 	{ 
 		if(data && --data->refCount == 0)
@@ -3299,6 +3487,16 @@ namespace MetalBone
 		if(data && --data->refCount == 0) { delete data; }
 		if((data = rhs.data) != 0) ++data->refCount;
 		return *this;
+	}
+
+	// ********** RenderRuleQuerier Impl 
+	RenderRuleQuerier::~RenderRuleQuerier()
+	{
+		if(mApp)
+			mApp->getStyleSheet()->removeCache(this);
+
+		for(int i = 0; i < children.size(); ++i)
+			delete children.at(i);
 	}
 
 	// ********** RenderRuleCacheKey Impl 
@@ -3344,8 +3542,12 @@ namespace MetalBone
 		{ mImpl->draw(w,rt,wr,cr,t,i); }
 	void MStyleSheetStyle::removeCache(MWidget* w)
 		{ mImpl->removeCache(w); }
+	void MStyleSheetStyle::removeCache(RenderRuleQuerier* q)
+		{ mImpl->removeCache(q); }
 	RenderRule MStyleSheetStyle::getRenderRule(MWidget* w, unsigned int p)
 		{return mImpl->getRenderRule(w,p); }
+	RenderRule MStyleSheetStyle::getRenderRule(RenderRuleQuerier* q, unsigned int p)
+		{return mImpl->getRenderRule(q,p); }
 	void MStyleSheetStyle::setTextRenderer(TextRenderer t, unsigned int maxSize)
 		{ MSSSPrivate::textRenderer = t; MSSSPrivate::maxGdiFontPtSize = maxSize; }
 	void MStyleSheetStyle::discardResource(ID2D1RenderTarget* w)
@@ -3381,10 +3583,13 @@ namespace MetalBone
 		cursor->show();
 	}
 
+
+
+
 	// ********** MSSSPrivate Implementation
 	MSSSPrivate* MSSSPrivate::instance = 0;
 	MStyleSheetStyle::TextRenderer MSSSPrivate::textRenderer = MStyleSheetStyle::AutoDetermine;
-	unsigned int MSSSPrivate::maxGdiFontPtSize = 16;
+	unsigned int MSSSPrivate::maxGdiFontPtSize = 12;
 	inline void MSSSPrivate::polish(MWidget* w)
 	{
 		RenderRule rule = getRenderRule(w, PC_Default);
@@ -3400,7 +3605,7 @@ namespace MetalBone
 	inline void MSSSPrivate::draw(MWidget* w, ID2D1RenderTarget* rt,
 		const RECT& wr, const RECT& cr, const wstring& t,int frameIndex)
 	{
-		brushPool.setWorkingRT(rt);
+		D2D1BrushPool::setWorkingRT(rt);
 		RenderRule rule = getRenderRule(w,w->getWidgetPseudo(true));
 		if(rule)
 		{
@@ -3440,7 +3645,7 @@ namespace MetalBone
 					removeAniWidget(w);
 			}
 		}
-		brushPool.setWorkingRT(0);
+		D2D1BrushPool::setWorkingRT(0);
 	}
 	void MSSSPrivate::updateAniWidgets()
 	{
@@ -3471,6 +3676,10 @@ namespace MetalBone
 		{ return textRenderer; }
 	inline D2D1BrushPool& MSSSPrivate::getBrushPool()
 		{ return instance->brushPool; }
+
+
+
+
 	void getWidgetClassName(const MWidget* w,wstring& name)
 	{
 		wstringstream s;
@@ -3485,7 +3694,6 @@ namespace MetalBone
 			pos += 2;
 		}
 	}
-
 	bool basicSelectorMatches(const BasicSelector* bs, MWidget* w)
 	{
 		if(!bs->id.empty() && w->objectName() != bs->id)
@@ -3500,7 +3708,20 @@ namespace MetalBone
 		return true;
 	}
 
-	bool selectorMatches(const Selector* sel, MWidget* w)
+	bool basicSelectorMatches(const BasicSelector* bs, RenderRuleQuerier* q)
+	{
+		if(!bs->id.empty() && q->objectName() != bs->id)
+			return false;
+
+		if(!bs->elementName.empty()) {
+			if(bs->elementName != q->className())
+				return false;
+		}
+		return true;
+	}
+
+	template<class Querier>
+	bool selectorMatches(const Selector* sel, Querier* w)
 	{
 		const vector<BasicSelector*>& basicSels = sel->basicSelectors;
 		if(basicSels.size() == 1)
@@ -3512,8 +3733,7 @@ namespace MetalBone
 
 		w = w->parent();
 
-		if(w == 0)
-			return false;
+		if(w == 0) return false;
 
 		int i = basicSels.size() - 2;
 		bool matched = true;
@@ -3537,7 +3757,8 @@ namespace MetalBone
 		return matched;
 	}
 
-	void matchRule(MWidget* w,const StyleRule* rule,int depth,
+	template<class Querier>
+	void matchRule(Querier* w,const StyleRule* rule,int depth,
 		multimap<int, MatchedStyleRule>& weightedRules)
 	{
 		for(unsigned int i = 0; i < rule->selectors.size(); ++i)
@@ -3617,28 +3838,77 @@ namespace MetalBone
 		}
 	}
 
-	RenderRule MSSSPrivate::getRenderRule(MWidget* w, unsigned int pseudo)
+	void MSSSPrivate::getMachedStyleRules(RenderRuleQuerier* querier, MatchedStyleRuleVector& srs)
+	{
+		// Get all possible stylesheets
+		multimap<int, MatchedStyleRule> weightedRules;
+		const StyleSheet* sheet = appStyleSheet;
+		// search for universal rules.
+		for(unsigned int i = 0;i< sheet->universal.size(); ++i) {
+			matchRule(querier,sheet->universal.at(i),1,weightedRules);
+		}
+
+		// check for Id
+		if(!sheet->srIdMap.empty() && !querier->objectName().empty())
+		{
+			pair<StyleSheet::StyleRuleIdMap::const_iterator,
+				StyleSheet::StyleRuleIdMap::const_iterator> result =
+				sheet->srIdMap.equal_range(querier->objectName());
+			while(result.first != result.second)
+			{
+				matchRule(querier,result.first->second,1,weightedRules);
+				++result.first;
+			}
+		}
+
+		// check for class name
+		if(!sheet->srElementMap.empty())
+		{
+			pair<StyleSheet::StyleRuleElementMap::const_iterator,
+				StyleSheet::StyleRuleElementMap::const_iterator> result =
+				sheet->srElementMap.equal_range(querier->className());
+			while(result.first != result.second)
+			{
+				matchRule(querier,result.first->second,1,weightedRules);
+				++result.first;
+			}
+		}
+
+		srs.clear();
+		srs.reserve(weightedRules.size());
+		multimap<int, MatchedStyleRule>::const_iterator wrIt    = weightedRules.begin();
+		multimap<int, MatchedStyleRule>::const_iterator wrItEnd = weightedRules.end();
+
+		while(wrIt != wrItEnd) {
+			srs.push_back(wrIt->second);
+			++wrIt;
+		}
+	}
+
+	template<class Querier, class QuerierRRMap, class QuerierSRMap>
+	RenderRule MSSSPrivate::getRenderRule(Querier* q, unsigned int pseudo,
+			QuerierRRMap& querierRRCache, QuerierSRMap& querierSRCache)
 	{
 		// == 1.Find RenderRule for MWidget w from Widget-RenderRule cache.
-		WidgetRenderRuleMap::iterator widgetCacheIter = widgetRenderRuleCache.find(w);
+		QuerierRRMap::iterator querierCacheIter = querierRRCache.find(q);
 		PseudoRenderRuleMap* prrMap = 0;
-		if(widgetCacheIter != widgetRenderRuleCache.end())
+		if(querierCacheIter != querierRRCache.end())
 		{
-			prrMap = widgetCacheIter->second;
+			prrMap = querierCacheIter->second;
 			PseudoRenderRuleMap::Element::iterator prrIter = prrMap->element.find(pseudo);
 			if(prrIter != prrMap->element.end())
 				return prrIter->second;
 		}
 
 		// == 2.Find StyleRules for MWidget w from Widget-StyleRule cache.
-		WidgetStyleRuleMap::iterator wsrIter = widgetStyleRuleCache.find(w);
+		QuerierSRMap::iterator qsrIter = querierSRCache.find(q);
 		MatchedStyleRuleVector* matchedsrv;
-		if(wsrIter != widgetStyleRuleCache.end()) {
-			matchedsrv = &(wsrIter->second);
+		if(qsrIter != querierSRCache.end()) {
+			matchedsrv = &(qsrIter->second);
 		} else {
-			matchedsrv = &(widgetStyleRuleCache.insert(
-				WidgetStyleRuleMap::value_type(w, MatchedStyleRuleVector())).first->second);
-			getMachedStyleRules(w,*matchedsrv);
+			matchedsrv = &(querierSRCache.insert(
+				QuerierSRMap::value_type(q, MatchedStyleRuleVector())).first->second);
+			getMachedStyleRules(q,*matchedsrv);
 		}
 
 		// == 3.If we don't have a PseudoRenderRuleMap, build one.
@@ -3650,7 +3920,7 @@ namespace MetalBone
 			for(int i = 0; i< srvSize; ++i)
 				cacheKey.styleRules.push_back(const_cast<StyleRule*>(matchedsrv->at(i).styleRule));
 			prrMap = &(renderRuleCollection[cacheKey]);
-			widgetRenderRuleCache.insert(WidgetRenderRuleMap::value_type(w,prrMap));
+			querierRRCache.insert(QuerierRRMap::value_type(q,prrMap));
 		}
 
 		// == 4. Merge the declarations.
@@ -3730,7 +4000,7 @@ namespace MetalBone
 				return renderRule;
 			}
 		}
-		
+
 		// Remove duplicate declarations (except background, because we support multi backgrounds)
 		PropertyType lastType = knownPropertyCount;
 		DeclMap::iterator declRIter = declarations.begin();
@@ -3756,6 +4026,11 @@ namespace MetalBone
 		return renderRule;
 	}
 
+	inline RenderRule MSSSPrivate::getRenderRule(MWidget* w, unsigned int p)
+		{ return getRenderRule(w,p,widgetRenderRuleCache,widgetStyleRuleCache); }
+	inline RenderRule MSSSPrivate::getRenderRule(RenderRuleQuerier* q, unsigned int p)
+		{ return getRenderRule(q,p,querierRenderRuleCache,querierStyleRuleCache); }
+
 	inline void MSSSPrivate::removeCache(MWidget* w)
 	{
 		// We just have to remove from these two cache, without touching
@@ -3763,6 +4038,11 @@ namespace MetalBone
 		widgetStyleRuleCache.erase(w);
 		widgetRenderRuleCache.erase(w);
 		widgetAniBGIndexMap.erase(w);
+	}
+	inline void MSSSPrivate::removeCache(RenderRuleQuerier* q)
+	{ 
+		querierStyleRuleCache.erase(q);
+		querierRenderRuleCache.erase(q);
 	}
 
 	inline MSSSPrivate::MSSSPrivate():appStyleSheet(new StyleSheet())
@@ -3792,6 +4072,8 @@ namespace MetalBone
 		renderRuleCollection.clear();
 		widgetStyleRuleCache.clear();
 		widgetRenderRuleCache.clear();
+		querierStyleRuleCache.clear();
+		querierRenderRuleCache.clear();
 
 		discardResource();
 

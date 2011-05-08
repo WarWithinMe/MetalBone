@@ -14,6 +14,14 @@ void mb_debug(const wchar_t* what)
 	OutputDebugStringW(what);
 }
 
+double get_time()
+{
+	LARGE_INTEGER t, f;
+	QueryPerformanceCounter(&t);
+	QueryPerformanceFrequency(&f);
+	return double(t.QuadPart)/double(f.QuadPart);
+}
+
 void mb_warning(bool cond, const wchar_t* what)
 {
 	if(!cond)

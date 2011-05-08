@@ -8,9 +8,6 @@
 
 #define MB_DEBUGBREAK_INSTEADOF_ABORT
 
-#define MB_DEBUG
-#define MB_DEBUG_D2D
-
 // Use MSVC to compile, currently only MSVC is supported
 #ifndef MSVC
 #  define MSVC

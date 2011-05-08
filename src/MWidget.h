@@ -15,6 +15,8 @@ namespace MetalBone
 		WF_Dialog           = 0x2 | WF_Window, // TitleBar, Close Button
 		WF_Popup            = 0x4 | WF_Window, // No system border. Use it with WF_Border, you can
 											   // create a window which has border but no titlebar.
+											   // The window will behave like a normal window if you
+											   // specify the WF_Popup | WF_MinimizeButton
 		WF_Tool             = 0x8 | WF_Window,
 
 		WF_MaximizeButton   = 0x100, // Also create close button.
@@ -25,12 +27,15 @@ namespace MetalBone
 		WF_Border           = 0x2000,
 		WF_ThinBorder       = 0x4000,
 
-		WF_AllowTransparency= 0x10000,
+		WF_AllowTransparency= 0x10000,// You must set WF_AllowTransparency | WF_MinimizeButton to make the window
+										// behave the same as the other window (i.e. can minimize when clicking
+										// the taskbar icon)
 
 		WF_AlwaysOnTop      = 0x20000,
 		WF_AlwaysOnBottom   = 0x40000,
 
-		WF_DontShowOnTaskbar= 0x80000
+		WF_DontShowOnTaskbar= 0x80000,
+		WF_NoActivate       = 0x100000
 	};
 
 	enum WidgetAttributes
@@ -55,7 +60,6 @@ namespace MetalBone
 		WA_NoMousePropagation = 0x100,// If a MouseEvent is not accpeted, and this attribute is not set,
 									  // it will by default propagete to its parent.
 		WA_TrackMouseMove     = 0x200,// If set, the widget will receive MouseMoveEvent.
-
 		WA_DontShowOnScreen   = 0x400 // If set, the widget won't do any painting. But it still receives mouse event.
 	};
 
@@ -150,6 +154,7 @@ namespace MetalBone
 
 			inline MToolTip* getToolTip();
 			// MWidget will take control of the MToolTip
+			// And setting a new tooltip will delete the old one.
 			void setToolTip(MToolTip*);
 			void setToolTip(const std::wstring&);
 

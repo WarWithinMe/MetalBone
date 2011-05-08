@@ -42,6 +42,9 @@
     <ClCompile Include="..\..\MResource.cpp">
       <Filter>ExternMB\Source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\MToolTip.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\MBGlobal.h">

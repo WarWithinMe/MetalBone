@@ -3,6 +3,15 @@
 #include "mb_switch.h"
 #include <Windows.h>
 
+#ifdef _DEBUG
+#ifndef MB_DEBUG
+#define MB_DEBUG
+#endif
+#ifndef MB_DEBUG_D2D
+#define MB_DEBUG_D2D
+#endif
+#endif
+
 #ifndef _UNICODE
 #  define _UNICODE
 #endif
@@ -22,12 +31,13 @@
 #  endif
 #endif // METALBONE_EXPORT
 
+#pragma comment(lib, "gdiplus.lib")       // Gdi+
+#pragma comment(lib, "windowscodecs.lib") // WIC
 #pragma comment(lib, "d2d1.lib")          // Direct2D
 #pragma comment(lib, "dwrite.lib")        // DirectWrite
-#pragma comment(lib, "windowscodecs.lib") // WIC
-#pragma comment(lib, "gdiplus.lib")       // Gdi+
-#pragma comment(lib, "d3d10_1.lib")       // D3D 10.1
 #pragma comment(lib, "dwmapi.lib")        // DWM
+
+#pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 namespace MetalBone{}
 #ifdef STRIP_METALBONE_NAMESPACE

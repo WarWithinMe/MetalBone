@@ -70,6 +70,7 @@
     <ClCompile Include="..\..\MRegion.cpp" />
     <ClCompile Include="..\..\MResource.cpp" />
     <ClCompile Include="..\..\MStyleSheet.cpp" />
+    <ClCompile Include="..\..\MToolTip.cpp" />
     <ClCompile Include="..\..\MWidget.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>

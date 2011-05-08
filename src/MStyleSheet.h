@@ -10,6 +10,7 @@
 #include <d2d1.h>
 #include <map>
 #include <unordered_map>
+#include <limits>
 
 namespace MetalBone
 {
@@ -144,6 +145,9 @@ namespace MetalBone
 				bool opaqueBackground() const;
 				void draw(ID2D1RenderTarget*,const RECT& widgetRectInRT, const RECT& clipRectInRT,
 					 const std::wstring& text = std::wstring(),unsigned int frameIndex = 0);
+				// If maxWidth is -1, it's not wordwrap.
+				SIZE getStringSize(const std::wstring&, int maxWidth = INT_MAX);
+				void getContentMargin(RECT&);
 				MCursor* getCursor();
 				inline bool operator==(const RenderRule&) const;
 				inline bool operator!=(const RenderRule&) const;
@@ -154,6 +158,32 @@ namespace MetalBone
 
 			friend class MSSSPrivate;
 			friend class MStyleSheetStyle;
+		};
+		class RenderRuleQuerier
+		{
+			public:
+				// You should keep the RenderRuleQuerier instead of creating it each time when you query a 
+				// RenderRule. Because MStyleSheetStyle internally cache the RenderRule for every RenderRuleQuerier.
+
+				// Construct a RenderRuleQuerier that has a className as its CLASS and objectName as its ID.
+				inline RenderRuleQuerier(const std::wstring& className, const std::wstring& objectName = std::wstring());
+				~RenderRuleQuerier();
+
+				// Return a new RenderRuleQuerier that has a className as its CLASS and objectName as its ID. 
+				// The new RenderRuleQuerier is a child of this RenderRuleQuerier. When the parent is deleted,
+				// All its children will be deleted.
+				inline RenderRuleQuerier* addChild(std::wstring& className, std::wstring& objectName = std::wstring());
+				inline RenderRuleQuerier* parent();
+				inline const std::wstring& objectName() const;
+				inline const std::wstring& className() const;
+			private:
+				std::wstring mclassName;
+				std::wstring mobjectName;
+				std::vector<RenderRuleQuerier*> children;
+				RenderRuleQuerier* mparent;
+
+				RenderRuleQuerier(const RenderRuleQuerier&);
+				const RenderRuleQuerier& operator=(const RenderRuleQuerier&);
 		};
 	} // namespace CSS
 
@@ -166,16 +196,24 @@ namespace MetalBone
 				Direct2D,
 				AutoDetermine
 			};
-			MStyleSheetStyle();
-			~MStyleSheetStyle();
+
 			void setAppSS(const std::wstring& css);
 			void setWidgetSS(MWidget* w, const std::wstring& css);
 			void polish(MWidget* w);
-			// clipRect should be equal to or inside the widgetRect.
+
+			// 1.Since the brush is shared among every render rule. It's necessary to ensure
+			// every ID2D1RenderTarget (rt) passed in can use resources created by
+			// the other ID2D1RenderTarget.
+			// 2.clipRect should be equal to or inside the widgetRect.
 			void draw(MWidget* w,ID2D1RenderTarget* rt, const RECT& widgetRectInRT, const RECT& clipRectInRT,
 					const std::wstring& text = std::wstring(), int frameIndex = -1);
+
 			void removeCache(MWidget* w);
+			void removeCache(CSS::RenderRuleQuerier*);
+
 			CSS::RenderRule getRenderRule(MWidget* w, unsigned int p = CSS::PC_Default);
+			CSS::RenderRule getRenderRule(CSS::RenderRuleQuerier*, unsigned int p = CSS::PC_Default);
+
 			// Check if the widget needs to be unpdated.
 			void updateWidgetAppearance(MWidget*);
 
@@ -184,6 +222,9 @@ namespace MetalBone
 			static void setTextRenderer(TextRenderer, unsigned int maxGdiFontPtSize = 16);
 
 			void discardResource(ID2D1RenderTarget*);
+
+			MStyleSheetStyle();
+			~MStyleSheetStyle();
 		private:
 			MSSSPrivate* mImpl;
 	};
@@ -199,5 +240,20 @@ namespace MetalBone
 		{ return data != rhs.data; }
 	inline CSS::RenderRuleData* CSS::RenderRule::operator->()
 		{ return data; }
+	inline CSS::RenderRuleQuerier::RenderRuleQuerier(const std::wstring& c, const std::wstring& o)
+		: mclassName(c), mobjectName(o){}
+	inline CSS::RenderRuleQuerier* CSS::RenderRuleQuerier::addChild(std::wstring& c, std::wstring& o)
+	{
+		RenderRuleQuerier* child = new RenderRuleQuerier(c,o);
+		child->mparent = this;
+		children.push_back(child);
+		return child;
+	}
+	inline CSS::RenderRuleQuerier* CSS::RenderRuleQuerier::parent()
+		{ return mparent; }
+	inline const std::wstring& CSS::RenderRuleQuerier::objectName() const
+		{ return mobjectName; }
+	inline const std::wstring& CSS::RenderRuleQuerier::className() const
+		{ return mclassName; }
 } // namespace MetalBone
 #endif // MSTYLESHEET_H

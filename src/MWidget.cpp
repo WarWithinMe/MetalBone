@@ -16,7 +16,6 @@
 #include <WindowsX.h>
 #include <ObjBase.h>
 #include <dwmapi.h>
-#include <d3d10_1.h>
 #include <limits>
 
 namespace MetalBone
@@ -37,13 +36,14 @@ namespace MetalBone
 	typedef std::tr1::unordered_map<MWidget*,bool>    DirtyChildrenHash;
 	struct WindowExtras {
 		inline WindowExtras();
+		~WindowExtras();
 
 		// If m_wndHandle is a layered window, then we create a dummy window.
 		// We send WM_PAINT messages to that window.
 		// Remark: Can we receive the message if the dummy window is hidden?
 		HWND m_wndHandle;
 		HWND m_dummyHandle;
-		ID2D1RenderTarget* m_renderTarget;
+		ID2D1HwndRenderTarget* m_renderTarget;
 		ID2D1RenderTarget* m_rtHook;
 
 		bool bTrackingMouse;
@@ -65,6 +65,13 @@ namespace MetalBone
 		m_renderTarget(0), m_rtHook(0), bTrackingMouse(false),
 		widgetUnderMouse(0), focusedWidget(0),
 		lastMouseX(0), lastMouseY(0){}
+	WindowExtras::~WindowExtras()
+	{
+		SafeRelease(m_renderTarget);
+		if(m_dummyHandle != NULL)
+			::DestroyWindow(m_dummyHandle);
+		::DestroyWindow(m_wndHandle);
+	}
 	inline void WindowExtras::clearUpdateQueue()
 	{
 		updateWidgets.clear();
@@ -91,7 +98,7 @@ namespace MetalBone
 
 
 
-	wchar_t gMWidgetClassName[] = L"MetalBone Widget";
+	extern wchar_t gMWidgetClassName[] = L"MetalBone Widget";
 	extern MCursor gArrowCursor = MCursor(MCursor::ArrowCursor);
 
 	// ========== MApplicationData ==========
@@ -121,11 +128,6 @@ namespace MetalBone
 		static MApplication::WinProc customWndProc;
 		static MApplicationData*     instance;
 		static void setFocusWidget(MWidget*);
-
-		static void showToolTip(MToolTip*, int xInDesktop, int yInDesktop);
-		static void hideToolTip(MToolTip* tooltip = 0);
-		
-		MToolTip* currentToolTip;
 	};
 
 
@@ -248,13 +250,12 @@ namespace MetalBone
 	// ========== MApplicationData Impl ==========
 	inline MApplicationData::MApplicationData(bool hwAccelerated):
 		quitOnLastWindowClosed(true),
-		hardwareAccelerated(hwAccelerated),
-		currentToolTip(0)
+		hardwareAccelerated(hwAccelerated)
 		{ instance = this; }
 	inline void MApplicationData::removeTLW(MWidget* w)
-		{ instance->topLevelWindows.erase(w); }
+		{ if(instance) instance->topLevelWindows.erase(w); }
 	inline void MApplicationData::insertTLW(MWidget* w)
-		{ instance->topLevelWindows.insert(w); }
+		{ if(instance) instance->topLevelWindows.insert(w); }
 
 	MApplication::WinProc MApplicationData::customWndProc = 0;
 	MApplicationData* MApplicationData::instance = 0;
@@ -301,27 +302,6 @@ namespace MetalBone
 		}
 	}
 
-	void MApplicationData::showToolTip(MToolTip* tip, int xInDesktop, int yInDesktop)
-	{
-		// 		if(instance->currentToolTip != 0)
-		// 			instance->currentToolTip->hide();
-		// 
-		// 		instance->currentToolTip = tip;
-		// 		tip->show(xInDesktop,yInDesktop);
-	}
-
-	void MApplicationData::hideToolTip(MToolTip* tooltip)
-	{
-		// 		if(!instance->currentToolTip)
-		// 			return;
-		// 
-		// 		if(tooltip != 0 && instance->currentToolTip != tooltip)
-		// 			return;
-		// 
-		// 		instance->currentToolTip->hide();
-		// 		instance->currentToolTip = 0;
-	}
-
 	void generateStyleFlags(unsigned int, DWORD*, DWORD*);
 	unsigned int mapKeyState()
 	{
@@ -336,6 +316,8 @@ namespace MetalBone
 	
 	LRESULT MApplicationData::windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	{
+		if(!instance)
+			return DefWindowProcW(hwnd,msg,wparam,lparam);
 		if(customWndProc)
 		{
 			LRESULT result;
@@ -346,7 +328,7 @@ namespace MetalBone
 		{
 			case WM_DESTROY:
 				// Check if the user wants to quit when the last window is closed.
-				if(instance->topLevelWindows.size() == 0 && instance->quitOnLastWindowClosed)
+				if(instance->quitOnLastWindowClosed && instance->topLevelWindows.size() == 0)
 					mApp->exit(0);
 				return 0;
 		}
@@ -373,8 +355,9 @@ namespace MetalBone
 				}
 				window->drawWindow();
 				ValidateRect(hwnd,0);
+				return 0;
 			}
-			return 0;
+			return DefWindowProcW(hwnd,msg,wparam,lparam);
 		} else if(msg == WM_MOVE)
 		{
 			window = instance->findWidgetByHandle<true>(hwnd);
@@ -413,19 +396,29 @@ namespace MetalBone
 			{
 				if(xtr->widgetUnderMouse != 0)
 				{
-// 					MToolTip* tip = xtr->widgetUnderMouse->getToolTip();
-// 					if(tip && tip != instance->currentToolTip)
-// 					{
-// 						RECT rect;
-// 						GetWindowRect(hwnd,&rect);
-// 						showToolTip(tip, rect.left + xtr->lastMouseX, rect.right + xtr->lastMouseY);
-// 					}
+					MToolTip* tip = xtr->widgetUnderMouse->getToolTip();
+					if(tip)
+					{
+						RECT rect;
+						GetWindowRect(hwnd,&rect);
+						tip->show(rect.left + xtr->lastMouseX + 20,
+							rect.top + xtr->lastMouseY + 20);
+					}
 				}
 				xtr->bTrackingMouse = false;
 			}
 			break;
 		case WM_MOUSEMOVE:
 			{
+				int xpos = GET_X_LPARAM(lparam);
+				int ypos = GET_Y_LPARAM(lparam);
+
+				if(xpos == xtr->lastMouseX && ypos == xtr->lastMouseY)
+					return 0;
+
+				xtr->lastMouseX = xpos;
+				xtr->lastMouseY = ypos;
+
 				if(!window->m_windowExtras->bTrackingMouse)
 				{
 					TRACKMOUSEEVENT tme = {0};
@@ -436,9 +429,6 @@ namespace MetalBone
 					::TrackMouseEvent(&tme);
 					window->m_windowExtras->bTrackingMouse = true;
 				}
-
-				int xpos = xtr->lastMouseX = GET_X_LPARAM(lparam);
-				int ypos = xtr->lastMouseY = GET_Y_LPARAM(lparam);
 
 				// We could first check if the mouse is still over the last widget.
 				MWidget* cw = 0;
@@ -455,6 +445,9 @@ namespace MetalBone
 						lastWidget->leaveEvent();
 						lastWidget->setWidgetState(MWS_Pressed | MWS_UnderMouse, false);
 						instance->ssstyle.updateWidgetAppearance(lastWidget);
+
+						MToolTip* tip = lastWidget->getToolTip();
+						if(tip) tip->hide();
 					} else {
 						// The mouse moves into the window, we set it to the default.
 						gArrowCursor.show(true);
@@ -491,12 +484,19 @@ namespace MetalBone
 				}
 				xtr->widgetUnderMouse = cw;
 
-				// Hide tooltip.
-// 				MToolTip* thisTT = cw == 0 ? 0 : cw->getToolTip();
-// 				if(instance->currentToolTip != thisTT)
-// 					hideToolTip();
-// 				else if(thisTT != 0 && thisTT->hidePolicy() == MToolTip::WhenMove)
-// 					hideToolTip();
+				MToolTip* thisTT = cw == 0 ? 0 : cw->getToolTip();
+				if(thisTT && thisTT->isShowing())
+				{
+					if(thisTT->hidePolicy() == MToolTip::WhenMove)
+						thisTT->hide();
+					else
+					{
+						RECT rect;
+						GetWindowRect(hwnd,&rect);
+						thisTT->show(rect.left + xtr->lastMouseX + 20,
+							rect.top + xtr->lastMouseY + 20);
+					}
+				}
 			}
 			break;
 		case WM_SYSKEYDOWN:
@@ -640,7 +640,7 @@ namespace MetalBone
 
 					SetCapture(hwnd);
 				}
-// 				hideToolTip();
+				MToolTip::hideAll();
 			}
 			break;
 		case WM_LBUTTONUP:
@@ -677,7 +677,7 @@ namespace MetalBone
 
 					ReleaseCapture();
 				}
-// 				hideToolTip();
+				MToolTip::hideAll();
 			}
 			break;
 		case WM_LBUTTONDBLCLK:
@@ -747,21 +747,13 @@ namespace MetalBone
 				window->width  = LOWORD(lparam);
 				window->height = HIWORD(lparam);
 				window->resizeEvent(&ev);
-				if((window->m_windowFlags & WF_AllowTransparency) == 0)
-				{
-					reinterpret_cast<ID2D1HwndRenderTarget*>(xtr->m_renderTarget)
-						->Resize(D2D1::SizeU(LOWORD(lparam),HIWORD(lparam)));
-				} else
-				{
-					SafeRelease(xtr->m_renderTarget);
-					window->createRenderTarget();
-				}
+				xtr->m_renderTarget->Resize(D2D1::SizeU(LOWORD(lparam),HIWORD(lparam)));
 			}
 			break;
 		case WM_NCHITTEST:
 			{
 				LRESULT result;
-				if(!::DwmDefWindowProc(hwnd,msg,wparam,lparam, &result))
+				if(!::DwmDefWindowProc(hwnd,msg,wparam,lparam,&result))
 					result = DefWindowProcW(hwnd,msg,wparam,lparam);
 				switch(result)
 				{
@@ -892,10 +884,10 @@ namespace MetalBone
 		{ delete m_toolTip; m_toolTip = tip; }
 	void MWidget::setToolTip(const std::wstring& tip)
 	{ 
-// 		if(m_toolTip)
-// 			m_toolTip->setText(tip);
-// 		else
-// 			m_toolTip = new MToolTip(tip);
+		if(m_toolTip)
+			m_toolTip->setText(tip);
+		else
+			m_toolTip = new MToolTip(tip);
 	}
 
 	unsigned int MWidget::getWidgetPseudo(bool mark)
@@ -916,8 +908,11 @@ namespace MetalBone
 
 	MWidget::~MWidget()
 	{
-		if(m_topLevelParent->m_windowExtras->focusedWidget == this)
-			m_topLevelParent->m_windowExtras->focusedWidget = 0;
+		if(m_topLevelParent->m_windowExtras)
+		{
+			if(m_topLevelParent->m_windowExtras->focusedWidget == this)
+				m_topLevelParent->m_windowExtras->focusedWidget = 0;
+		}
 
 		// Delete children
 		MWidgetList::iterator iter    = m_children.begin();
@@ -931,26 +926,20 @@ namespace MetalBone
 		if(m_parent != 0)
 			setParent(0);
 
-// 		if(m_toolTip)
-// 		{
-// 			MApplicationData::hideToolTip(m_toolTip);
-// 			delete m_toolTip;
-// 		}
+		delete m_toolTip;
 		delete m_cursor;
 
-		mApp->getStyleSheet()->setWidgetSS(this,std::wstring());
-		mApp->getStyleSheet()->removeCache(this);
-
-
-		// Destroy window
-		if(hasWindow())
+		if(mApp)
 		{
-			if(m_windowExtras->m_dummyHandle != NULL)
-				::DestroyWindow(m_windowExtras->m_dummyHandle);
-			MApplicationData::removeTLW(this);
-			::DestroyWindow(m_windowExtras->m_wndHandle);
+			mApp->getStyleSheet()->setWidgetSS(this,std::wstring());
+			mApp->getStyleSheet()->removeCache(this);
 		}
-		delete m_windowExtras;
+
+		if(m_windowExtras)
+		{
+			MApplicationData::removeTLW(this);
+			delete m_windowExtras;
+		}
 	}
 
 	bool MWidget::hasWindow() const
@@ -1036,15 +1025,11 @@ namespace MetalBone
 				winStyle |= WS_BORDER;
 		}
 
-		if(flags & WF_AllowTransparency)
-		{
-			winExStyle |= WS_EX_LAYERED;
-		}
 
 		if((flags & 0xFE) == 0)
 		{ // WF_Widget
 			if(flags & WF_AllowTransparency)
-				winStyle |= (WS_POPUP | WS_MINIMIZEBOX);
+				winStyle |= WS_POPUP;
 			else if(!customized)
 				winStyle |= WS_TILEDWINDOW;
 		}else if(flags & WF_Popup)
@@ -1056,6 +1041,10 @@ namespace MetalBone
 				winExStyle |= WS_EX_TOOLWINDOW;
 		}
 
+		if(flags & WF_AllowTransparency)
+			winExStyle |= WS_EX_LAYERED;
+		if(flags & WF_NoActivate)
+			winExStyle |= WS_EX_NOACTIVATE;
 		if(flags & WF_AlwaysOnTop)
 			winExStyle |= WS_EX_TOPMOST;
 
@@ -1430,23 +1419,25 @@ namespace MetalBone
 				height = vheight;
 				resizeEvent(&ev);
 			}
-			return;
-		}
-
-		if(m_parent != 0) {
-			// If is a child widget, we need to update the old region within the parent.
-			m_parent->repaint(x,y,width,height);
-			x = vx;
-			y = vy;
-			if(sizeChanged)
-			{
-				width  = vwidth;
-				height = vheight;
-				resizeEvent(&ev);
+		} else
+		{
+			if(m_parent != 0) {
+				// If is a child widget, we need to update the old region within the parent.
+				m_parent->repaint(x,y,width,height);
+				x = vx;
+				y = vy;
+				if(sizeChanged)
+				{
+					width  = vwidth;
+					height = vheight;
+					resizeEvent(&ev);
+				}
+				// Update the new rect.
+				repaint();
 			}
-			// Update the new rect.
-			repaint();
-		} else {
+		}
+		if(m_windowExtras != 0)
+		{
 			// It's a window. We change the size of it. And Windows will repaint it automatically.
 			RECT rect = { 0, 0, width, height };
 			DWORD winStyle   = 0;
@@ -1535,50 +1526,9 @@ namespace MetalBone
 		p.pixelFormat.format    = DXGI_FORMAT_B8G8R8A8_UNORM;
 		p.pixelFormat.alphaMode = D2D1_ALPHA_MODE_PREMULTIPLIED;
 
-		if((m_windowFlags & WF_AllowTransparency) == 0)
-		{
-			ID2D1HwndRenderTarget* rt;
-			D2D1_SIZE_U s;
-			s.width  = width;
-			s.height = height;
-			mApp->getD2D1Factory()->CreateHwndRenderTarget(p,
-				D2D1::HwndRenderTargetProperties(m_windowExtras->m_wndHandle,s), &rt);
-			rt->QueryInterface(&m_windowExtras->m_renderTarget);
-			rt->Release();
-		} else if(mApp->isHardwareAccerated())
-		{
-			// Create DXGI render target.
-			ID3D10Device1* d3device;
-			::D3D10CreateDevice1(0,D3D10_DRIVER_TYPE_HARDWARE,0,
-				D3D10_CREATE_DEVICE_BGRA_SUPPORT,
-				D3D10_FEATURE_LEVEL_10_0,D3D10_1_SDK_VERSION,&d3device);
-			D3D10_TEXTURE2D_DESC description = {};
-			description.ArraySize = 1;
-			description.BindFlags = D3D10_BIND_RENDER_TARGET;
-			description.Format    = DXGI_FORMAT_B8G8R8A8_UNORM;
-			description.Width     = width;
-			description.Height    = height;
-			description.MipLevels = 1;
-			description.SampleDesc.Count = 1;
-			description.MiscFlags = D3D10_RESOURCE_MISC_GDI_COMPATIBLE;
-
-			ID3D10Texture2D* texture;
-			IDXGISurface*    surface;
-			d3device->CreateTexture2D(&description, 0, &texture);
-			texture->QueryInterface(&surface);
-
-			mApp->getD2D1Factory()->CreateDxgiSurfaceRenderTarget(surface,p,&m_windowExtras->m_renderTarget);
-			d3device->Release();
-			texture->Release();
-			surface->Release();
-		} else
-		{
-			IWICBitmap* bitmap;
-			mApp->getWICImagingFactory()->CreateBitmap(width,height,
-				GUID_WICPixelFormat32bppPBGRA,WICBitmapCacheOnLoad,&bitmap);
-			mApp->getD2D1Factory()->CreateWicBitmapRenderTarget(bitmap,&p,&m_windowExtras->m_renderTarget);
-			bitmap->Release();
-		}
+		mApp->getD2D1Factory()->CreateHwndRenderTarget(p,
+			D2D1::HwndRenderTargetProperties(m_windowExtras->m_wndHandle,D2D1::SizeU(width,height)),
+			&m_windowExtras->m_renderTarget);
 	}
 
 	// Windows has told us that we can now repaint the window.
@@ -1785,7 +1735,7 @@ namespace MetalBone
 				ID2D1GdiInteropRenderTarget* gdiRT;
 				HDC dc;
 				m_windowExtras->m_renderTarget->QueryInterface(&gdiRT);
-				result = gdiRT->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&dc);
+				gdiRT->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&dc);
 
 				BLENDFUNCTION blend;
 				blend.BlendOp     = AC_SRC_OVER;
@@ -1799,7 +1749,7 @@ namespace MetalBone
 				info.cbSize   = sizeof(UPDATELAYEREDWINDOWINFO);
 				info.crKey    = 0;
 				info.dwFlags  = ULW_ALPHA;
-				info.hdcDst   = GetDC(m_windowExtras->m_wndHandle);
+				info.hdcDst   = NULL;
 				info.hdcSrc   = dc;
 				info.pblend   = &blend;
 				info.psize    = &windowSize; // NULL
