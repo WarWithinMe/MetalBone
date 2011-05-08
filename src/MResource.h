@@ -1,45 +1,115 @@
-#ifndef GUI_MRESOURCE_H
-#define GUI_MRESOURCE_H
+#pragma once
+
 #include "MBGlobal.h"
 #include "MApplication.h"
 
-#include <D2d1helper.h>
-#include <Windows.h>
+#include <d2d1helper.h>
+#include <windows.h>
+#include <commctrl.h>
 #include <string>
 #include <unordered_map>
 
+// MToolTip
+// MFont
+// MCursor
+// MTimer
+// MResource
+// MShortcut
+// MColor
 namespace MetalBone
 {
-	struct MFontData;
-	// A wrapper class for HFONT
-	class MFont
+	class MWidget;
+	class METALBONE_EXPORT MToolTip
 	{
 		public:
-			~MFont();
-			MFont();
-			MFont(const MFont&);
-			explicit MFont(const LOGFONTW&);
+			enum HidePolicy { WhenMoveOut, WhenMove };
 
-			MFont(unsigned int size, const std::wstring& faceName,
-				bool bold = false, bool italic = false,
+			enum Icon
+			{
+				None         = TTI_NONE,
+				Info         = TTI_INFO,
+				Warning      = TTI_WARNING,
+				Error        = TTI_ERROR,
+				LargeInfo    = TTI_INFO_LARGE,
+				LargeWarning = TTI_WARNING_LARGE,
+				LargeError   = TTI_ERROR_LARGE
+			};
+
+			// MToolTip do not take control of the MWidget,
+			// It's the responsibility of the user to delete the widget.
+			explicit MToolTip(const std::wstring& tip = std::wstring(),
+				MWidget* w = 0, HidePolicy hp = WhenMoveOut);
+			~MToolTip();
+
+			inline void setHidePolicy(HidePolicy);
+			inline HidePolicy hidePolicy() const;
+
+			// If the toolTip is shown when you are setting the data for it,
+			// you must hide and show it again to take effect.
+			inline void setText(const std::wstring&);
+			// If there's any HICON/MWidget previous set, this function will return
+			// that HICON/MWidget, you must free the returned HICON/MWidget yourself.
+			// The HICON/MWidget parameter passed in this function is deleted when
+			// this class is deleted.
+			// If you set the delegate to w, whenever the tooltip shows up, it won't
+			// show up, instead, it calls MWidget::show() for the w.
+			inline MWidget* setDelegate(MWidget* w);
+			inline HICON setExtra(const std::wstring& title, HICON icon = NULL);
+			inline HICON setExtra(const std::wstring& title, Icon);
+
+			inline const std::wstring& getTitle()  const;
+			inline const std::wstring& getText()   const;
+			inline MWidget*            getWidget() const;
+
+			void show(long x, long y);
+			void hide();
+			bool isShowing() const;
+
+			// If there's a visible tooltip, this function will hide it.
+			static void hideAll();
+
+		private:
+			HidePolicy   hp;
+			std::wstring tipString;
+			std::wstring title;
+			HICON        icon;
+			Icon         iconEnum;
+			MWidget*     customWidget;
+	};
+
+
+	struct MFontData;
+	class METALBONE_EXPORT MFont
+	{
+		// A wrapper class for HFONT
+		public:
+			MFont(unsigned int      size,
+				const std::wstring& faceName,
+				bool bold      = false,
+				bool italic    = false,
 				bool pixelUnit = true);
+			explicit MFont(const LOGFONTW&);
+			MFont(const MFont&);
+			MFont();
+			~MFont();
 
 			HFONT getHandle();
-			bool isBold()   const;
-			bool isItalic() const;
+			bool  isBold()   const;
+			bool  isItalic() const;
 			const std::wstring& getFaceName() const;
 			unsigned int pointSize() const;
 
 			operator HFONT() const;
 			const MFont& operator=(const MFont&);
+
 		private:
 			MFontData* data;
 	};
 
 
-
-	class MCursor
+	class METALBONE_EXPORT MCursor
 	{
+		// TODO: Add support for creating cursor dynamically.
 		public:
 			enum CursorType
 			{
@@ -72,23 +142,21 @@ namespace MetalBone
 
 			inline HCURSOR getHandle() const;
 
-			// TODO: Add support for creating cursor dynamically.
-
 			inline void loadCursorFromFile(const std::wstring&);
 			// Loads a cursor from a resource embeded into this exe.
 			inline void loadCursorFromRes(LPWSTR lpCursorName);
 
-			// This function does not take control of the MCursor.
-			// It's the caller's responsibility to delete the MCursor.
-			// Setting this to 0 will cancle the App's Cursor, so that
-			// it can change when hovering over different widgets.
-			inline static void     setAppCursor(MCursor*);
+			// Sets the app's cursor to c, return the previous app's cursor or 0.
+			// If the app's cursor doesn't change, it returns 0.
+			// The MCursor c will be deleted when the application exits.
+			// But you must free the returned cursor yourself.
+			static MCursor* setAppCursor(MCursor* c);
 			inline static MCursor* getAppCursor();
 			inline static void     setPos(int x, int y);
 			inline static POINT    pos();
 
-
 			void show(bool forceUpdate = false) const;
+
 		private:
 			CursorType e_type;
 			HCURSOR handle;
@@ -99,74 +167,73 @@ namespace MetalBone
 	};
 
 
-
-	// A wrapper class for Win32 SetTimer and KillTimer
-	// The interface is a copy of Qt's timer class - QTimer
-	class MTimer
+	class METALBONE_EXPORT MTimer
 	{
+		// A wrapper class for Win32 SetTimer and KillTimer
+		// The interface is a copy of Qt's timer class - QTimer
 		public:
 			inline MTimer();
 			inline ~MTimer();
+
+			// Stops every MTimer
+			static void cleanUp();
 
 			inline bool isActive()         const;
 			inline bool isSingleShot()     const;
 			inline unsigned int timerId()  const;
 			inline unsigned int interval() const;
+
 			inline void setSingleShot(bool);
 			void setInterval(unsigned int msec);
 
+			// Starts the timer with msec as the interval.
 			inline void start(unsigned int msec);
-			static void cleanUp();
 			void start();
 			void stop();
 
 			Signal0<> timeout;
+
+
 		private:
 			static void __stdcall timerProc(HWND, UINT, UINT_PTR, DWORD);
-			// TimerId - Interval
-			typedef std::tr1::unordered_map<unsigned int, unsigned int> TimerIdMap;
-			// Interval - MTimer
-			typedef std::tr1::unordered_multimap<unsigned int, MTimer*> TimerHash;
-			static TimerHash  timerHash;
-			static TimerIdMap timerIdMap;
 			unsigned int m_interval;
 			unsigned int m_id;
 			bool b_active;
 			bool b_singleshot;
+		friend struct TimerHelper;
 	};
 
 
-
-	// Use for small resource files like theme images.
-	class MResource
+	class METALBONE_EXPORT MResource
 	{
+		// Use for small resource files like theme images.
 		public:
 			inline MResource();
 
 			inline const BYTE*  byteBuffer() const;
-			inline unsigned int length() const;
+			inline unsigned int length()     const;
 
 			// Open a file from the cache, if a file is already opened,
 			// it will be closed.
 			bool open(const std::wstring& fileName);
 			// Open a file from a module, if a file is already opened,
 			// it will be closed.
-			bool open(HINSTANCE hInstance, const wchar_t* name,
-					  const wchar_t* type);
+			bool open(HINSTANCE hInstance,
+					const wchar_t* name,
+					const wchar_t* type);
 
 			static void clearCache();
 			static bool addFileToCache(const std::wstring& filePath);
 			static bool addZipToCache(const std::wstring& zipPath);
 
-
 #ifdef MB_DEBUG
 			static void dumpCache();
 #endif
+			
+
 		private:
 			const BYTE* buffer;
 			unsigned int size;
-
-
 			struct ResourceEntry
 			{
 				BYTE* buffer;
@@ -180,13 +247,14 @@ namespace MetalBone
 	};
 
 
-
-	class MShortCut
+	class METALBONE_EXPORT MShortCut
 	{
 		public:
+			inline MShortCut(unsigned int modifier,
+				unsigned int virtualKey,
+				MWidget*     target = 0,
+				bool         global = false);
 			inline MShortCut();
-			inline MShortCut(unsigned int modifier, unsigned int virtualKey,
-				MWidget* target = 0, bool global = false);
 			inline ~MShortCut();
 
 			void setKey(unsigned int modifier, unsigned int virtualKey);
@@ -204,9 +272,12 @@ namespace MetalBone
 			inline unsigned int getVirtualKey() const;
 			inline MWidget* getTarget() const;
 
-			static std::vector<MShortCut*> getMachedShortCuts(unsigned int modifier, unsigned int virtualKey);
+			static void getMachedShortCuts(unsigned int modifier,
+				unsigned int virtualKey, std::vector<MShortCut*>&);
 
 			Signal0<> invoked;
+
+
 		private:
 			MShortCut(const MShortCut&);
 			const MShortCut& operator=(const MShortCut&);
@@ -222,14 +293,12 @@ namespace MetalBone
 			inline void removeFromMap();
 			inline void insertToMap();
 			inline unsigned int getKey();
-
 	};
 
 
-
-	// A class for storing ARGB(0xAARRGGBB) color value.
-	class MColor
+	class METALBONE_EXPORT MColor
 	{
+		// A class for storing ARGB(0xAARRGGBB) color value.
 		public:
 			inline MColor();
 			inline explicit MColor(unsigned int argb);
@@ -250,20 +319,56 @@ namespace MetalBone
 			inline unsigned int getRGB()  const;
 			inline COLORREF getCOLORREF() const;
 
-// 			inline static MColor fromRGBA(unsigned int);
 			inline static MColor fromCOLORREF(COLORREF color, BYTE alpha);
 
 			inline const MColor& operator=(const MColor&);
 			inline bool operator==(const MColor&) const;
 
 			inline operator D2D1_COLOR_F() const;
+
 		private:
 			unsigned int argb;
 	};
 
 
-// 	inline MColor MColor::fromRGBA(unsigned int rgba)
-// 		{ return MColor(((rgba & 0xFF) << 24) | (rgba & 0xFFFFFF)); }
+
+
+	inline void MToolTip::setHidePolicy(HidePolicy p)
+		{ hp = p; }
+	inline MToolTip::HidePolicy MToolTip::hidePolicy() const
+		{ return hp; }
+	inline const std::wstring& MToolTip::getText() const
+		{ return tipString; }
+	inline const std::wstring& MToolTip::getTitle() const
+		{ return title; }
+	inline MWidget* MToolTip::getWidget() const
+		{ return customWidget; }
+	inline void MToolTip::setText(const std::wstring& t)
+		{ tipString = t; }
+	inline HICON MToolTip::setExtra(const std::wstring& t, Icon i)
+	{
+		title = t;
+		iconEnum = i;
+		icon = NULL;
+		return icon;
+	}
+	inline HICON MToolTip::setExtra(const std::wstring& t, HICON i)
+	{
+		HICON oldIcon = icon;
+		title = t;
+		icon  = i;
+		return oldIcon;
+	}
+	inline MWidget* MToolTip::setDelegate(MWidget* w)
+	{ 
+		hide();
+		MWidget* oldW = customWidget;
+		customWidget = w;
+		return oldW;
+	}
+
+
+
 	inline MColor MColor::fromCOLORREF(COLORREF color, BYTE alpha)
 	{
 		unsigned int argb = alpha;
@@ -308,9 +413,10 @@ namespace MetalBone
 
 	MShortCut::MShortCut():modifier(0),virtualKey(0),target(0),global(false),enabled(false){}
 	MShortCut::MShortCut(unsigned int m, unsigned int vk, MWidget* t, bool g):
-		modifier(m),virtualKey(vk),target(t),global(false),enabled(true){ insertToMap(); if(g) setGlobal(true); }
-	MShortCut::~MShortCut() { removeFromMap(); }
-
+		modifier(m),virtualKey(vk),target(t),global(false),enabled(true)
+		{ insertToMap(); if(g) setGlobal(true); }
+	MShortCut::~MShortCut()
+		{ removeFromMap(); }
 	inline bool MShortCut::isGlobal() const
 		{ return global; }
 	inline bool MShortCut::isEnabled() const
@@ -332,12 +438,13 @@ namespace MetalBone
 
 
 
-
 	inline MResource::MResource():buffer(0),size(0){}
 	inline const BYTE*  MResource::byteBuffer() const
 		{ return buffer; }
 	inline unsigned int MResource::length() const
 		{ return size; }
+
+
 
 	inline MCursor::MCursor(CursorType t):e_type(CustomCursor)
 		{ setType(t); }
@@ -355,13 +462,8 @@ namespace MetalBone
 		{ updateCursor(::LoadCursorFromFileW(path.c_str()),CustomCursor); }
 	inline void MCursor::loadCursorFromRes(LPWSTR res)
 		{ updateCursor(::LoadCursorW(mApp->getAppHandle(),res),CustomCursor); }
-	void MCursor::setAppCursor(MCursor* c)
-	{
-		if(appCursor == c) return;
 
-		appCursor = c;
-		appCursor->show();
-	}
+
 
 	inline MTimer::MTimer():m_interval(0),m_id(0),
 		b_active(false),b_singleshot(false){}
@@ -388,4 +490,3 @@ class std::tr1::hash<MColor>
 		size_t operator()(const MColor& color) const
 			{ return std::tr1::hash<unsigned int>().operator()(color.getARGB()); }
 };
-#endif // MRESOURCE_H

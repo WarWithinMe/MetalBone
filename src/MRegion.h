@@ -1,4 +1,3 @@
-#pragma once
 /*
  * This class is originally developed by Vladislav Gelfer. The original source code
  * can be obtain from the article - Advanced multi-dimensional region template class
@@ -6,19 +5,20 @@
  * just a specialized version of the original implementation. So all regards should be
  * to Vladislav Gelfer. 
  */
-#include <windows.h>
+
+#pragma once
 #include "MBGlobal.h"
+#include <windows.h>
 #include "3rd/ContainersInl.h"
 namespace MetalBone
 {
-	class MRegion
+	class METALBONE_EXPORT MRegion
 	{
 		public:
-			class Iterator;
-			MRegion (){}
-			~MRegion(){}
-			explicit MRegion(const RECT& r) { addRect(r); }
-			MRegion(const MRegion& r) { copyFrom(r); }
+			inline MRegion ();
+			inline ~MRegion();
+			inline explicit MRegion(const RECT& r);
+			inline MRegion(const MRegion& r);
 
 			void addRect   (const RECT&);
 			void combine   (const MRegion&); // RGN_OR
@@ -26,9 +26,6 @@ namespace MetalBone
 			void subtract  (const MRegion&); // RGN_DIFF
 			void subtractEx(const MRegion&, MRegion& intersectOut);
 			void offset    (LONG x, LONG y);
-
-
-			Iterator begin() const;
 
 			inline void clear();
 			inline void swap(MRegion&);
@@ -43,7 +40,8 @@ namespace MetalBone
 			bool isRectFullyInside (const RECT&)    const;
 			bool isRectPartlyInside(const RECT&)    const;
 
-
+			class Iterator;
+			Iterator begin() const;
 
 
 		private:
@@ -91,10 +89,8 @@ namespace MetalBone
 			void perfOperation(const MRegion&, MRegion* pIntersect);
 
 			const MRegion& operator=(const MRegion&);
-
-
 		public:
-			class Iterator {
+			class METALBONE_EXPORT Iterator {
 					const YNode* ynode;
 					const XNode* xnode;
 				public:
@@ -109,6 +105,11 @@ namespace MetalBone
 
 
 
+
+	inline MRegion::MRegion(){}
+	inline MRegion::~MRegion(){}
+	inline MRegion::MRegion(const RECT& r) { addRect(r); }
+	inline MRegion::MRegion(const MRegion& r) { copyFrom(r); }
 	inline bool MRegion::isRectValidNonEmpty(const RECT& r)
 		{ return r.left < r.right && r.top < r.bottom; }
 	inline void MRegion::swap(MRegion& rgn)

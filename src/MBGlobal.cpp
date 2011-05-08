@@ -1,4 +1,6 @@
 #include "MBGlobal.h"
+
+#ifdef MB_DEBUG
 #include <iostream>
 #include <stdlib.h>
 #include <stdio.h>
@@ -7,7 +9,6 @@
 #include <sstream>
 #include <string>
 
-#ifdef MB_DEBUG
 inline void InlDebugBreak() { __asm { int 3 }; }
 void mb_debug(const wchar_t* what)
 {

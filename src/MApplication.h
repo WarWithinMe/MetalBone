@@ -1,13 +1,15 @@
-#ifndef GUI_MAPPLICATION_H
-#define GUI_MAPPLICATION_H
+#pragma once
+
 #include "MBGlobal.h"
 #include <string>
 #include <windows.h>
-#include <d2d1.h>
-#include <wincodec.h>
-#include <dwrite.h>
+#include <objbase.h>
 
 #define mApp MetalBone::MApplication::instance()
+
+interface IDWriteFactory;
+interface IWICImagingFactory;
+interface ID2D1Factory;
 
 namespace MetalBone
 {
@@ -15,7 +17,7 @@ namespace MetalBone
 	class MStyleSheetStyle;
 	struct MApplicationData;
 
-	class MApplication
+	class METALBONE_EXPORT MApplication
 	{
 		public:
 			MApplication(bool hardwareAccelerated = true);
@@ -66,10 +68,11 @@ namespace MetalBone
 
 			// When MApplication quits the Message Loop. This signal is emitted.
 			Signal0<> aboutToQuit;
+
+
 		protected:
 			// Override this function to register a custom Window Class
 			virtual void setupRegisterClass(WNDCLASSW&);
-
 
 		private:
 			static MApplication* s_instance;
@@ -82,10 +85,11 @@ namespace MetalBone
 
 
 
-
-	inline MApplication* MApplication::instance()	{ return s_instance; }
-	inline void MApplication::exit(int ret)			{ PostQuitMessage(ret); }
-	inline unsigned int MApplication::winDpi() const { return windowsDPI; }
+	inline MApplication* MApplication::instance()
+		{ return s_instance; }
+	inline void MApplication::exit(int ret)
+		{ PostQuitMessage(ret); }
+	inline unsigned int MApplication::winDpi() const
+		{ return windowsDPI; }
 }
 
-#endif // GUI_MAPPLICATION_H

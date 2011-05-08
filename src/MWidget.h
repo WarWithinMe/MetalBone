@@ -1,10 +1,11 @@
-#ifndef GUI_MWIDGET_H
-#define GUI_MWIDGET_H
+#pragma once
+
 #include "MBGlobal.h"
+#include "MEvent.h"
 
 #include <string>
-#include <d2d1.h>
 #include <list>
+#include <d2d1.h>
 
 namespace MetalBone
 {
@@ -78,21 +79,15 @@ namespace MetalBone
 		MoveOverFocus, // If set, the widget will automatically grab focus when move over.
 	};
 
-	class MEvent;
-	class MResizeEvent;
-	class MPaintEvent;
-	class MMouseEvent;
-	class MKeyEvent;
-	class MCharEvent;
-	class MStyleSheetStyle;
 	class MWidget;
 	class MRegion;
 	class MToolTip;
-	struct MApplicationData;
 	class MCursor;
+	class MStyleSheetStyle;
 	struct WindowExtras;
-	typedef std::list<MWidget*> MWidgetList; 
-	class MWidget
+	struct MApplicationData;
+	typedef std::list<MWidget*> MWidgetList;
+	class METALBONE_EXPORT MWidget
 	{
 		public:
 			MWidget(MWidget* parent = 0);
@@ -130,7 +125,6 @@ namespace MetalBone
 			// rect(5,5,10,10) and rect(30,30,35,35) will results in a rect(5,5,35,35) 
 			inline void repaint();
 			void repaint(int x, int y, unsigned int width, unsigned int height);
-			inline void repaintIfCSSChanged();
 			ID2D1RenderTarget* getRenderTarget();
 
 			// Sets the owner of this Window to the Window contains p.
@@ -199,6 +193,7 @@ namespace MetalBone
 			virtual unsigned int getWidgetPseudo(bool markAsLast = false);
 			void ssSetOpaque(bool opaque);
 
+
 		protected:
 			// MWidget only receive closeEvent when it is a window.
 			// If the MEvent is not accepted, nothing happen.
@@ -227,6 +222,7 @@ namespace MetalBone
 			virtual void resizeEvent(MResizeEvent*)     {}
 
 			virtual void doStyleSheetDraw(ID2D1RenderTarget*,const RECT& widgetRectInRT, const RECT& clipRectInRT);
+
 
 		private:
 			MWidget* m_parent;
@@ -307,4 +303,3 @@ namespace MetalBone
 	inline void MWidget::setWidgetState(unsigned int s, bool on)
 		{ on ? (m_widgetState |= s) : (m_widgetState &= (~s)); }
 }
-#endif // MWIDGET_H

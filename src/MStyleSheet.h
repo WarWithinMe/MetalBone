@@ -1,13 +1,12 @@
-#ifndef GUI_MSTYLESHEET_H
-#define GUI_MSTYLESHEET_H
+#pragma once
 
-#include "mb_switch.h"
+#include "MBGlobal.h"
 
+#include <windows.h>
+#include <d2d1.h>
 #include <set>
 #include <vector>
 #include <string>
-#include <Windows.h>
-#include <d2d1.h>
 #include <map>
 #include <unordered_map>
 #include <limits>
@@ -34,102 +33,8 @@ namespace MetalBone
 			knownPseudoCount = 20
 		};
 
-		// 只包含了样式相关的属性，删除了位置相关的属性，
-		// 而outline和box-shadow等效果应该使用MWidgetFilter来实现
-		// Do not change the enum value's order. Because the algorithm rely on the order.
-		enum PropertyType {
-			PT_InheritBackground,
-			PT_Background,             PT_BackgroundClip,             PT_BackgroundRepeat,
-			PT_BackgroundPosition,     PT_BackgroundSize,             PT_BackgroundAlignment,
-
-			PT_BorderImage,
-
-			PT_Border,                 PT_BorderWidth,                PT_BorderColor,
-			PT_BorderStyles,
-			PT_BorderTop,              PT_BorderRight,                PT_BorderBottom,
-			PT_BorderLeft,
-			PT_BorderTopWidth,         PT_BorderRightWidth,           PT_BorderBottomWidth,
-			PT_BorderLeftWidth,
-			PT_BorderTopColor,         PT_BorderRightColor,           PT_BorderBottomColor,
-			PT_BorderLeftColor,
-			PT_BorderTopStyle,         PT_BorderRightStyle,           PT_BorderBottomStyle,
-			PT_BorderLeftStyle,
-			PT_BorderTopLeftRadius,    PT_BorderTopRightRadius,       PT_BorderBottomLeftRadius,
-			PT_BorderBottomRightRadius,
-			PT_BorderRadius,
-
-			PT_Margin,                 PT_MarginTop,                  PT_MarginRight,
-			PT_MarginBottom,           PT_MarginLeft,
-			PT_Padding,                PT_PaddingTop,                 PT_PaddingRight,
-			PT_PaddingBottom,          PT_PaddingLeft,
-
-			PT_Width,                  PT_Height,
-			PT_MinimumWidth,           PT_MinimumHeight,
-			PT_MaximumWidth,           PT_MaximumHeight,
-
-			PT_Cursor,
-
-			PT_Font,                   PT_FontSize,                   PT_FontStyle,
-			PT_FontWeight,             PT_Color,
-			PT_TextAlignment,          PT_TextDecoration,             PT_TextOverflow,
-			PT_TextUnderlineStyle,     PT_TextOutline,                PT_TextShadow,
-
-			knownPropertyCount
-		};
-
-		enum ValueType {
-			Value_Unknown,    Value_None,        Value_Transparent,
-
-			Value_Bold,
-			Value_Normal,     Value_Italic,      Value_Oblique,
-			Value_Clip,       Value_Ellipsis,    Value_Wrap,
-			Value_Underline,  Value_Overline,    Value_LineThrough,
-
-			Value_Dashed,     Value_DotDash,     Value_DotDotDash, Value_Dotted,    Value_Solid,   Value_Wave,
-
-			Value_Padding,    Value_Border,      Value_Content,    Value_Margin,
-			Value_Top,        Value_Right,       Value_Left,       Value_Bottom,    Value_Center,
-			Value_NoRepeat,   Value_RepeatX,     Value_RepeatY,    Value_Repeat,    Value_Stretch,
-			Value_True,
-			
-			// The Cursor's order must be the same as MCursor::CursorType
-			Value_Default,   Value_AppStarting, Value_Cross,   Value_Hand,    Value_Help,    Value_IBeam,
-			Value_Wait,      Value_Forbidden,   Value_UpArrow, Value_SizeAll, Value_SizeVer, Value_SizeHor,
-			Value_SizeBDiag, Value_SizeFDiag,   Value_Blank,
-
-			Value_SingleLoop,
-
-			KnownValueCount
-		};
-
-		struct Selector;
-		struct Declaration;
-		struct StyleRule;
-		struct CssValue;
-		struct MatchedStyleRule
-		{
-			const Selector*  matchedSelector;
-			const StyleRule* styleRule;
-		};
-		struct StyleSheet
-		{
-			typedef std::tr1::unordered_multimap<std::wstring, StyleRule*> StyleRuleElementMap;
-			typedef std::tr1::unordered_multimap<std::wstring, StyleRule*> StyleRuleIdMap;
-			~StyleSheet();
-			std::vector<StyleRule*>	styleRules; // Keeps track of every StyleRule
-			std::vector<StyleRule*>	universal;  // Universal
-			StyleRuleElementMap		srElementMap;
-			StyleRuleIdMap			srIdMap;
-		};
-
-		struct RenderRuleCacheKey
-		{
-			std::vector<StyleRule*> styleRules;
-			bool operator<(const RenderRuleCacheKey& rhs) const;
-			RenderRuleCacheKey& operator=(RenderRuleCacheKey& rhs) { styleRules = rhs.styleRules; }
-		};
 		class RenderRuleData;
-		class RenderRule
+		class METALBONE_EXPORT RenderRule
 		{
 			// RenderRule is not thread-safe and it haven't to be.
 			// Because all Styling/Drawing stuff should remain on the same thread(Main thread)
@@ -139,18 +44,26 @@ namespace MetalBone
 				RenderRule(const RenderRule& d);
 				~RenderRule();
 
-				const RenderRule& operator=(const RenderRule& other);
-				inline operator bool() const;
 				inline bool isValid() const;
 				bool opaqueBackground() const;
-				void draw(ID2D1RenderTarget*,const RECT& widgetRectInRT, const RECT& clipRectInRT,
-					 const std::wstring& text = std::wstring(),unsigned int frameIndex = 0);
-				// If maxWidth is -1, it's not wordwrap.
+
+				void draw(ID2D1RenderTarget*,
+					const RECT& widgetRectInRT,
+					const RECT& clipRectInRT,
+					const std::wstring& text = std::wstring(),
+					unsigned int frameIndex = 0);
+
 				SIZE getStringSize(const std::wstring&, int maxWidth = INT_MAX);
 				void getContentMargin(RECT&);
+
 				MCursor* getCursor();
+
 				inline bool operator==(const RenderRule&) const;
 				inline bool operator!=(const RenderRule&) const;
+				const RenderRule& operator=(const RenderRule& other);
+				inline operator bool() const;
+
+
 			private:
 				void init();
 				inline RenderRuleData* operator->();
@@ -159,23 +72,30 @@ namespace MetalBone
 			friend class MSSSPrivate;
 			friend class MStyleSheetStyle;
 		};
-		class RenderRuleQuerier
+		class METALBONE_EXPORT RenderRuleQuerier
 		{
 			public:
-				// You should keep the RenderRuleQuerier instead of creating it each time when you query a 
-				// RenderRule. Because MStyleSheetStyle internally cache the RenderRule for every RenderRuleQuerier.
+				// You should keep the RenderRuleQuerier instead of creating
+				// it each time when you query a RenderRule.
+				// Because MStyleSheetStyle internally cache the RenderRule
+				// for every RenderRuleQuerier.
 
 				// Construct a RenderRuleQuerier that has a className as its CLASS and objectName as its ID.
-				inline RenderRuleQuerier(const std::wstring& className, const std::wstring& objectName = std::wstring());
+				inline RenderRuleQuerier(const std::wstring& className,
+					const std::wstring& objectName = std::wstring());
 				~RenderRuleQuerier();
 
 				// Return a new RenderRuleQuerier that has a className as its CLASS and objectName as its ID. 
-				// The new RenderRuleQuerier is a child of this RenderRuleQuerier. When the parent is deleted,
-				// All its children will be deleted.
-				inline RenderRuleQuerier* addChild(std::wstring& className, std::wstring& objectName = std::wstring());
+				// The new RenderRuleQuerier is a child of this RenderRuleQuerier.
+				// When the parent is deleted, all its children will be deleted.
+				inline RenderRuleQuerier* addChild(std::wstring& className,
+					std::wstring& objectName = std::wstring());
+
 				inline RenderRuleQuerier* parent();
 				inline const std::wstring& objectName() const;
-				inline const std::wstring& className() const;
+				inline const std::wstring& className()  const;
+
+
 			private:
 				std::wstring mclassName;
 				std::wstring mobjectName;
@@ -187,7 +107,7 @@ namespace MetalBone
 		};
 	} // namespace CSS
 
-	class MStyleSheetStyle
+	class METALBONE_EXPORT MStyleSheetStyle
 	{
 		public:
 			enum TextRenderer
@@ -205,8 +125,11 @@ namespace MetalBone
 			// every ID2D1RenderTarget (rt) passed in can use resources created by
 			// the other ID2D1RenderTarget.
 			// 2.clipRect should be equal to or inside the widgetRect.
-			void draw(MWidget* w,ID2D1RenderTarget* rt, const RECT& widgetRectInRT, const RECT& clipRectInRT,
-					const std::wstring& text = std::wstring(), int frameIndex = -1);
+			void draw(MWidget* w, ID2D1RenderTarget* rt,
+				const RECT& widgetRectInRT,
+				const RECT& clipRectInRT,
+				const std::wstring& text = std::wstring(),
+				int frameIndex = -1);
 
 			void removeCache(MWidget* w);
 			void removeCache(CSS::RenderRuleQuerier*);
@@ -214,7 +137,7 @@ namespace MetalBone
 			CSS::RenderRule getRenderRule(MWidget* w, unsigned int p = CSS::PC_Default);
 			CSS::RenderRule getRenderRule(CSS::RenderRuleQuerier*, unsigned int p = CSS::PC_Default);
 
-			// Check if the widget needs to be unpdated.
+			// If the MWidget needs to update, this function calls MWidget::repaint();
 			void updateWidgetAppearance(MWidget*);
 
 			// If TextRenderer is AutoDetermine, we use GDI to render text when the font size is
@@ -225,9 +148,14 @@ namespace MetalBone
 
 			MStyleSheetStyle();
 			~MStyleSheetStyle();
+
 		private:
 			MSSSPrivate* mImpl;
 	};
+
+
+
+
 
 	inline CSS::RenderRule::RenderRule():data(0){}
 	inline CSS::RenderRule::operator bool() const
@@ -256,4 +184,3 @@ namespace MetalBone
 	inline const std::wstring& CSS::RenderRuleQuerier::className() const
 		{ return mclassName; }
 } // namespace MetalBone
-#endif // MSTYLESHEET_H

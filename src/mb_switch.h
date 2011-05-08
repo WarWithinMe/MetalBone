@@ -1,8 +1,8 @@
-#ifndef MB_SWITCH_H
-#define MB_SWITCH_H
+#pragma once
 
 // MetalBone is not exported, if defined.
-#define METALBONE_EXPORT
+//#define METALBONE_LIBRARY
+//#define MB_DECL_EXPORT
 
 #define STRIP_METALBONE_NAMESPACE
 
@@ -12,5 +12,3 @@
 #ifndef MSVC
 #  define MSVC
 #endif
-
-#endif // MB_SWITCH_H

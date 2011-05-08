@@ -19,52 +19,20 @@
     <Filter Include="Source">
       <UniqueIdentifier>{ca25f9d5-9117-4705-a5db-ad78064acc8c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="My Inspector Results">
-      <UniqueIdentifier>{cf3102e5-6e37-4490-bde5-ff82799f5530}</UniqueIdentifier>
+    <Filter Include="ExternMB\Header\private">
+      <UniqueIdentifier>{026bdfa2-8681-4785-bdd4-f6698a0ab325}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ExternMB\Source\private">
+      <UniqueIdentifier>{ffc2e337-69bc-48ee-a899-172c6226cb1d}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\MApplication.h">
-      <Filter>ExternMB\Header</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\MBGlobal.h">
-      <Filter>ExternMB\Header</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\mb_switch.h">
-      <Filter>ExternMB\Header</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\MEvent.h">
-      <Filter>ExternMB\Header</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\MRegion.h">
-      <Filter>ExternMB\Header</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\MResource.h">
-      <Filter>ExternMB\Header</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\MStyleSheet.h">
-      <Filter>ExternMB\Header</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\MToolTip.h">
-      <Filter>ExternMB\Header</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\MWidget.h">
-      <Filter>ExternMB\Header</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\3rd\ContainersInl.h">
-      <Filter>ExternMB\Header\3rd</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\3rd\Delegate.h">
-      <Filter>ExternMB\Header\3rd</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\3rd\Signal.h">
-      <Filter>ExternMB\Header\3rd</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\3rd\XUnzip.h">
-      <Filter>ExternMB\Header\3rd</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MApplication.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\MBGlobal.cpp">
       <Filter>ExternMB\Source</Filter>
     </ClCompile>
@@ -80,25 +48,58 @@
     <ClCompile Include="..\..\MWidget.cpp">
       <Filter>ExternMB\Source</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\private\CSSParser.cpp">
+      <Filter>ExternMB\Source\private</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\3rd\XUnzip.cpp">
       <Filter>ExternMB\Source\3rd</Filter>
     </ClCompile>
-    <ClCompile Include="main.cpp">
-      <Filter>Source</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\MToolTip.cpp">
-      <Filter>ExternMB\Source</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="My Inspector Results\r001mi1\r001mi1.insp">
-      <Filter>My Inspector Results</Filter>
-    </None>
-    <None Include="My Inspector Results\r002mi1\r002mi1.insp">
-      <Filter>My Inspector Results</Filter>
-    </None>
-    <None Include="My Inspector Results\r003mi1\r003mi1.insp">
-      <Filter>My Inspector Results</Filter>
-    </None>
+    <ClInclude Include="..\..\MApplication.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MWidget.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\mb_switch.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MBGlobal.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MEvent.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MRegion.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MResource.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MStyleSheet.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rd\ContainersInl.h">
+      <Filter>ExternMB\Header\3rd</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rd\Signal.h">
+      <Filter>ExternMB\Header\3rd</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rd\XUnzip.h">
+      <Filter>ExternMB\Header\3rd</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rd\Delegate.h">
+      <Filter>ExternMB\Header\3rd</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\private\CSSParser.h">
+      <Filter>ExternMB\Header\private</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\private\MApp_p.h">
+      <Filter>ExternMB\Header\private</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\private\MWidget_p.h">
+      <Filter>ExternMB\Header\private</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

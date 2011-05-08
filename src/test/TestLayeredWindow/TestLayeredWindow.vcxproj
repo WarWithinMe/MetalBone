@@ -78,6 +78,17 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\3rd\XUnzip.cpp" />
+    <ClCompile Include="..\..\MApplication.cpp" />
+    <ClCompile Include="..\..\MBGlobal.cpp" />
+    <ClCompile Include="..\..\MRegion.cpp" />
+    <ClCompile Include="..\..\MResource.cpp" />
+    <ClCompile Include="..\..\MStyleSheet.cpp" />
+    <ClCompile Include="..\..\MWidget.cpp" />
+    <ClCompile Include="..\..\private\CSSParser.cpp" />
+    <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
     <ClInclude Include="..\..\3rd\ContainersInl.h" />
     <ClInclude Include="..\..\3rd\Delegate.h" />
     <ClInclude Include="..\..\3rd\Signal.h" />
@@ -89,23 +100,10 @@
     <ClInclude Include="..\..\MRegion.h" />
     <ClInclude Include="..\..\MResource.h" />
     <ClInclude Include="..\..\MStyleSheet.h" />
-    <ClInclude Include="..\..\MToolTip.h" />
     <ClInclude Include="..\..\MWidget.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="..\..\3rd\XUnzip.cpp" />
-    <ClCompile Include="..\..\MBGlobal.cpp" />
-    <ClCompile Include="..\..\MRegion.cpp" />
-    <ClCompile Include="..\..\MResource.cpp" />
-    <ClCompile Include="..\..\MStyleSheet.cpp" />
-    <ClCompile Include="..\..\MToolTip.cpp" />
-    <ClCompile Include="..\..\MWidget.cpp" />
-    <ClCompile Include="main.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="My Inspector Results\r001mi1\r001mi1.insp" />
-    <None Include="My Inspector Results\r002mi1\r002mi1.insp" />
-    <None Include="My Inspector Results\r003mi1\r003mi1.insp" />
+    <ClInclude Include="..\..\private\CSSParser.h" />
+    <ClInclude Include="..\..\private\MApp_p.h" />
+    <ClInclude Include="..\..\private\MWidget_p.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

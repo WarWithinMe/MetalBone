@@ -1,10 +1,10 @@
-#ifndef GUI_MEVENT_H
-#define GUI_MEVENT_H
+#pragma once
+#include "MBGlobal.h"
 
 namespace MetalBone
 {
 	class MRegion;
-	class MEvent
+	class METALBONE_EXPORT MEvent
 	{
 		public:
 			inline MEvent(bool a = true);
@@ -12,27 +12,30 @@ namespace MetalBone
 			inline void accept();
 			inline void ignore();
 			inline bool isAccepted() const;
+
 		private:
 			bool accepted;
 			MEvent(const MEvent&);
 			const MEvent& operator=(const MEvent&);
 	};
 
-	class MPaintEvent : public MEvent
+	class METALBONE_EXPORT MPaintEvent : public MEvent
 	{
 		public:
 			inline explicit MPaintEvent(const MRegion&);
 			inline const MRegion& getUpdateRegion() const;
+
 		private:
 			const MRegion& region;
 	};
 
-	class MResizeEvent : public MEvent
+	class METALBONE_EXPORT MResizeEvent : public MEvent
 	{
 		public:
 			inline MResizeEvent(long oldWidth, long oldHeight, long newWidth, long newHeight);
 			inline SIZE getOldSize() const;
 			inline SIZE getNewSize() const;
+
 		private:
 			SIZE oldSize;
 			SIZE newSize;
@@ -46,11 +49,10 @@ namespace MetalBone
 		RightButton  = 2,
 		MiddleButton = 4
 	};
-	class MMouseEvent : public MEvent
+	class METALBONE_EXPORT MMouseEvent : public MEvent
 	{
 		public:
 			inline MMouseEvent(int, int, int, int, MouseButton);
-
 
 			inline MouseButton button() const;
 			inline int getX()       const;
@@ -58,6 +60,7 @@ namespace MetalBone
 			inline int getGlobalX() const;
 			inline int getGlobalY() const;
 			inline void offsetPos(int,int);
+
 		private:
 			int ix,iy,igx,igy;
 			MouseButton btn;
@@ -72,26 +75,31 @@ namespace MetalBone
 		WinModifier    = MOD_WIN,
 		KeypadModifier = 0x80
 	};
-
-	class MKeyEvent : public MEvent
+	class METALBONE_EXPORT MKeyEvent : public MEvent
 	{
 		public:
 			inline MKeyEvent(unsigned int vk, unsigned int modifiers = NoModifier);
 			inline unsigned int getModifier() const;
 			inline unsigned int getVirtualKey() const;
+
 		private:
 			unsigned int virtualKey;
 			unsigned int modifiers;
 	};
 
-	class MCharEvent : public MEvent
+	class METALBONE_EXPORT MCharEvent : public MEvent
 	{
 		public:
 			inline MCharEvent(unsigned int ch);
 			inline unsigned int getChar() const;
+
 		private:
 			unsigned int ch;
 	};
+
+
+
+
 
 	inline MEvent::MEvent(bool a):accepted(a){}
 	inline MEvent::~MEvent(){}
@@ -132,4 +140,3 @@ namespace MetalBone
 	inline MCharEvent::MCharEvent(unsigned int c):ch(c){}
 	inline unsigned int MCharEvent::getChar() const { return ch; }
 }
-#endif // MEVENT_H
