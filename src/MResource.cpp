@@ -70,9 +70,9 @@ namespace MetalBone
 
 		isShown = true;
 		CSS::RenderRule rule = mApp->getStyleSheet()->getRenderRule(&rrQuerier);
-		RECT marginRect;
-		SIZE size = rule.getStringSize(tip, MAX_TOOLTIP_WIDTH);
 
+		MSize size = rule.getStringSize(tip, MAX_TOOLTIP_WIDTH);
+		MRect marginRect;
 		rule.getContentMargin(marginRect);
 		size.cx += (marginRect.left + marginRect.right);
 		size.cy += (marginRect.top  + marginRect.bottom);
@@ -82,16 +82,17 @@ namespace MetalBone
 		{
 			width  = size.cx;
 			height = size.cy;
-			rt->Resize(D2D1::SizeU(width,height));
+			rt->Resize(size);
 		}
 
 		ID2D1GdiInteropRenderTarget* gdiRT;
 		HDC dc;
-		RECT drawRect = {0,0,width,height};
+		MRect drawRect(0,0,width,height);
 
 		rt->BeginDraw();
 		rt->Clear();
 		rule.draw(rt, drawRect, drawRect, tip);
+
 		rt->QueryInterface(&gdiRT);
 		gdiRT->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&dc);
 

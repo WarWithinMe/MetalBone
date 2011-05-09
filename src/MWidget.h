@@ -227,7 +227,8 @@ namespace MetalBone
 			
 			virtual void resizeEvent(MResizeEvent*)     {}
 
-			virtual void doStyleSheetDraw(ID2D1RenderTarget*,const RECT& widgetRectInRT, const RECT& clipRectInRT);
+			virtual void doStyleSheetDraw(ID2D1RenderTarget*,
+				const MRect& widgetRectInRT, const MRect& clipRectInRT);
 
 
 		private:

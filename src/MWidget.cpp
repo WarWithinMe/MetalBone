@@ -304,7 +304,7 @@ namespace MetalBone
 			m_parent = 0;
 		}
 
-		RECT rect = {0,0,width,height};
+		MRect rect(0,0,width,height);
 		generateStyleFlags(m_windowFlags,&winStyle,&winExStyle);
 
 		::AdjustWindowRectEx(&rect,winStyle,false,winExStyle);
@@ -313,8 +313,7 @@ namespace MetalBone
 			m_windowExtras->m_windowTitle.c_str(),
 			winStyle,
 			x,y, // Remark: we should offset a bit, due to the border frame.
-			rect.right - rect.left, // Width
-			rect.bottom - rect.top, // Height
+			rect.width(), rect.height(),
 			parentHandle,NULL,
 			mApp->getAppHandle(), NULL);
 
@@ -324,7 +323,7 @@ namespace MetalBone
 				gMWidgetClassName,
 				m_windowExtras->m_windowTitle.c_str(),
 				WS_POPUP,
-				0, 0, 50, 50,
+				0, 0, 10, 10,
 				parentHandle,NULL,
 				mApp->getAppHandle(), NULL);
 			::SetLayeredWindowAttributes(m_windowExtras->m_dummyHandle,0,0,LWA_ALPHA);
@@ -661,12 +660,12 @@ namespace MetalBone
 		if(m_windowExtras != 0)
 		{
 			// It's a window. We change the size of it. And Windows will repaint it automatically.
-			RECT rect = { 0, 0, width, height };
+			MRect rect(0, 0, width, height);
 			DWORD winStyle   = 0;
 			DWORD winExStyle = 0;
 			generateStyleFlags(m_windowFlags, &winStyle, &winExStyle);
 			::AdjustWindowRectEx(&rect, winStyle, false, winExStyle);
-			::MoveWindow(m_windowExtras->m_wndHandle, x, y, rect.right - rect.left, rect.bottom - rect.top, true);
+			::MoveWindow(m_windowExtras->m_wndHandle, x, y, rect.width(), rect.height(), true);
 		}
 	}
 
@@ -717,7 +716,7 @@ namespace MetalBone
 
 		// Tells Windows that we need to update, we don't care the clip region.
 		// We do it in our own way.
-		RECT rect = { 0, 0, 1, 1 };
+		MRect rect(0,0,1,1);
 		HWND hwnd = m_topLevelParent->m_windowExtras->m_dummyHandle;
 		if(hwnd == NULL) hwnd = windowHandle();
 		::InvalidateRect(hwnd, &rect, false);
@@ -760,7 +759,7 @@ namespace MetalBone
 
 		bool layeredWindow    = (m_windowFlags & WF_AllowTransparency) != 0;
 		bool fullWindowUpdate = false;
-		RECT windowUpdateRect = {width,height,0,0};
+		MRect windowUpdateRect(width,height,0,0);
 
 		ID2D1RenderTarget* rt = getRenderTarget();
 		rt->BeginDraw();
@@ -774,12 +773,13 @@ namespace MetalBone
 		while(drIterEnd != drIter)
 		{
 			MWidget* uTarget = drIter->first;
-			RECT&    uRect   = drIter->second;
+			MRect&   uRect   = drIter->second;
 			++drIter;
 
 			// If we are dealing with the topLevelWindow itself,
 			// we only have to add it the passiaveUpdateWidgets.
 			if(uTarget == this) {
+
 				passiveUpdateWidgets[this].addRect(uRect);
 				if(layeredWindow && uRect.left == 0 &&
 					uRect.right == width && uRect.top == 0 && uRect.bottom == height)
@@ -794,7 +794,7 @@ namespace MetalBone
 				continue;
 			}
 
-			RECT urForNonOpaque = uRect;
+			MRect urForNonOpaque = uRect;
 
 			MWidget* pc = uTarget;
 			MWidget* pp = pc->m_parent;
@@ -809,7 +809,7 @@ namespace MetalBone
 			// above uTarget, we need to update those things too.
 			while(pp != 0)
 			{
-				OffsetRect(&uRect,pc->x,pc->y);
+				uRect.offset(pc->x,pc->y);
 				uTargetUR.offset(pc->x,pc->y);
 				DrawRegionHash::iterator tpwIter    = tempPassiveWidgets.begin();
 				DrawRegionHash::iterator tpwIterEnd = tempPassiveWidgets.end();
@@ -840,7 +840,7 @@ namespace MetalBone
 						MWidget* cw = *(chIter++);
 						if(cw->isHidden() || cw->testAttributes(WA_DontShowOnScreen)) continue;
 
-						RECT childRect = {cw->x, cw->y, cw->x + cw->width, cw->y + cw->height};
+						MRect childRect(cw->x, cw->y, cw->x + cw->width, cw->y + cw->height);
 						MRegion childR(childRect);
 						if(cw->isOpaqueDrawing())
 						{
@@ -885,15 +885,14 @@ namespace MetalBone
 
 			if(layeredWindow && !fullWindowUpdate)
 			{
-				RECT wur;
+				MRect wur;
 				uTargetUR.getBounds(wur);
 				if(windowUpdateRect.left   > wur.left  ) windowUpdateRect.left   = wur.left;
 				if(windowUpdateRect.right  < wur.right ) windowUpdateRect.right  = wur.right;
 				if(windowUpdateRect.top    > wur.top   ) windowUpdateRect.top    = wur.top;
 				if(windowUpdateRect.bottom < wur.bottom) windowUpdateRect.bottom = wur.bottom;
 
-				rt->PushAxisAlignedClip(D2D1::RectF((FLOAT)wur.left, (FLOAT)wur.top, 
-					(FLOAT)wur.right, (FLOAT)wur.bottom), D2D1_ANTIALIAS_MODE_ALIASED);
+				rt->PushAxisAlignedClip(wur, D2D1_ANTIALIAS_MODE_ALIASED);
 				rt->Clear();
 				rt->PopAxisAlignedClip();
 			}
@@ -930,7 +929,7 @@ namespace MetalBone
 					MWidget* cw = *(chrIter++);
 					if(cw->isHidden() || cw->testAttributes(WA_DontShowOnScreen)) continue;
 
-					RECT siblingRect = {cw->x, cw->y, cw->x + cw->width, cw->y + cw->height};
+					MRect siblingRect(cw->x, cw->y, cw->x + cw->width, cw->y + cw->height);
 					MRegion siblingR(siblingRect);
 					siblingR.intersect(underneathUR);
 					if(!siblingR.isEmpty())
@@ -967,16 +966,12 @@ namespace MetalBone
 				m_windowExtras->m_renderTarget->QueryInterface(&gdiRT);
 				gdiRT->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&dc);
 
-				BLENDFUNCTION blend = {};
-				blend.AlphaFormat = AC_SRC_ALPHA;
-				blend.SourceConstantAlpha = 255;
-
+				BLENDFUNCTION blend = {AC_SRC_OVER,0,255,AC_SRC_ALPHA};
 				POINT sourcePos = {0, 0};
 				SIZE windowSize = {width, height};
 
 				UPDATELAYEREDWINDOWINFO info = {};
 				info.cbSize   = sizeof(UPDATELAYEREDWINDOWINFO);
-				info.crKey    = 0;
 				info.dwFlags  = ULW_ALPHA;
 				info.hdcSrc   = dc;
 				info.pblend   = &blend;
@@ -1001,7 +996,7 @@ namespace MetalBone
 		m_windowExtras->clearUpdateQueue();
 	}
 
-	void MWidget::doStyleSheetDraw(ID2D1RenderTarget* rt,const RECT& wr, const RECT& cr)
+	void MWidget::doStyleSheetDraw(ID2D1RenderTarget* rt,const MRect& wr, const MRect& cr)
 		{ mApp->getStyleSheet()->draw(this,rt,wr,cr); }
 
 	void MWidget::draw(int xOffsetInWnd, int yOffsetInWnd, bool drawMySelf)
@@ -1018,19 +1013,16 @@ namespace MetalBone
 				MRegion::Iterator iter = updateRegion.begin();
 				while(iter) {
 					// Draw the background with CSS
-					RECT clipRect;
+					MRect clipRect;
 					iter.getRect(clipRect);
-					rt->PushAxisAlignedClip(D2D1::RectF((FLOAT)clipRect.left,(FLOAT)clipRect.top,
-						(FLOAT)clipRect.right, (FLOAT)clipRect.bottom), D2D1_ANTIALIAS_MODE_ALIASED);
 
-					RECT widgetRect;
-					widgetRect.left   = xOffsetInWnd;
-					widgetRect.right  = widgetRect.left + width;
-					widgetRect.top    = yOffsetInWnd;
-					widgetRect.bottom = widgetRect.top + height;
+					rt->PushAxisAlignedClip(clipRect, D2D1_ANTIALIAS_MODE_ALIASED);
+					MRect widgetRect(xOffsetInWnd,yOffsetInWnd,
+						xOffsetInWnd+width, yOffsetInWnd+height);
 					doStyleSheetDraw(rt,widgetRect,clipRect);
-					++iter;
 					rt->PopAxisAlignedClip();
+
+					++iter;
 				}
 			}
 
@@ -1045,9 +1037,9 @@ namespace MetalBone
 			// the top, if we meet a opaque child, we immediately draw it
 			// and exclude its rectangle from the update region. Maybe we
 			// should try this.
-			MWidgetList::iterator chIter = m_children.begin();
+			MWidgetList::iterator chIter    = m_children.begin();
 			MWidgetList::iterator chIterEnd = m_children.end();
-			RECT childRectInWnd;
+			MRect childRectInWnd;
 			while(chIter != chIterEnd)
 			{
 				MWidget* child = *chIter;

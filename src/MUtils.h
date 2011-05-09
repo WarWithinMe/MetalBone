@@ -4,9 +4,12 @@
 
 #include <d2d1helper.h>
 
+//MSize
+//MPoint
+//MRect
+//MColor
 namespace MetalBone
 {
-
 	class METALBONE_EXPORT MSize : public SIZE
 	{
 		public:
@@ -33,8 +36,8 @@ namespace MetalBone
 			inline const MSize& operator=(const MSize&);
 			inline const MSize& operator=(const SIZE&);
 
-			inline operator D2D1_SIZE_U();
-			inline operator D2D1_SIZE_F();
+			inline operator D2D1_SIZE_U() const;
+			inline operator D2D1_SIZE_F() const;
 	};
 
 	class METALBONE_EXPORT MPoint : public POINT
@@ -55,8 +58,8 @@ namespace MetalBone
 			inline const MPoint& operator=(const MPoint&);
 			inline const MPoint& operator=(const POINT&);
 
-			inline operator D2D1_POINT_2U();
-			inline operator D2D1_POINT_2F();
+			inline operator D2D1_POINT_2U() const;
+			inline operator D2D1_POINT_2F() const;
 	};
 
 	class METALBONE_EXPORT MRect : public RECT
@@ -87,9 +90,45 @@ namespace MetalBone
 			inline BOOL intersect(const RECT& rc1, const RECT& rc2);
 			inline BOOL unionRect(const RECT& rc1, const RECT& rc2);
 
-			inline operator D2D1_RECT_U();
-			inline operator D2D1_RECT_F();
+			inline operator D2D1_RECT_U() const;
+			inline operator D2D1_RECT_F() const;
 	};
+
+	class METALBONE_EXPORT MColor
+	{
+		// A class for storing ARGB(0xAARRGGBB) color value.
+		public:
+			inline MColor();
+			inline explicit MColor(unsigned int argb);
+			inline MColor(const MColor&);
+
+			inline void setRed  (BYTE red);
+			inline void setGreen(BYTE green);
+			inline void setBlue (BYTE blue);
+			inline void setAlpha(BYTE alpha);
+
+			inline BYTE getRed()   const;
+			inline BYTE getGreen() const;
+			inline BYTE getBlue()  const;
+			inline BYTE getAlpha() const;
+			inline bool isTransparent() const;
+
+			inline unsigned int getARGB() const;
+			inline unsigned int getRGB()  const;
+			inline COLORREF getCOLORREF() const;
+
+			inline static MColor fromCOLORREF(COLORREF color, BYTE alpha);
+
+			inline const MColor& operator=(const MColor&);
+			inline bool operator==(const MColor&) const;
+
+			inline operator D2D1_COLOR_F() const;
+
+		private:
+			unsigned int argb;
+	};
+
+
 
 	inline       MSize::MSize    ()                { cx = 0; cy = 0; }
 	inline       MSize::MSize    (long w, long h)  { cx = w; cy = h; }
@@ -139,15 +178,15 @@ namespace MetalBone
 	inline MRect::MRect(const RECT& r)
 		{ left = r.left; right = r.right; top = r.top; bottom = r.bottom; }
 	inline bool MRect::operator==(const RECT& rc)
-		{ return memcpy(this,&rc,sizeof(RECT)) == 0; }
+		{ return memcmp(this,&rc,sizeof(RECT)) == 0; }
 	inline bool MRect::operator!=(const RECT& rc)
-		{ return memcpy(this,&rc,sizeof(RECT)) != 0; }
+		{ return memcmp(this,&rc,sizeof(RECT)) != 0; }
 	inline void MRect::operator= (const RECT& rc)
 		{ left = rc.left; right = rc.right; top = rc.top; bottom = rc.bottom; }
 	inline bool MRect::operator==(const MRect& rc)
-		{ return memcpy(this,&rc,sizeof(MRect)) == 0; }
+		{ return memcmp(this,&rc,sizeof(MRect)) == 0; }
 	inline bool MRect::operator!=(const MRect& rc)
-		{ return memcpy(this,&rc,sizeof(MRect)) != 0; }
+		{ return memcmp(this,&rc,sizeof(MRect)) != 0; }
 	inline void MRect::operator= (const MRect& rc)
 		{ left = rc.left; right = rc.right; top = rc.top; bottom = rc.bottom; }
 	inline long MRect::height() const { return bottom - top;  }
@@ -173,10 +212,58 @@ namespace MetalBone
 	inline BOOL MRect::unionRect(const RECT& rc1, const RECT& rc2)
 		{ return ::UnionRect(this,&rc1,&rc2); }
 
-	inline MSize:: operator D2D1_SIZE_U()   { return D2D1::SizeU(cx,cy); }
-	inline MSize:: operator D2D1_SIZE_F()   { return D2D1::SizeF((FLOAT)cx, (FLOAT)cy); }
-	inline MPoint::operator D2D1_POINT_2U() { return D2D1::Point2U(x,y); }
-	inline MPoint::operator D2D1_POINT_2F() { return D2D1::Point2F((FLOAT)x,(FLOAT)y); }
-	inline MRect::operator D2D1_RECT_U() { return D2D1::RectU(left,top,right,bottom); }
-	inline MRect::operator D2D1_RECT_F() { return D2D1::RectF((FLOAT)left,(FLOAT)top,(FLOAT)right,(FLOAT)bottom); }
+
+	inline MColor MColor::fromCOLORREF(COLORREF color, BYTE alpha)
+	{
+		unsigned int argb = alpha;
+		argb = argb << 24 | ((color & 0xFF) << 16) | (color & 0xFF00) | (color >> 16) & 0xFF;
+		return MColor(argb);
+	}
+	inline COLORREF MColor::getCOLORREF() const // ColorRef is bgr format.
+		{ return ((argb & 0xFF) << 16) | (argb & 0xFF00) | (argb >> 16 & 0xFF); }
+	inline MColor::MColor():argb(0xFF000000){}
+	inline MColor::MColor(unsigned int c):argb(c){}
+	inline MColor::MColor(const MColor& rhs):argb(rhs.argb){}
+	inline void MColor::setRed(BYTE red)
+		{ argb = argb & 0xFF00FFFF | (red << 16); }
+	inline void MColor::setGreen(BYTE green)
+		{ argb = argb & 0xFFFF00FF | (green << 8); }
+	inline void MColor::setBlue(BYTE blue)
+		{ argb = argb & 0xFFFFFF00 | blue; }
+	inline void MColor::setAlpha(BYTE alpha)
+		{ argb = argb & 0xFFFFFF | (alpha << 24); }
+	inline BYTE MColor::getRed() const
+		{ return BYTE(argb >> 16); }
+	inline BYTE MColor::getGreen() const
+		{ return BYTE(argb >> 8); }
+	inline BYTE MColor::getBlue() const
+		{ return (BYTE)argb; }
+	inline BYTE MColor::getAlpha() const
+		{ return BYTE(argb >> 24); }
+	inline bool MColor::isTransparent() const
+		{ return argb <= 0x00FFFFFF; }
+	inline const MColor& MColor::operator=(const MColor& rhs)
+		{ argb = rhs.argb; return *this; }
+	inline bool MColor::operator==(const MColor& rhs) const
+		{ return argb == rhs.argb; }
+	inline unsigned int MColor::getARGB() const
+		{ return argb; }
+	inline unsigned int MColor::getRGB() const
+		{ return argb & 0xFFFFFF; }
+
+	inline MSize:: operator D2D1_SIZE_U  () const { return D2D1::SizeU(cx,cy); }
+	inline MSize:: operator D2D1_SIZE_F  () const { return D2D1::SizeF((FLOAT)cx, (FLOAT)cy); }
+	inline MPoint::operator D2D1_POINT_2U() const { return D2D1::Point2U(x,y); }
+	inline MPoint::operator D2D1_POINT_2F() const { return D2D1::Point2F((FLOAT)x,(FLOAT)y); }
+	inline MRect:: operator D2D1_RECT_U  () const { return D2D1::RectU(left,top,right,bottom); }
+	inline MRect:: operator D2D1_RECT_F  () const { return D2D1::RectF((FLOAT)left,(FLOAT)top,(FLOAT)right,(FLOAT)bottom); }
+	inline MColor::operator D2D1_COLOR_F () const { return D2D1::ColorF(argb & 0xFFFFFF, float(argb >> 24 & 0xFF) / 255); }
 }
+
+template<>
+class std::tr1::hash<MColor>
+{
+	public:
+		size_t operator()(const MColor& color) const
+			{ return std::tr1::hash<unsigned int>().operator()(color.getARGB()); }
+};

@@ -7,9 +7,12 @@
  */
 
 #pragma once
+
 #include "MBGlobal.h"
-#include <windows.h>
+#include "MUtils.h"
 #include "3rd/ContainersInl.h"
+
+#include <windows.h>
 namespace MetalBone
 {
 	class METALBONE_EXPORT MRegion
@@ -17,28 +20,28 @@ namespace MetalBone
 		public:
 			inline MRegion ();
 			inline ~MRegion();
-			inline explicit MRegion(const RECT& r);
+			inline explicit MRegion(const MRect& r);
 			inline MRegion(const MRegion& r);
 
-			void addRect   (const RECT&);
+			void addRect   (const MRect&);
 			void combine   (const MRegion&); // RGN_OR
 			void intersect (const MRegion&); // RGN_AND
 			void subtract  (const MRegion&); // RGN_DIFF
 			void subtractEx(const MRegion&, MRegion& intersectOut);
-			void offset    (LONG x, LONG y);
+			void offset    (long x, long y);
 
 			inline void clear();
 			inline void swap(MRegion&);
 			inline bool isEmpty() const;
 
-			inline static bool isRectValidNonEmpty(const RECT&);
+			inline static bool isRectValidNonEmpty(const MRect&);
 
 			void copyFrom          (const MRegion&);
 			bool isEqual           (const MRegion&) const;
-			bool getBounds         (RECT&)          const;
-			bool isPointInside     (const POINT&)   const;
-			bool isRectFullyInside (const RECT&)    const;
-			bool isRectPartlyInside(const RECT&)    const;
+			bool getBounds         (MRect&)         const;
+			bool isPointInside     (const MPoint&)  const;
+			bool isRectFullyInside (const MRect&)   const;
+			bool isRectPartlyInside(const MRect&)   const;
 
 			class Iterator;
 			Iterator begin() const;
@@ -53,9 +56,9 @@ namespace MetalBone
 			// We have one CoorTree (CoordianteTree) in each MRegion;
 			// This CoorTree is used to sort Y-axis. Every MRegion::YNode
 			// contains another CoorTree which is used to sort X-axis.
-			typedef ThirdParty::Container::TreeEng<LONG, LONG, void> CoorTree;
+			typedef ThirdParty::Container::TreeEng<long, long, void> CoorTree;
 			struct Range : public CoorTree::Node {
-				LONG m_End;
+				long m_End;
 				inline bool isEqualRanges(const Range& range) const;
 			};
 			struct XNode : public Range { 
@@ -66,7 +69,7 @@ namespace MetalBone
 
 				inline bool isEmpty() const;
 				inline void swap(YNode& y);
-				inline XNode* addRange(LONG start, LONG end);
+				inline XNode* addRange(long start, long end);
 				void copy(const YNode& ynode);
 				void assertValid() const;
 				void onNodeChanged(XNode* pNode);
@@ -81,7 +84,7 @@ namespace MetalBone
 			};
 			ThirdParty::Container::TreeDyn<CoorTree, YNode> m_yCoorTree;
 
-			YNode* addRange(LONG start, LONG end, const YNode&);
+			YNode* addRange(long start, long end, const YNode&);
 			void onNodeChanged(YNode*);
 			void assertValid() const;
 
@@ -95,7 +98,7 @@ namespace MetalBone
 					const XNode* xnode;
 				public:
 					Iterator():ynode(0),xnode(0){}
-					inline void getRect(RECT& r) const;
+					inline void getRect(MRect& r) const;
 					inline operator bool() const;
 					Iterator& operator++();
 				friend class MRegion;
@@ -106,11 +109,11 @@ namespace MetalBone
 
 
 
-	inline MRegion::MRegion(){}
+	inline MRegion::MRegion() {}
 	inline MRegion::~MRegion(){}
-	inline MRegion::MRegion(const RECT& r) { addRect(r); }
+	inline MRegion::MRegion(const MRect& r)   { addRect(r);  }
 	inline MRegion::MRegion(const MRegion& r) { copyFrom(r); }
-	inline bool MRegion::isRectValidNonEmpty(const RECT& r)
+	inline bool MRegion::isRectValidNonEmpty(const MRect& r)
 		{ return r.left < r.right && r.top < r.bottom; }
 	inline void MRegion::swap(MRegion& rgn)
 		{ m_yCoorTree.Swap(rgn.m_yCoorTree); }
@@ -128,7 +131,7 @@ namespace MetalBone
 		{ return m_xCoorTree.IsEmpty(); }
 	inline void MRegion::YNode::swap(YNode& y)
 		{ m_xCoorTree.Swap(y.m_xCoorTree); }
-	inline MRegion::XNode* MRegion::YNode::addRange(LONG start, LONG end) {
+	inline MRegion::XNode* MRegion::YNode::addRange(long start, long end) {
 		M_ASSERT(start < end);
 		XNode* pxNode = m_xCoorTree.Create(start);
 		pxNode->m_End = end;
@@ -137,7 +140,7 @@ namespace MetalBone
 
 	inline MRegion::Iterator::operator bool() const
 	 { return ynode && xnode; }
-	inline void MRegion::Iterator::getRect(RECT& r) const {
+	inline void MRegion::Iterator::getRect(MRect& r) const {
 		r.left   = xnode->m_Key;
 		r.right  = xnode->m_End;
 		r.top    = ynode->m_Key;

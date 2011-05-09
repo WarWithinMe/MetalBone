@@ -210,25 +210,28 @@ namespace MetalBone
 			window = instance->findWidgetByHandle<true>(hwnd);
 			if(window == 0) RET_DEFPROC;
 
-			RECT updateRect;
-			::GetUpdateRect(hwnd,&updateRect,false);
-			if(updateRect.right > 1 && updateRect.bottom > 1)
 			{
-				RECT clientRect;
-				::GetClientRect(hwnd,&clientRect);
-				// If we have to update the whole window,
-				// we should ignore the update request make by the child widgets.
-				if(memcmp(&updateRect,&clientRect,sizeof(updateRect)) == 0)
-					window->m_windowExtras->clearUpdateQueue();
+				MRect updateRect;
+				::GetUpdateRect(hwnd,&updateRect,false);
+				if(updateRect.right > 1 && updateRect.bottom > 1)
+				{
+					MRect clientRect;
+					::GetClientRect(hwnd,&clientRect);
+					// If we have to update the whole window,
+					// we should ignore the update request make by the child widgets.
+					if(updateRect == clientRect)
+						window->m_windowExtras->clearUpdateQueue();
 
-				window->m_windowExtras->addToRepaintMap(window, 0,0,window->width,window->height);
+					window->m_windowExtras->addToRepaintMap(window,0,0,window->width,window->height);
+				}
 			}
+
 			window->drawWindow();
 			::ValidateRect(hwnd,0);
 			return 0;
 		case WM_MOVE:
 			window = instance->findWidgetByHandle<true>(hwnd);
-			if (window == 0) RET_DEFPROC; 
+			if (window == 0) RET_DEFPROC;
 
 			long newX = LOWORD(lparam);
 			long newY = HIWORD(lparam);
@@ -238,11 +241,8 @@ namespace MetalBone
 				window->y = newY;
 				if(window->m_windowFlags & WF_AllowTransparency)
 				{
-					BLENDFUNCTION blend = {};
-					blend.AlphaFormat = AC_SRC_ALPHA;
-					blend.SourceConstantAlpha = 255;
+					BLENDFUNCTION blend = {AC_SRC_OVER,0,255,AC_SRC_ALPHA};
 					POINT windowPos = {window->x, window->y};
-
 					UPDATELAYEREDWINDOWINFO info = {};
 					info.cbSize   = sizeof(UPDATELAYEREDWINDOWINFO);
 					info.dwFlags  = ULW_ALPHA;
@@ -261,7 +261,7 @@ namespace MetalBone
 		switch(msg) {
 
 		case WM_SETCURSOR:
-			return (LOWORD(lparam) == HTCLIENT) ? TRUE : DefWindowProcW(hwnd,msg,wparam,lparam);
+			return (LOWORD(lparam) == HTCLIENT) ? TRUE : ::DefWindowProcW(hwnd,msg,wparam,lparam);
 		case WM_MOUSEHOVER:
 			{
 				if(xtr->widgetUnderMouse != 0)
@@ -269,10 +269,10 @@ namespace MetalBone
 					MToolTip* tip = xtr->widgetUnderMouse->getToolTip();
 					if(tip)
 					{
-						RECT rect;
-						GetWindowRect(hwnd,&rect);
+						MRect rect;
+						::GetWindowRect(hwnd,&rect);
 						tip->show(rect.left + xtr->lastMouseX + 20,
-							rect.top + xtr->lastMouseY + 20);
+								  rect.top  + xtr->lastMouseY + 20);
 					}
 				}
 				xtr->bTrackingMouse = false;
@@ -292,9 +292,9 @@ namespace MetalBone
 				if(!window->m_windowExtras->bTrackingMouse)
 				{
 					TRACKMOUSEEVENT tme = {0};
-					tme.cbSize = sizeof(TRACKMOUSEEVENT);
-					tme.dwFlags = TME_HOVER | TME_LEAVE;
-					tme.hwndTrack = hwnd;
+					tme.cbSize      = sizeof(TRACKMOUSEEVENT);
+					tme.dwFlags     = TME_HOVER | TME_LEAVE;
+					tme.hwndTrack   = hwnd;
 					tme.dwHoverTime = 400; // Remark: Set this value to a proper one.
 					::TrackMouseEvent(&tme);
 					window->m_windowExtras->bTrackingMouse = true;
@@ -338,10 +338,10 @@ namespace MetalBone
 
 					if(mouseMove && cw->testAttributes(WA_TrackMouseMove))
 					{
-						RECT rect;
-						GetWindowRect(hwnd,&rect);
-						MMouseEvent me(xpos, ypos, rect.left + xtr->lastMouseX,
-							rect.top + xtr->lastMouseY, NoButton);
+						MRect rect;
+						::GetWindowRect(hwnd,&rect);
+						rect.offset(xtr->lastMouseX, xtr->lastMouseY);
+						MMouseEvent me(xpos, ypos, rect.left, rect.top, NoButton);
 						do 
 						{
 							if(cw->testAttributes(WA_TrackMouseMove))
@@ -361,8 +361,8 @@ namespace MetalBone
 						thisTT->hide();
 					else
 					{
-						RECT rect;
-						GetWindowRect(hwnd,&rect);
+						MRect rect;
+						::GetWindowRect(hwnd,&rect);
 						thisTT->show(rect.left + xtr->lastMouseX + 20,
 							rect.top + xtr->lastMouseY + 20);
 					}
@@ -468,7 +468,7 @@ namespace MetalBone
 		case WM_RBUTTONDOWN:
 		case WM_MBUTTONDOWN:
 			{
-				SetFocus(hwnd);
+				::SetFocus(hwnd);
 				int xpos = GET_X_LPARAM(lparam);
 				int ypos = GET_Y_LPARAM(lparam);
 				if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
@@ -488,8 +488,6 @@ namespace MetalBone
 						instance->ssstyle.updateWidgetAppearance(cw);
 					}
 
-					RECT rect;
-					::GetWindowRect(hwnd,&rect);
 					MWidget* pc = cw;
 					MWidget* pp = cw->m_parent;
 					while(pp != 0)
@@ -498,6 +496,9 @@ namespace MetalBone
 						ypos -= pc->y;
 						pc = pp; pp = pc->m_parent;
 					}
+
+					MRect rect;
+					::GetWindowRect(hwnd,&rect);
 					MMouseEvent me(xpos, ypos,
 						rect.left + xtr->lastMouseX,
 						rect.top  + xtr->lastMouseY, btn);
@@ -533,7 +534,7 @@ namespace MetalBone
 						instance->ssstyle.updateWidgetAppearance(cw);
 					}
 
-					RECT rect;
+					MRect rect;
 					::GetWindowRect(hwnd,&rect);
 					MMouseEvent me(xpos, ypos,
 						rect.left + xtr->lastMouseX,
@@ -545,7 +546,7 @@ namespace MetalBone
 						cw = cw->m_parent;
 					} while (cw && !me.isAccepted() &&
 						cw->testAttributes(WA_NoMousePropagation));
-					ReleaseCapture();
+					::ReleaseCapture();
 				}
 				MToolTip::hideAll();
 			}
@@ -653,13 +654,13 @@ namespace MetalBone
 				DWORD winStyle    = 0;
 				DWORD winExStyle  = 0;
 				// We don't set parent of layered window.
-				RECT wndRect = {0,0,window->width,window->height};
+				MRect wndRect(0,0,window->width,window->height);
 				generateStyleFlags(window->m_windowFlags,&winStyle,&winExStyle);
 				::AdjustWindowRectEx(&wndRect,winStyle,false,winExStyle);
-				int dx = wndRect.right  - wndRect.left - window->width;
-				int dy = wndRect.bottom - wndRect.top  - window->height;
+				long dx = wndRect.width() - window->width;
+				long dy = wndRect.height()- window->height;
 
-				MINMAXINFO* info = (MINMAXINFO*)lparam;
+				MINMAXINFO* info  = (MINMAXINFO*)lparam;
 				info->ptMaxSize.x = window->maxWidth;
 				info->ptMaxSize.y = window->maxHeight;
 				long sum = window->maxWidth + dx;

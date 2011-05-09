@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MBGlobal.h"
+#include "MUtils.h"
 
 #include <windows.h>
 #include <d2d1.h>
@@ -48,13 +49,13 @@ namespace MetalBone
 				bool opaqueBackground() const;
 
 				void draw(ID2D1RenderTarget*,
-					const RECT& widgetRectInRT,
-					const RECT& clipRectInRT,
+					const MRect& widgetRectInRT,
+					const MRect& clipRectInRT,
 					const std::wstring& text = std::wstring(),
 					unsigned int frameIndex = 0);
 
-				SIZE getStringSize(const std::wstring&, int maxWidth = INT_MAX);
-				void getContentMargin(RECT&);
+				MSize getStringSize(const std::wstring&, int maxWidth = INT_MAX);
+				void getContentMargin(MRect&);
 
 				MCursor* getCursor();
 
@@ -126,8 +127,8 @@ namespace MetalBone
 			// the other ID2D1RenderTarget.
 			// 2.clipRect should be equal to or inside the widgetRect.
 			void draw(MWidget* w, ID2D1RenderTarget* rt,
-				const RECT& widgetRectInRT,
-				const RECT& clipRectInRT,
+				const MRect& widgetRectInRT,
+				const MRect& clipRectInRT,
 				const std::wstring& text = std::wstring(),
 				int frameIndex = -1);
 

@@ -13,7 +13,7 @@ namespace MetalBone
 		MWS_Pressed     = 0x40
 	};
 
-	typedef std::tr1::unordered_map<MWidget*,RECT>    DrawRectHash;
+	typedef std::tr1::unordered_map<MWidget*,MRect>   DrawRectHash;
 	typedef std::tr1::unordered_map<MWidget*,MRegion> DrawRegionHash;
 	typedef std::tr1::unordered_map<MWidget*,bool>    DirtyChildrenHash;
 
@@ -67,13 +67,13 @@ namespace MetalBone
 	{
 		DrawRectHash::iterator iter = updateWidgets.find(w);
 		if(iter != updateWidgets.end()) {
-			RECT& updateRect  = iter->second;
+			MRect& updateRect  = iter->second;
 			if(updateRect.left   > left  ) updateRect.left   = left;
 			if(updateRect.top    > top   ) updateRect.top    = top;
 			if(updateRect.right  < right ) updateRect.right  = right;
 			if(updateRect.bottom < bottom) updateRect.bottom = bottom;
 		} else {
-			RECT& updateRect  = updateWidgets[w];
+			MRect& updateRect  = updateWidgets[w];
 			updateRect.left   = left;
 			updateRect.right  = right;
 			updateRect.top    = top;

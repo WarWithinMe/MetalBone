@@ -5,7 +5,7 @@
 #include "MStyleSheet.h"
 #include "MEvent.h"
 
-#ifdef DEBUG
+#ifdef _DEBUG
 #include "vld.h"
 #endif
 
@@ -30,7 +30,7 @@ class NewWidget : public MWidget
 };
 class ChildWidget : public NewWidget
 {
-	virtual void doStyleSheetDraw(ID2D1RenderTarget* rt,const RECT& widgetRectInRT, const RECT& clipRectInRT)
+	virtual void doStyleSheetDraw(ID2D1RenderTarget* rt,const MRect& widgetRectInRT, const MRect& clipRectInRT)
 	{
 		std::wstring text = L"Î¢ÈíÑÅºÚ";
 		mApp->getStyleSheet()->draw(this,rt,widgetRectInRT,clipRectInRT,text);
@@ -39,7 +39,7 @@ class ChildWidget : public NewWidget
 class CheckBox    : public NewWidget {};
 class Button      : public NewWidget
 {
-	virtual void doStyleSheetDraw(ID2D1RenderTarget* rt,const RECT& widgetRectInRT, const RECT& clipRectInRT)
+	virtual void doStyleSheetDraw(ID2D1RenderTarget* rt,const MRect& widgetRectInRT, const MRect& clipRectInRT)
 	{
 		std::wstring text = L"Î¢ÈíÑÅºÚ";
 		mApp->getStyleSheet()->draw(this,rt,widgetRectInRT,clipRectInRT,text);
@@ -165,6 +165,7 @@ void TestWidgetController::createWidgets()
 	MWidget* mainWindow2 = new MWidget();
 	mainWindow2->setObjectName(L"mainWindow");
 	mainWindow2->setGeometry(200,200,500,500);
+	mainWindow2->setAttributes(WA_DeleteOnClose);
 	mainWindow2->setWindowFlags(WF_AllowTransparency | WF_MinimizeButton);
 	mainWindow2->show();
 }

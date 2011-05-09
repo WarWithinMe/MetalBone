@@ -50,7 +50,7 @@ namespace MetalBone
 		// One should never call Release() on the returned ID2D1Brush
 		inline operator ID2D1Brush*() const;
 		inline ID2D1Brush* getBrush() const;
-		ID2D1BitmapBrush* getBorderPotion(BorderImagePortion, const RECT& widths);
+		ID2D1BitmapBrush* getBorderPotion(BorderImagePortion, const MRect& widths);
 	};
 	class D2D1BrushPool
 	{
@@ -86,10 +86,10 @@ namespace MetalBone
 			NewBrushInfo newBrushInfo; // Store the recently created brush infomation.
 
 			void createBrush(const BrushHandle*);
-			void createBorderImageBrush(const BrushHandle*, const RECT&);
+			void createBorderImageBrush(const BrushHandle*, const MRect&);
 
 			static ID2D1RenderTarget* workingRT;
-			static D2D1BrushPool* instance;
+			static D2D1BrushPool*     instance;
 
 		friend struct BrushHandle;
 	};
@@ -113,7 +113,7 @@ namespace MetalBone
 		if(*brushPosition == 0) D2D1BrushPool::instance->createBrush(this);
 		return reinterpret_cast<ID2D1Brush*>(*brushPosition);
 	}
-	ID2D1BitmapBrush* BrushHandle::getBorderPotion(BorderImagePortion p, const RECT& widths)
+	ID2D1BitmapBrush* BrushHandle::getBorderPotion(BorderImagePortion p, const MRect& widths)
 	{
 		M_ASSERT(type == Bitmap);
 		if(*brushPosition == 0)
@@ -231,7 +231,7 @@ namespace MetalBone
 				error.append(1,L'\n');
 				mWarning(true,error.c_str());
 				// create a empty bitmap because we can't find the image.
-				hr = workingRT->CreateBitmap( D2D1::SizeU(),
+				hr = workingRT->CreateBitmap(D2D1::SizeU(),
 					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,
 					D2D1_ALPHA_MODE_PREMULTIPLIED)), &bitmap);
 
@@ -303,7 +303,7 @@ namespace MetalBone
 		}
 	}
 
-	void D2D1BrushPool::createBorderImageBrush(const BrushHandle* bh, const RECT& widths)
+	void D2D1BrushPool::createBorderImageBrush(const BrushHandle* bh, const MRect& widths)
 	{
 		createBrush(bh);
 		ID2D1BitmapBrush* brush = *(ID2D1BitmapBrush**)bh->brushPosition;
@@ -410,7 +410,7 @@ namespace MetalBone
 			void discardResource(ID2D1RenderTarget* = 0);
 
 			inline void polish(MWidget*);
-			inline void draw(MWidget*,ID2D1RenderTarget*,const RECT&,const RECT&, const wstring&,int);
+			inline void draw(MWidget*,ID2D1RenderTarget*,const MRect&,const MRect&, const wstring&,int);
 			inline void removeCache(MWidget*);
 			inline void removeCache(RenderRuleQuerier*);
 
@@ -523,7 +523,7 @@ namespace MetalBone
 			ValueType    alignY;
 			ImageRepeat  repeat;
 
-			unsigned int frameCount;
+			unsigned short frameCount; // Do we need more frames?
 			bool infiniteLoop;
 
 			// We remember the brush's pointer, so that if the brush is recreated,
@@ -539,7 +539,7 @@ namespace MetalBone
 			inline BorderImageRenderObject();
 			ImageRepeat  repeat;
 			BrushHandle  brush;
-			RECT         widths;
+			MRect        widths;
 		};
 
 
@@ -549,7 +549,7 @@ namespace MetalBone
 
 			BROType type;
 			virtual ~BorderRenderObject() {}
-			virtual void getBorderWidth(RECT&) const = 0;
+			virtual void getBorderWidth(MRect&)const = 0;
 			virtual bool isVisible()           const = 0;
 		};
 		struct SimpleBorderRenderObject : public BorderRenderObject
@@ -561,7 +561,7 @@ namespace MetalBone
 			MColor       color;
 			BrushHandle  brush;
 
-			void getBorderWidth(RECT&) const;
+			void getBorderWidth(MRect&) const;
 			bool isVisible() const;
 			int  getWidth()  const;
 		};
@@ -581,7 +581,7 @@ namespace MetalBone
 			MColor      colors[4];    // T, R, B, L
 			BrushHandle brushes[4];   // T, R, B, L
 
-			void getBorderWidth(RECT&) const;
+			void getBorderWidth(MRect&) const;
 			bool isVisible() const;
 
 			void checkUniform();
@@ -631,7 +631,7 @@ namespace MetalBone
 		
 
 		inline BorderImageRenderObject::BorderImageRenderObject():
-			repeat(NoRepeat) { memset(&widths, 0, sizeof(RECT)); }
+			repeat(NoRepeat),widths(){}
 		inline GeometryRenderObject::GeometryRenderObject():
 			width(-1), height(-1), minWidth(-1),
 			minHeight(-1), maxWidth(-1), maxHeight(-1){}
@@ -650,7 +650,7 @@ namespace MetalBone
 			width(0),style(Value_Solid) { type = SimpleBorder; }
 		inline RadiusBorderRenderObject::RadiusBorderRenderObject():
 			radius(0){ type = RadiusBorder; }
-		void SimpleBorderRenderObject::getBorderWidth(RECT& rect) const
+		void SimpleBorderRenderObject::getBorderWidth(MRect& rect) const
 			{ rect.left = rect.right = rect.bottom = rect.top = width; }
 		int  SimpleBorderRenderObject::getWidth() const
 			{ return width; }
@@ -660,8 +660,8 @@ namespace MetalBone
 		{
 			type = ComplexBorder;
 			styles.left = styles.top = styles.right = styles.bottom = Value_Solid;
-			memset(&widths  , 0, sizeof(RECT));
-			memset(&radiuses, 0, 4 * sizeof(int));
+			memset(&widths  , 0, sizeof(D2D1_RECT_U));
+			memset(&radiuses, 0, 4 * sizeof(unsigned int));
 			for(int i = 0; i < 4; ++i)
 				colors[i].setAlpha(0);
 		}
@@ -695,7 +695,7 @@ namespace MetalBone
 				colors[0] == colors[1] &&  colors[1] == colors[2] &&  colors[2] == colors[3])
 				uniform = true;
 		}
-		void ComplexBorderRenderObject::getBorderWidth(RECT& rect) const
+		void ComplexBorderRenderObject::getBorderWidth(MRect& rect) const
 		{
 			rect.left   = widths.left;
 			rect.right  = widths.right;
@@ -914,23 +914,23 @@ namespace MetalBone
 				void init(MSSSPrivate::DeclMap&);
 				// Return true if we changed the widget's size
 				bool setGeometry(MWidget*);
-				void draw(ID2D1RenderTarget*,const RECT&,const RECT&,const wstring&,unsigned int);
+				void draw(ID2D1RenderTarget*,const MRect&,const MRect&,const wstring&,unsigned int);
 
 				inline unsigned int getTotalFrameCount();
-				bool isBGSingleLoop();
-				SIZE getStringSize(const std::wstring&, int maxWidth);
-				void getContentMargin(RECT&);
+				bool  isBGSingleLoop();
+				MSize getStringSize(const std::wstring&, int maxWidth);
+				void  getContentMargin(MRect&);
 
 			private:
-				void drawBackgrounds(const RECT& widgetRectInRT, const RECT& clipRectInRT,
+				void drawBackgrounds(const MRect& widgetRect, const MRect& clipRect,
 							ID2D1Geometry*, unsigned int frameIndex);
-				void drawBorderImage(const RECT& widgetRectInRT, const RECT& clipRectInRT);
-				void drawGdiText    (const D2D1_RECT_F& borderRectInRT, const RECT& clipRectInRT, const wstring& text);
-				void drawD2DText    (const D2D1_RECT_F& borderRectInRT, const wstring& text);
+				void drawBorderImage(const MRect& widgetRect, const MRect& clipRect);
+				void drawGdiText    (const D2D1_RECT_F& borderRect, const MRect& clipRect, const wstring& text);
+				void drawD2DText    (const D2D1_RECT_F& borderRect, const wstring& text);
 
-				BackgroundRenderObject*  createBackgroundRO(CssValueArray&);
+				BackgroundRenderObject* createBackgroundRO(CssValueArray&);
 				void createBorderImageRO(CssValueArray&);
-				void setSimpleBorderRO(MSSSPrivate::DeclMap::iterator&, MSSSPrivate::DeclMap::iterator);
+				void setSimpleBorderRO(MSSSPrivate::DeclMap::iterator&,  MSSSPrivate::DeclMap::iterator);
 				void setComplexBorderRO(MSSSPrivate::DeclMap::iterator&, MSSSPrivate::DeclMap::iterator);
 
 				int  refCount;
@@ -989,9 +989,9 @@ namespace MetalBone
 		}
 		return true;
 	}
-	SIZE RenderRuleData::getStringSize(const std::wstring& s, int maxWidth)
+	MSize RenderRuleData::getStringSize(const std::wstring& s, int maxWidth)
 	{
-		SIZE size = {};
+		MSize size;
 
 		MFont defaultFont;
 		TextRenderObject defaultRO(defaultFont);
@@ -1013,7 +1013,7 @@ namespace MetalBone
 			unsigned int formatParam = DT_CALCRECT;
 			if(tro != 0) formatParam |= tro->getGDITextFormat();
 
-			RECT textRect = {};
+			MRect textRect;
 			textRect.right = maxWidth;
 
 			size.cy = ::DrawTextW(calcDC, s.c_str(), s.size(), &textRect, formatParam);
@@ -1031,8 +1031,8 @@ namespace MetalBone
 			DWRITE_TEXT_METRICS metrics;
 			textLayout->GetMetrics(&metrics);
 
-			size.cx = (int)metrics.widthIncludingTrailingWhitespace;
-			size.cy = (int)metrics.height;
+			size.cx = (long)metrics.widthIncludingTrailingWhitespace;
+			size.cy = (long)metrics.height;
 
 			SafeRelease(textFormat);
 			SafeRelease(textLayout);
@@ -1040,7 +1040,7 @@ namespace MetalBone
 
 		return size;
 	}
-	void RenderRuleData::getContentMargin(RECT& r)
+	void RenderRuleData::getContentMargin(MRect& r)
 	{
 		if(hasMargin)
 		{
@@ -1049,7 +1049,7 @@ namespace MetalBone
 			r.top    = margin.top;
 			r.bottom = margin.bottom;
 		} else
-			memset(&r,0,sizeof(RECT));
+			memset(&r,0,sizeof(MRect));
 
 		if(hasPadding)
 		{
@@ -1115,19 +1115,14 @@ namespace MetalBone
 		return true;
 	}
 
-	void RenderRuleData::draw(ID2D1RenderTarget* rt, const RECT& widgetRectInRT,
-		const RECT& clipRectInRT, const wstring& text, unsigned int frameIndex)
+	void RenderRuleData::draw(ID2D1RenderTarget* rt, const MRect& widgetRectInRT,
+		const MRect& clipRectInRT, const wstring& text, unsigned int frameIndex)
 	{
 		M_ASSERT(rt != 0);
 		workingRT = rt;
 		D2D1BrushPool::setWorkingRT(workingRT);
 
-		D2D1_RECT_F borderRect;
-		borderRect.left   = (FLOAT)widgetRectInRT.left;
-		borderRect.top    = (FLOAT)widgetRectInRT.top;
-		borderRect.right  = (FLOAT)widgetRectInRT.right;
-		borderRect.bottom = (FLOAT)widgetRectInRT.bottom;
-
+		D2D1_RECT_F borderRect = widgetRectInRT;
 		if(hasMargin) {
 			borderRect.left   += (FLOAT)margin.left;
 			borderRect.right  -= (FLOAT)margin.right;
@@ -1234,11 +1229,12 @@ namespace MetalBone
 		D2D1BrushPool::setWorkingRT(0);
 	}
 
-	void RenderRuleData::drawBackgrounds(const RECT& wr, const RECT& cr, ID2D1Geometry* borderGeo, unsigned int frameIndex)
+	void RenderRuleData::drawBackgrounds(const MRect& wr, const MRect& cr,
+		ID2D1Geometry* borderGeo, unsigned int frameIndex)
 	{
 		for(unsigned int i = 0; i < backgroundROs.size(); ++i)
 		{
-			RECT contentRect = wr;
+			MRect contentRect = wr;
 
 			BackgroundRenderObject* bgro  = backgroundROs.at(i);
 			if(frameIndex >= bgro->frameCount)
@@ -1255,7 +1251,7 @@ namespace MetalBone
 
 				if(bgro->clip != Value_Border) {
 					if(borderRO != 0) {
-						RECT borderWidth;
+						MRect borderWidth;
 						borderRO->getBorderWidth(borderWidth);
 						contentRect.left   += borderWidth.left;
 						contentRect.top    += borderWidth.top;
@@ -1366,7 +1362,7 @@ namespace MetalBone
 		}
 	}
 
-	void RenderRuleData::drawBorderImage(const RECT& widgetRect, const RECT& clipRect)
+	void RenderRuleData::drawBorderImage(const MRect& widgetRect, const MRect& clipRect)
 	{
 		// 0.TopLeft     1.TopCenter     2.TopRight
 		// 3.CenterLeft  4.Center        5.CenterRight
@@ -1645,7 +1641,8 @@ namespace MetalBone
 	}
 
 	using namespace Gdiplus;
-	void RenderRuleData::drawGdiText(const D2D1_RECT_F& borderRect, const RECT& clipRectInRT, const wstring& text)
+	void RenderRuleData::drawGdiText(const D2D1_RECT_F& borderRect,
+		const MRect& clipRectInRT, const wstring& text)
 	{
 		// TODO: Add support for underline and its line style.
 
@@ -1672,7 +1669,8 @@ namespace MetalBone
 		bool hasShadow  = !tro->shadowColor.isTransparent() &&
 			( tro->shadowBlur != 0 || (tro->shadowOffsetX != 0 || tro->shadowOffsetY != 0) );
 
-		RECT drawRect = {(LONG)borderRect.left, (LONG)borderRect.top, (LONG)borderRect.right, (LONG)borderRect.bottom };
+		MRect drawRect((LONG)borderRect.left, (LONG)borderRect.top,
+			(LONG)borderRect.right, (LONG)borderRect.bottom);
 
 		HRGN  clipRGN = ::CreateRectRgn(drawRect.left, drawRect.top, drawRect.right, drawRect.bottom);
 		HRGN  oldRgn  = (HRGN)::SelectObject(textDC,clipRGN);
@@ -1706,8 +1704,8 @@ namespace MetalBone
 				style = tro->font.isItalic() ? FontStyleBoldItalic : FontStyleBold;
 			else if(tro->font.isItalic())
 				style = FontStyleItalic;
-			int w = drawRect.right  - drawRect.left + tro->shadowBlur * 2;
-			int h = drawRect.bottom - drawRect.top  + tro->shadowBlur * 2;
+			int w = drawRect.width() + tro->shadowBlur * 2;
+			int h = drawRect.height()+ tro->shadowBlur * 2;
 			Rect layoutRect(drawRect.left + tro->shadowOffsetX, drawRect.top + tro->shadowOffsetY, w, h);
 			textPath.AddString(text.c_str(), -1, &fm, style, f.GetSize(), layoutRect, &sf);
 
@@ -1744,8 +1742,8 @@ namespace MetalBone
 					HDC tempDC = ::CreateCompatibleDC(0);
 					void* pvBits;
 
-					int width  = drawRect.right  - drawRect.left + tro->shadowBlur * 2;
-					int height = drawRect.bottom - drawRect.top  + tro->shadowBlur * 2;
+					int width  = drawRect.width() + tro->shadowBlur * 2;
+					int height = drawRect.height()+ tro->shadowBlur * 2;
 
 					BITMAPINFO bmi = {};
 					bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
@@ -1763,8 +1761,7 @@ namespace MetalBone
 					::SetBkColor  (tempDC, RGB(0,0,0));
 					::SetBkMode   (tempDC, OPAQUE);
 
-					RECT shadowRect = {tro->shadowBlur, tro->shadowBlur,
-							drawRect.right - drawRect.left, drawRect.bottom - drawRect.top};
+					MRect shadowRect(tro->shadowBlur, tro->shadowBlur, drawRect.width(), drawRect.height());
 					::DrawTextW(tempDC, (LPWSTR)text.c_str(), -1, &shadowRect, formatParam);
 
 					unsigned int* pixel = (unsigned int*)pvBits;
@@ -1811,11 +1808,8 @@ namespace MetalBone
 
 				} else {
 
-					RECT shadowRect = {drawRect.left + tro->shadowOffsetX,
-						drawRect.top    + tro->shadowOffsetY,
-						drawRect.right  + tro->shadowOffsetX,
-						drawRect.bottom + tro->shadowOffsetY};
-
+					MRect shadowRect = drawRect;
+					shadowRect.offset(tro->shadowOffsetX,tro->shadowOffsetY);
 					::SetTextColor(textDC, tro->shadowColor.getCOLORREF());
 					::DrawTextW(textDC, (LPWSTR)text.c_str(), -1, &shadowRect, formatParam);
 				}
@@ -1832,8 +1826,8 @@ namespace MetalBone
 			HDC tempDC = ::CreateCompatibleDC(0);
 			void* pvBits;
 			BITMAPINFO bmi = {};
-			int width  = drawRect.right  - drawRect.left;
-			int height = drawRect.bottom - drawRect.top;
+			int width  = drawRect.width();
+			int height = drawRect.height();
 			bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
 			bmi.bmiHeader.biWidth       = width;
 			bmi.bmiHeader.biHeight      = height;
@@ -1852,7 +1846,8 @@ namespace MetalBone
 				component[3] = 0xFF;
 			}
 
-			::SetDIBitsToDevice(textDC, drawRect.left, drawRect.top, width, height, 0, 0, 0, height, pvBits, &bmi, DIB_RGB_COLORS);
+			::SetDIBitsToDevice(textDC, drawRect.left, drawRect.top,
+				width, height, 0, 0, 0, height, pvBits, &bmi, DIB_RGB_COLORS);
 			::SelectObject(tempDC, oldBMP);
 			::DeleteObject(tempBMP);
 			::DeleteDC(tempDC);
@@ -1866,14 +1861,7 @@ namespace MetalBone
 		gdiTarget->Release();
 
 		if(hasClip)
-		{
-			D2D1_RECT_F destRect;
-			destRect.left   = (FLOAT)clipRectInRT.left;
-			destRect.right  = (FLOAT)clipRectInRT.right;
-			destRect.top    = (FLOAT)clipRectInRT.top;
-			destRect.bottom = (FLOAT)clipRectInRT.bottom;
-			workingRT->PushAxisAlignedClip(destRect, D2D1_ANTIALIAS_MODE_ALIASED);
-		}
+			workingRT->PushAxisAlignedClip(clipRectInRT, D2D1_ANTIALIAS_MODE_ALIASED);
 	}
 
 
@@ -2616,16 +2604,16 @@ namespace MetalBone
 		{ if(data) ++data->refCount; }
 	bool RenderRule::opaqueBackground() const
 		{ return data == 0 ? false : data->opaqueBackground; }
-	void RenderRule::draw(ID2D1RenderTarget* rt,const RECT& wr, const RECT& cr,
+	void RenderRule::draw(ID2D1RenderTarget* rt,const MRect& wr, const MRect& cr,
 		const wstring& t,unsigned int i)
 		{ if(data) data->draw(rt,wr,cr,t,i); }
 	void RenderRule::init()
 		{ M_ASSERT(data==0); data = new RenderRuleData(); }
 	MCursor* RenderRule::getCursor()
 		{ return data ? data->cursor : 0; }
-	SIZE RenderRule::getStringSize(const std::wstring& s, int maxWidth)
-		{ return data ? data->getStringSize(s, maxWidth) : SIZE(); }
-	void RenderRule::getContentMargin(RECT& r)
+	MSize RenderRule::getStringSize(const std::wstring& s, int maxWidth)
+		{ return data ? data->getStringSize(s, maxWidth) : MSize(); }
+	void RenderRule::getContentMargin(MRect& r)
 		{ if(data) data->getContentMargin(r); }
 	RenderRule::~RenderRule()
 	{ 
@@ -2689,7 +2677,7 @@ namespace MetalBone
 	void MStyleSheetStyle::polish(MWidget* w)
 		{ mImpl->polish(w); }
 	void MStyleSheetStyle::draw(MWidget* w,ID2D1RenderTarget* rt,
-		const RECT& wr, const RECT& cr, const std::wstring& t,int i)
+		const MRect& wr, const MRect& cr, const std::wstring& t,int i)
 		{ mImpl->draw(w,rt,wr,cr,t,i); }
 	void MStyleSheetStyle::removeCache(MWidget* w)
 		{ mImpl->removeCache(w); }
@@ -2754,7 +2742,7 @@ namespace MetalBone
 	}
 
 	inline void MSSSPrivate::draw(MWidget* w, ID2D1RenderTarget* rt,
-		const RECT& wr, const RECT& cr, const wstring& t,int frameIndex)
+		const MRect& wr, const MRect& cr, const wstring& t,int frameIndex)
 	{
 		D2D1BrushPool::setWorkingRT(rt);
 		RenderRule rule = getRenderRule(w,w->getWidgetPseudo(true));

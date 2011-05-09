@@ -81,8 +81,8 @@ namespace MetalBone
 			pCurrent != 0;
 			pCurrent = rgn.m_xCoorTree.FindNext(*pCurrent))
 		{
-			LONG key_left  = pCurrent->m_Key;
-			LONG end_right = pCurrent->m_End;
+			long key_left  = pCurrent->m_Key;
+			long end_right = pCurrent->m_End;
 
 			while(true)
 			{
@@ -165,7 +165,7 @@ namespace MetalBone
 
 
 
-	void MRegion::addRect(const RECT& r) 
+	void MRegion::addRect(const MRect& r) 
 	{
 		assertValid();
 		if(isRectValidNonEmpty(r))
@@ -237,7 +237,7 @@ namespace MetalBone
 		assertValid();
 	}
 
-	bool MRegion::isPointInside(const POINT& p) const
+	bool MRegion::isPointInside(const MPoint& p) const
 	{
 		const YNode* yNode = m_yCoorTree.FindExactSmaller(p.y);
 		if(yNode) {
@@ -250,7 +250,7 @@ namespace MetalBone
 		return false;
 	}
 
-	bool MRegion::getBounds(RECT& r) const
+	bool MRegion::getBounds(MRect& r) const
 	{
 		assertValid();
 
@@ -281,7 +281,7 @@ namespace MetalBone
 		return true;
 	}
 
-	bool MRegion::isRectFullyInside(const RECT& r) const
+	bool MRegion::isRectFullyInside(const MRect& r) const
 	{
 		if(!isRectValidNonEmpty(r))
 			return false;
@@ -310,7 +310,7 @@ namespace MetalBone
 		return true;
 	}
 
-	bool MRegion::isRectPartlyInside(const RECT& r) const
+	bool MRegion::isRectPartlyInside(const MRect& r) const
 	{
 		for(const YNode* yNode = m_yCoorTree.FindSmaller(r.bottom);
 			yNode != 0 && (yNode->m_End > r.top); 
@@ -323,7 +323,7 @@ namespace MetalBone
 		return false;
 	}
 
-	MRegion::YNode* MRegion::addRange(LONG start, LONG end, const YNode& y)
+	MRegion::YNode* MRegion::addRange(long start, long end, const YNode& y)
 	{
 		M_ASSERT(start < end);
 
@@ -373,8 +373,8 @@ namespace MetalBone
 			pyCurrent != 0;
 			pyCurrent = rgn.m_yCoorTree.FindNext(*pyCurrent))
 		{
-			LONG key_top    = pyCurrent->m_Key;
-			LONG end_bottom = pyCurrent->m_End;
+			long key_top    = pyCurrent->m_Key;
+			long end_bottom = pyCurrent->m_End;
 
 			while(true)
 			{
@@ -479,7 +479,7 @@ namespace MetalBone
 #endif
 	}
 
-	void MRegion::offset(LONG x, LONG y)
+	void MRegion::offset(long x, long y)
 	{
 		// In the original version of this region class,
 		// offseting a region can cause overflow happens.
@@ -489,7 +489,8 @@ namespace MetalBone
 		{
 			yNode->m_Key += y;
 			yNode->m_End += y;
-			for(XNode* xNode = yNode->m_xCoorTree.FindMin(); xNode; xNode = yNode->m_xCoorTree.FindNext(*xNode))
+			for(XNode* xNode = yNode->m_xCoorTree.FindMin(); xNode;
+				xNode = yNode->m_xCoorTree.FindNext(*xNode))
 			{
 				xNode->m_Key += x;
 				xNode->m_End += x;
