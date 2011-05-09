@@ -6,6 +6,7 @@
 #pragma comment(lib, "dwrite.lib")        // DirectWrite
 #pragma comment(lib, "dwmapi.lib")        // DWM
 #pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+//#pragma comment(linker,"\"/manifestdependency:type='Win32' name='Microsoft.Windows.GdiPlus' version='1.1.6001.18000' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 #include "mb_switch.h"
 #include <Windows.h>
@@ -17,6 +18,10 @@
 #  if !defined(MB_DEBUG_D2D)
 #    define MB_DEBUG_D2D
 #  endif
+#endif
+
+#ifdef MB_DEBUG_D2D
+#  undef MB_DEBUG_D2D
 #endif
 
 #ifndef _UNICODE
@@ -65,7 +70,13 @@ inline void SafeRelease(Interface*& comObject) {
 	}
 }
 
-namespace MetalBone{}
+#ifndef GET_X_LPARAM
+#  define GET_X_LPARAM(lp)  ((int)(short)LOWORD(lp))
+#endif
+#ifndef GET_Y_LPARAM
+#  define GET_Y_LPARAM(lp)  ((int)(short)HIWORD(lp))
+#endif
+
 #include "3rd/Signal.h"
 #ifdef STRIP_METALBONE_NAMESPACE
   using namespace MetalBone;

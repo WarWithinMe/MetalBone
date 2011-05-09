@@ -101,5 +101,8 @@
     <ClInclude Include="..\..\private\MWidget_p.h">
       <Filter>ExternMB\Header\private</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\MUtils.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

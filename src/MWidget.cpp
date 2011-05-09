@@ -576,6 +576,46 @@ namespace MetalBone
 		}
 	}
 
+	void MWidget::raise()
+	{
+		if(m_parent == 0)
+		{
+			if(hasWindow() && ::IsWindowVisible(m_windowExtras->m_wndHandle))
+			{
+				::SetWindowPos(m_windowExtras->m_wndHandle, HWND_TOPMOST, 0,0,0,0,
+					SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOREDRAW);
+			}
+			return;
+		}
+
+		if(*(m_parent->m_children.begin()) != this)
+		{
+			m_parent->m_children.remove(this);
+			m_parent->m_children.push_front(this);
+			m_parent->repaint();
+		}
+	}
+
+	void MWidget::lower()
+	{
+		if(m_parent == 0)
+		{
+			if(hasWindow() && ::IsWindowVisible(m_windowExtras->m_wndHandle))
+			{
+				::SetWindowPos(m_windowExtras->m_wndHandle, HWND_BOTTOM, 0,0,0,0,
+					SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOREDRAW);
+			}
+			return;
+		}
+
+		if(*(m_parent->m_children.rbegin()) != this)
+		{
+			m_parent->m_children.remove(this);
+			m_parent->m_children.push_back(this);
+			m_parent->repaint();
+		}
+	}
+
 	void MWidget::setGeometry(long vx, long vy, long vwidth, long vheight)
 	{
 		// Ensure the size is in a valid range.

@@ -87,7 +87,6 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PTSTR,int)
 	timer.timeout.Connect(&controller,&TestWidgetController::updateC10);
 	timer.start(5000);
 
-
 	app.exec();
 	return 0;
 }

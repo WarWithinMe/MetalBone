@@ -100,6 +100,7 @@
     <ClInclude Include="..\..\MRegion.h" />
     <ClInclude Include="..\..\MResource.h" />
     <ClInclude Include="..\..\MStyleSheet.h" />
+    <ClInclude Include="..\..\MUtils.h" />
     <ClInclude Include="..\..\MWidget.h" />
     <ClInclude Include="..\..\private\CSSParser.h" />
     <ClInclude Include="..\..\private\MApp_p.h" />

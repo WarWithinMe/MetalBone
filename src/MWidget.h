@@ -2,6 +2,7 @@
 
 #include "MBGlobal.h"
 #include "MEvent.h"
+#include "MUtils.h"
 
 #include <string>
 #include <list>
@@ -175,11 +176,16 @@ namespace MetalBone
 			// ensured to be created.
 			void show();
 			void hide();
-			inline D2D_SIZE_U size()     const;
-			inline D2D_SIZE_U minSize()  const;
-			inline D2D_SIZE_U maxSize()  const;
-			inline POINT      pos()      const;
-			inline RECT       geometry() const; 
+
+			// Raise the widget to the top or lower to the bottom of its parent.
+			void raise();
+			void lower();
+
+			inline MPoint pos()      const;
+			inline MSize  size()     const;
+			inline MSize  minSize()  const;
+			inline MSize  maxSize()  const;
+			inline MRect  geometry() const; 
 			inline void move   (long x, long y);
 			inline void resize (long width, long height);
 			void setGeometry   (long x, long y, long width, long height);
@@ -275,11 +281,11 @@ namespace MetalBone
 
 
 	inline const std::wstring& MWidget::objectName()   const          { return m_objectName; }
-	inline D2D_SIZE_U   MWidget::size()                const          { return D2D1::SizeU(width,height); }
-	inline D2D_SIZE_U   MWidget::minSize()             const          { return D2D1::SizeU(minWidth,minHeight); }
-	inline D2D_SIZE_U   MWidget::maxSize()             const          { return D2D1::SizeU(maxWidth,maxHeight); }
-	inline POINT        MWidget::pos()                 const          { POINT p = {x,y}; return p; }
-	inline RECT         MWidget::geometry()            const          { RECT r = {x,y,x+width,y+height}; return r;}
+	inline MSize        MWidget::size()                const          { return MSize(width,height); }
+	inline MSize        MWidget::minSize()             const          { return MSize(minWidth,minHeight); }
+	inline MSize        MWidget::maxSize()             const          { return MSize(maxWidth,maxHeight); }
+	inline MPoint       MWidget::pos()                 const          { return MPoint(x,y); }
+	inline MRect        MWidget::geometry()            const          { return MRect(x,y,x+width,y+height); }
 	inline MWidget*     MWidget::parent()              const          { return m_parent;      }
 	inline unsigned int MWidget::windowFlags()         const          { return m_windowFlags; }
 	inline unsigned int MWidget::attributes()          const          { return m_attributes;  }

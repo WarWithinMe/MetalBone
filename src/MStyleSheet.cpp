@@ -1083,33 +1083,35 @@ namespace MetalBone
 		if(geoRO == 0)
 			return false;
 
-		D2D_SIZE_U size  = w->size();
-		D2D_SIZE_U size2 = size;
-		if(geoRO->width  != -1 && geoRO->width  != size2.width)  size2.width   = geoRO->width;
-		if(geoRO->height != -1 && geoRO->height != size2.height) size2.height  = geoRO->height;
+		MSize size  = w->size();
+		MSize size2 = size;
+		if(geoRO->width  != -1 && geoRO->width  != size2.getWidth())
+			size2.width() = geoRO->width;
+		if(geoRO->height != -1 && geoRO->height != size2.getHeight())
+			size2.height() = geoRO->height;
 
-		D2D_SIZE_U range = w->minSize();
-		bool changed     = false;
-		if(geoRO->minWidth  != -1) { range.width  = geoRO->minWidth;  changed = true; }
-		if(geoRO->minHeight != -1) { range.height = geoRO->minHeight; changed = true; }
-		if(changed) w->setMinimumSize(range.width,range.height);
+		MSize range  = w->minSize();
+		bool changed = false;
+		if(geoRO->minWidth  != -1) { range.width()  = geoRO->minWidth;  changed = true; }
+		if(geoRO->minHeight != -1) { range.height() = geoRO->minHeight; changed = true; }
+		if(changed) w->setMinimumSize(range.getWidth(),range.getHeight());
 
-		if(size2.width  < range.width)  size2.width  = range.width;
-		if(size2.height < range.height) size2.height = range.height;
+		if(size2.width()  < range.width())  size2.width()  = range.width();
+		if(size2.height() < range.height()) size2.height() = range.height();
 
 		range   = w->maxSize();
 		changed = false;
-		if(geoRO->maxWidth  != -1) { range.width  = geoRO->maxWidth;  changed = true; }
-		if(geoRO->maxHeight != -1) { range.height = geoRO->maxHeight; changed = true; }
-		if(changed) w->setMaximumSize(range.width,range.height);
+		if(geoRO->maxWidth  != -1) { range.width()  = geoRO->maxWidth;  changed = true; }
+		if(geoRO->maxHeight != -1) { range.height() = geoRO->maxHeight; changed = true; }
+		if(changed) w->setMaximumSize(range.width(), range.height());
 
-		if(size2.width  > range.width)  size2.width  = range.width;
-		if(size2.height > range.height) size2.height = range.height;
+		if(size2.width()  > range.width())  size2.width()  = range.width();
+		if(size2.height() > range.height()) size2.height() = range.height();
 
-		if(size2.width == size.width && size2.height == size.height)
+		if(size2.width() == size.width() && size2.height() == size.height())
 			return false;
 
-		w->resize(size2.width,size2.height);
+		w->resize(size2.width(),size2.height());
 		return true;
 	}
 
@@ -1570,28 +1572,31 @@ namespace MetalBone
 
 		ID2D1TransformedGeometry* pTransformedGeometry = NULL;
 		mApp->getD2D1Factory()->CreateTransformedGeometry(pPathGeometry, &matrix, &pTransformedGeometry);
-		ID2D1StrokeStyle* ss;
+		ID2D1StrokeStyle* pStrokeStyle;
 		mApp->getD2D1Factory()->CreateStrokeStyle(&D2D1::StrokeStyleProperties(
-			D2D1_CAP_STYLE_FLAT,D2D1_CAP_STYLE_FLAT,D2D1_CAP_STYLE_FLAT,D2D1_LINE_JOIN_ROUND),0,0,&ss);
+			D2D1_CAP_STYLE_FLAT,D2D1_CAP_STYLE_FLAT,D2D1_CAP_STYLE_FLAT,D2D1_LINE_JOIN_ROUND),0,0,&pStrokeStyle);
 		if(sbrush != 0)
 		{
 			// Draw shadow.
 			// Remark: If the shadow color is not opaque, we will see the outline of the shadow.
 			// We can however render the opaque shadow to a bitmap then render the bitmap to the
 			// rendertarget with opacity applied.
+			ID2D1TransformedGeometry* shadowGeo = NULL;
 			D2D1::Matrix3x2F const shadowMatrix = D2D1::Matrix3x2F(
 				1.0f, 0.0f, 0.0f, 1.0f,
 				baselineOriginX + tRO->shadowOffsetX, baselineOriginY + tRO->shadowOffsetY);
-			ID2D1TransformedGeometry* shadowGeo = NULL;
 			mApp->getD2D1Factory()->CreateTransformedGeometry(pPathGeometry, &shadowMatrix, &shadowGeo);
-			rt->DrawGeometry(shadowGeo,sbrush,tRO->outlineWidth,ss);
+
+			rt->DrawGeometry(shadowGeo,sbrush,tRO->outlineWidth,pStrokeStyle);
 			rt->FillGeometry(shadowGeo,sbrush);
-			shadowGeo->Release();
+
+			SafeRelease(shadowGeo);
 		}
 
-		rt->DrawGeometry(pTransformedGeometry,obrush,tRO->outlineWidth,ss);
+		rt->DrawGeometry(pTransformedGeometry,obrush,tRO->outlineWidth,pStrokeStyle);
 		rt->FillGeometry(pTransformedGeometry,tbrush);
 
+		SafeRelease(pStrokeStyle);
 		SafeRelease(pPathGeometry);
 		SafeRelease(pSink);
 		SafeRelease(pTransformedGeometry);

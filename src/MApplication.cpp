@@ -6,7 +6,6 @@
 #include "private/MApp_p.h"
 
 #include <windows.h>
-#include <windowsx.h>
 #include <gdiplus.h>
 #include <dwmapi.h>
 #include <d2d1.h>
@@ -106,7 +105,7 @@ namespace MetalBone
 		MSG msg;
 		int result;
 
-		while( (result = GetMessageW(&msg, 0, 0, 0)) != 0)
+		while( (result = ::GetMessageW(&msg, 0, 0, 0)) != 0)
 		{
 			if(result == -1) break; // GetMessage Error
 
@@ -118,8 +117,8 @@ namespace MetalBone
 					scs.at(i)->invoked();
 
 			} else {
-				TranslateMessage(&msg);
-				DispatchMessageW(&msg);
+				::TranslateMessage(&msg);
+				::DispatchMessageW(&msg);
 			}
 		}
 
