@@ -722,6 +722,9 @@ namespace MetalBone
 		bool fullWindowUpdate = false;
 		RECT windowUpdateRect = {width,height,0,0};
 
+		ID2D1RenderTarget* rt = getRenderTarget();
+		rt->BeginDraw();
+
 		// Calculate which widget needs to be redraw.
 		DirtyChildrenHash& childUpdatedHash  = m_windowExtras->childUpdatedHash;
 		DrawRegionHash& passiveUpdateWidgets = m_windowExtras->passiveUpdateWidgets;
@@ -746,6 +749,7 @@ namespace MetalBone
 					windowUpdateRect.top    = 0;
 					windowUpdateRect.bottom = height;
 					fullWindowUpdate = true;
+					rt->Clear();
 				}
 				continue;
 			}
@@ -847,6 +851,11 @@ namespace MetalBone
 				if(windowUpdateRect.right  < wur.right ) windowUpdateRect.right  = wur.right;
 				if(windowUpdateRect.top    > wur.top   ) windowUpdateRect.top    = wur.top;
 				if(windowUpdateRect.bottom < wur.bottom) windowUpdateRect.bottom = wur.bottom;
+
+				rt->PushAxisAlignedClip(D2D1::RectF((FLOAT)wur.left, (FLOAT)wur.top, 
+					(FLOAT)wur.right, (FLOAT)wur.bottom), D2D1_ANTIALIAS_MODE_ALIASED);
+				rt->Clear();
+				rt->PopAxisAlignedClip();
 			}
 
 			// Second, if this widget is not opaque, and there's widget under it
@@ -910,7 +919,6 @@ namespace MetalBone
 		int retryTimes = 3;
 		do
 		{
-			getRenderTarget()->BeginDraw();
 			draw(0,0,passiveUpdateWidgets.find(this) != passiveUpdateWidgets.end());
 			if(layeredWindow)
 			{

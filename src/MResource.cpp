@@ -90,13 +90,12 @@ namespace MetalBone
 		RECT drawRect = {0,0,width,height};
 
 		rt->BeginDraw();
+		rt->Clear();
 		rule.draw(rt, drawRect, drawRect, tip);
 		rt->QueryInterface(&gdiRT);
 		gdiRT->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&dc);
 
-		BLENDFUNCTION blend = {};
-		blend.AlphaFormat = AC_SRC_ALPHA;
-		blend.SourceConstantAlpha = 255;
+		BLENDFUNCTION blend = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
 		POINT sourcePos = {};
 		POINT destPos   = {x, y};
 		SIZE windowSize = {width, height};
