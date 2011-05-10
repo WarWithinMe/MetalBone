@@ -5,8 +5,212 @@
 #include "3rd/XUnzip.h"
 
 #define MAX_TOOLTIP_WIDTH 350
+#define TRAY_ICON_MESSAGE (WM_USER+100)
+
 namespace MetalBone
 {
+	struct MIconData
+	{
+		inline MIconData(HICON h, bool d):refCount(1),handle(h),autoDestroy(d){}
+		inline ~MIconData(){ if(autoDestroy) ::DestroyIcon(handle); }
+
+		HICON handle;
+		unsigned int refCount;
+		bool autoDestroy;
+	};
+
+	MIcon::~MIcon() { if(data != 0 && (--data->refCount == 0)) delete data; }
+	MIcon::MIcon(HICON icon, bool ad):data(new MIconData(icon,ad)){}
+	MIcon::MIcon(const MIcon& rhs)
+	{
+		if(rhs.data != 0) ++rhs.data->refCount;
+		data = rhs.data;
+	}
+	void MIcon::setHandle(HICON icon, bool autoDestroy)
+	{
+		if(data == 0)
+			data = new MIconData(icon,autoDestroy);
+		else if(data->refCount > 1)
+		{
+			--data->refCount;
+			data = new MIconData(icon,autoDestroy);
+		} else
+		{
+			if(data->autoDestroy)
+				::DestroyIcon(data->handle);
+			data->handle = icon;
+			data->autoDestroy = autoDestroy;
+		}
+	}
+	MIcon::operator HICON() const
+		{ return data == 0 ? NULL : data->handle; }
+	MIcon::operator bool() const
+		{ return (data !=0) && data->handle != NULL; }
+	const MIcon& MIcon::operator=(const MIcon& rhs)
+	{
+		if(data != 0 && (--data->refCount == 0))
+			delete data;
+		if(rhs.data != 0) ++rhs.data->refCount;
+		data = rhs.data;
+		return *this;
+	}
+	bool MIcon::operator==(const MIcon& rhs) const
+	{
+		if(data != rhs.data)
+			return false;
+		if(data == 0)
+			return true;
+		return data->handle == rhs.data->handle;
+	}
+
+
+
+	unsigned short MSysTrayIcon::cid = 0;
+	HWND  MSysTrayIcon::trayWnd = NULL;
+	std::map<unsigned short, MSysTrayIcon*> MSysTrayIcon::trayIconMap;
+	static wchar_t gMSysTrayWndClassName[] = L"MetalBone SysTray Wnd";
+	MSysTrayIcon::MSysTrayIcon():id(cid),isVisible(false)
+	{
+		++cid;
+		trayIconMap[id] = this;
+		if(trayWnd == NULL)
+		{
+			WNDCLASSW wc = {};
+			wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+			wc.hInstance     = (HINSTANCE)GetModuleHandle(NULL);
+			wc.hCursor       = ::LoadCursorW(NULL, IDC_ARROW);
+			wc.lpfnWndProc   = MSysTrayIcon::trayWndProc;
+			wc.lpszClassName = gMSysTrayWndClassName;
+			RegisterClassW(&wc);
+
+			trayWnd = CreateWindowExW(0,gMSysTrayWndClassName,0,
+				WS_POPUP,0,0,0,0,0,0,wc.hInstance,0);
+		}
+	}
+
+	MSysTrayIcon::~MSysTrayIcon()
+		{ hide(); trayIconMap.erase(cid); }
+	void MSysTrayIcon::setName(const std::wstring& n)
+	{
+		name = n;
+		if(name.size() > 127)
+			name.resize(127);
+		if(isVisible)
+		{
+			NOTIFYICONDATAW data = {};
+			data.cbSize = sizeof(NOTIFYICONDATAW);
+			data.hWnd   = trayWnd;
+			data.uID    = id;
+			data.uFlags = NIF_TIP;
+			wcscpy_s(data.szTip, min(n.size(), 127), n.c_str());
+			::Shell_NotifyIconW(NIM_MODIFY, &data);
+		}
+	}
+
+	void MSysTrayIcon::setIcon(MIcon ic)
+	{
+		if(icon == ic) return;
+		icon = ic;
+		if(isVisible)
+		{
+			NOTIFYICONDATAW data = {};
+			data.cbSize = sizeof(NOTIFYICONDATAW);
+			data.hWnd   = trayWnd;
+			data.uID    = id;
+			data.uFlags = NIF_ICON;
+			data.hIcon  = icon ? icon : ::LoadIconW(NULL, IDI_APPLICATION);
+			::Shell_NotifyIconW(NIM_MODIFY, &data);
+		}
+	}
+
+	void MSysTrayIcon::show()
+	{
+		if(isVisible) return;
+		isVisible = true;
+
+		NOTIFYICONDATAW data = {};
+		data.uCallbackMessage = TRAY_ICON_MESSAGE;
+		data.cbSize = sizeof(NOTIFYICONDATAW);
+		data.hWnd   = trayWnd;
+		data.uID    = id;
+		data.uFlags = NIF_MESSAGE|NIF_ICON|NIF_TIP;
+		data.hIcon  = icon ? icon : ::LoadIconW(NULL, IDI_APPLICATION);
+		wcscpy_s(data.szTip, 128, name.c_str());
+
+		::Shell_NotifyIconW(NIM_ADD, &data);
+	}
+
+	void MSysTrayIcon::hide()
+	{
+		if(!isVisible) return;
+		isVisible = false;
+
+		NOTIFYICONDATAW data = {};
+		data.cbSize = sizeof(NOTIFYICONDATAW);
+		data.hWnd   = trayWnd;
+		data.uID    = id;
+		::Shell_NotifyIconW(NIM_DELETE, &data);
+	}
+
+	void MSysTrayIcon::reshow()
+	{
+		if(isVisible)
+		{
+			isVisible = false;
+			show();
+		}
+	}
+
+	static const UINT gTaskbarCreatedMsg = ::RegisterWindowMessage(TEXT("TaskbarCreated"));
+	LRESULT CALLBACK MSysTrayIcon::trayWndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+	{
+		if(msg == TRAY_ICON_MESSAGE)
+		{
+			TrayIconMap::iterator it = trayIconMap.find((unsigned short)wparam);
+			if(it != trayIconMap.end())
+				it->second->event((unsigned int)lparam);
+			return 0;
+		} else if(msg == gTaskbarCreatedMsg)
+		{
+			TrayIconMap::iterator it = trayIconMap.begin();
+			TrayIconMap::iterator itEnd = trayIconMap.end();
+			while(it != itEnd)
+				it->second->reshow();
+		}
+		return ::DefWindowProc(hwnd, msg, wparam, lparam);
+	}
+
+	bool MSysTrayIcon::showBalloonMessage(const std::wstring& message,
+		const std::wstring& title, BalloonIcon iconEnum, MIcon customIcon)
+	{
+		if(!isVisible) return false;
+
+		if(message.size() > 0 && message.size() < 256)
+		{
+			NOTIFYICONDATA data = {};
+			data.cbSize      = sizeof(NOTIFYICONDATAW);
+			data.hWnd        = trayWnd;
+			data.uID         = id;
+			data.uFlags      = NIF_INFO;
+			if(customIcon)
+			{
+				data.dwInfoFlags = NIIF_USER;
+				data.hBalloonIcon = customIcon;
+			} else
+				data.dwInfoFlags = iconEnum;
+
+			wcscpy_s(data.szInfo, 256, message.c_str());
+			if(title.size() > 0 && title.size() < 64)
+				wcscpy_s(data.szInfoTitle, 64, data.szInfoTitle);
+
+			return (bool)::Shell_NotifyIcon(NIM_MODIFY, &data);
+		}
+
+		return false;
+	}
+
+
+
 	// ========== MToolTip ==========
 	extern wchar_t gMWidgetClassName[];
 	class ToolTipWidget

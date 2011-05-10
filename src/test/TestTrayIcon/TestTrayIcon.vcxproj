@@ -11,9 +11,9 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{092965D8-9753-42B9-9060-0226370D9330}</ProjectGuid>
+    <ProjectGuid>{2850BA1C-E486-49F2-941A-324ECD88D65C}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>TestLayeredWindow</RootNamespace>
+    <RootNamespace>TestTrayIcon</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -44,17 +44,13 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>C:\Program Files\Visual Leak Detector\include;$(SolutionDir)\..;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Program Files\Visual Leak Detector\lib\Win32;$(SolutionDir)\..;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -64,8 +60,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
+      <PrecompiledHeader>Use</PrecompiledHeader>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
@@ -79,17 +74,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\3rd\XUnzip.cpp" />
-    <ClCompile Include="..\..\MApplication.cpp" />
-    <ClCompile Include="..\..\MBGlobal.cpp" />
-    <ClCompile Include="..\..\MIcon.cpp" />
-    <ClCompile Include="..\..\MRegion.cpp" />
-    <ClCompile Include="..\..\MResource.cpp" />
-    <ClCompile Include="..\..\MStyleSheet.cpp" />
-    <ClCompile Include="..\..\MSysTrayIcon.cpp" />
-    <ClCompile Include="..\..\MWidget.cpp" />
-    <ClCompile Include="..\..\private\CSSParser.cpp" />
-    <ClCompile Include="main.cpp" />
+    <None Include="small.ico" />
+    <None Include="TestTrayIcon.ico" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\3rd\ContainersInl.h" />
@@ -100,16 +86,29 @@
     <ClInclude Include="..\..\MBGlobal.h" />
     <ClInclude Include="..\..\mb_switch.h" />
     <ClInclude Include="..\..\MEvent.h" />
-    <ClInclude Include="..\..\MIcon.h" />
     <ClInclude Include="..\..\MRegion.h" />
     <ClInclude Include="..\..\MResource.h" />
     <ClInclude Include="..\..\MStyleSheet.h" />
-    <ClInclude Include="..\..\MSysTrayIcon.h" />
     <ClInclude Include="..\..\MUtils.h" />
     <ClInclude Include="..\..\MWidget.h" />
     <ClInclude Include="..\..\private\CSSParser.h" />
     <ClInclude Include="..\..\private\MApp_p.h" />
     <ClInclude Include="..\..\private\MWidget_p.h" />
+    <ClInclude Include="Resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\3rd\XUnzip.cpp" />
+    <ClCompile Include="..\..\MApplication.cpp" />
+    <ClCompile Include="..\..\MBGlobal.cpp" />
+    <ClCompile Include="..\..\MRegion.cpp" />
+    <ClCompile Include="..\..\MResource.cpp" />
+    <ClCompile Include="..\..\MStyleSheet.cpp" />
+    <ClCompile Include="..\..\MWidget.cpp" />
+    <ClCompile Include="..\..\private\CSSParser.cpp" />
+    <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="TestTrayIcon.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

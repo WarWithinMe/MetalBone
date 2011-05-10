@@ -54,6 +54,12 @@
     <ClCompile Include="..\..\3rd\XUnzip.cpp">
       <Filter>ExternMB\Source\3rd</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\MSysTrayIcon.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MIcon.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\MApplication.h">
@@ -102,6 +108,12 @@
       <Filter>ExternMB\Header\private</Filter>
     </ClInclude>
     <ClInclude Include="..\..\MUtils.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MSysTrayIcon.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MIcon.h">
       <Filter>ExternMB\Header</Filter>
     </ClInclude>
   </ItemGroup>

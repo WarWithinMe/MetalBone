@@ -7,7 +7,10 @@
 #include <commctrl.h>
 #include <string>
 #include <unordered_map>
+#include <map>
 
+// MIcon
+// MSysTrayIcon
 // MToolTip
 // MFont
 // MCursor
@@ -16,6 +19,81 @@
 // MShortcut
 namespace MetalBone
 {
+	struct MIconData;
+	class METALBONE_EXPORT MIcon
+	{
+		public:
+			// This class is a wrapper of the HICON handle.
+			// You have to create the icon using Win32 API.
+
+			// Construct a empty icon.
+			MIcon():data(0){}
+			~MIcon();
+
+			// If autoDestroy is true, the HICON icon will be deleted
+			// when every copy of this MIcon object is deleted.
+			explicit MIcon(HICON icon, bool autoDestroy = false);
+
+			// The MIcon objects will share the same HICON if they're 
+			// copyed or constructed using copy-construtor.
+			MIcon(const MIcon&);
+			const MIcon& operator=(const MIcon&);
+
+			void setHandle(HICON icon, bool autoDestroy);
+			operator HICON() const;
+			operator bool() const;
+			bool operator==(const MIcon&) const;
+
+		private:
+			MIconData* data;
+	};
+
+	class METALBONE_EXPORT MSysTrayIcon
+	{
+		public:
+			enum BalloonIcon
+			{
+				None    = 0,
+				Info    = 1,
+				Warning = 2,
+				Error   = 3,
+				Custom  = 4
+			};
+
+			MSysTrayIcon();
+			virtual ~MSysTrayIcon();
+
+			void setName(const std::wstring&);
+			inline const std::wstring& getName() const;
+			// Return the previous set icon.
+			void setIcon(MIcon);
+			inline MIcon getIcon() const;
+
+			void show();
+			void hide();
+
+			bool showBalloonMessage(const std::wstring& message,
+				const std::wstring& title = std::wstring(),
+				BalloonIcon iconEnum = None,
+				MIcon customIcon = MIcon());
+
+		protected:
+			virtual void event(unsigned int msg){}
+
+		private:
+			std::wstring name;
+			MIcon        icon;
+			unsigned short id;
+			bool         isVisible;
+			typedef std::map<unsigned short, MSysTrayIcon*> TrayIconMap;
+			static TrayIconMap  trayIconMap;
+			static unsigned short cid;
+			static HWND         trayWnd;
+			static LRESULT CALLBACK trayWndProc(HWND, UINT, WPARAM, LPARAM);
+			void reshow();
+	};
+
+
 	class MWidget;
 	class METALBONE_EXPORT MToolTip
 	{
@@ -293,6 +371,10 @@ namespace MetalBone
 			inline unsigned int getKey();
 	};
 
+
+
+	inline MIcon MSysTrayIcon::getIcon() const
+		{ return icon; }
 
 
 
