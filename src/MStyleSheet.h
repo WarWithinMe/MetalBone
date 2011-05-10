@@ -98,10 +98,10 @@ namespace MetalBone
 
 
 			private:
+				RenderRuleQuerier* mparent;
 				std::wstring mclassName;
 				std::wstring mobjectName;
 				std::vector<RenderRuleQuerier*> children;
-				RenderRuleQuerier* mparent;
 
 				RenderRuleQuerier(const RenderRuleQuerier&);
 				const RenderRuleQuerier& operator=(const RenderRuleQuerier&);

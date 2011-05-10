@@ -138,7 +138,7 @@ void TestWidgetController::createWidgets()
 
 	c0->show();
 	c1->show();
-// 	c2->show();
+	c2->show();
 	c3->show();
 	c4->show();
 

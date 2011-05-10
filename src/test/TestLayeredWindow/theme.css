@@ -16,7 +16,7 @@ ChildWidget{
 	cursor: no-cursor;
 }
 #child2{
-	background: #123456;
+	background: url(theme\MC_BG.gif) repeat;
 	border: 3px solid #654321;
 	cursor: wait;
 }

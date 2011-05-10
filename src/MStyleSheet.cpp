@@ -36,8 +36,9 @@ namespace MetalBone
 	struct BrushHandle
 	{
 		enum  Type { Unknown, Solid, Gradient, Bitmap };
-		Type   type;
+
 		void** brushPosition;
+		Type   type;
 
 		inline BrushHandle();
 		inline BrushHandle(Type,void**);
@@ -415,8 +416,6 @@ namespace MetalBone
 			inline void removeCache(RenderRuleQuerier*);
 
 			typedef unordered_map<MWidget*, StyleSheet*> WidgetSSCache;
-			WidgetSSCache widgetSSCache; // Widget specific StyleSheets
-			StyleSheet*   appStyleSheet; // Application specific StyleSheets
 
 			// A RenderRule is widget-specific and pseudo-specific.
 			// How to build a RenderRule for MWidget "w" with Pseudo "p"?
@@ -448,11 +447,7 @@ namespace MetalBone
 			typedef unordered_map<RenderRuleQuerier*, MatchedStyleRuleVector> QuerierStyleRuleMap;
 			typedef unordered_map<RenderRuleQuerier*, PseudoRenderRuleMap*>   QuerierRenderRuleMap;
 
-			RenderRuleMap        renderRuleCollection;
-			WidgetStyleRuleMap   widgetStyleRuleCache;
-			WidgetRenderRuleMap  widgetRenderRuleCache;
-			QuerierStyleRuleMap  querierStyleRuleCache;
-			QuerierRenderRuleMap querierRenderRuleCache;
+			typedef unordered_map<MWidget*, unsigned int> AniWidgetIndexMap;
 
 			void getMachedStyleRules(MWidget*, MatchedStyleRuleVector&);
 			void getMachedStyleRules(RenderRuleQuerier*, MatchedStyleRuleVector&);
@@ -462,18 +457,25 @@ namespace MetalBone
 			template<class Querier, class QuerierRRMap, class QuerierSRMap>
 			RenderRule getRenderRule(Querier*, unsigned int, QuerierRRMap&, QuerierSRMap&);
 
-			D2D1BrushPool brushPool;
+			void updateAniWidgets();
+			void addAniWidget(MWidget*);
+			void removeAniWidget(MWidget*);
+
+			WidgetSSCache        widgetSSCache; // Widget specific StyleSheets
+			WidgetStyleRuleMap   widgetStyleRuleCache;
+			WidgetRenderRuleMap  widgetRenderRuleCache;
+			QuerierStyleRuleMap  querierStyleRuleCache;
+			QuerierRenderRuleMap querierRenderRuleCache;
+			StyleSheet*          appStyleSheet; // Application specific StyleSheets
+			D2D1BrushPool        brushPool;
+			RenderRuleMap        renderRuleCollection;
+			MTimer               aniBGTimer;
+			AniWidgetIndexMap    widgetAniBGIndexMap;
+
 
 			static MSSSPrivate* instance;
 			static MStyleSheetStyle::TextRenderer textRenderer;
 			static unsigned int maxGdiFontPtSize;
-
-			typedef unordered_map<MWidget*, unsigned int> AniWidgetIndexMap;
-			AniWidgetIndexMap widgetAniBGIndexMap;
-			MTimer aniBGTimer;
-			void updateAniWidgets();
-			void addAniWidget(MWidget*);
-			void removeAniWidget(MWidget*);
 
 		friend class MStyleSheetStyle;
 	};
@@ -482,16 +484,19 @@ namespace MetalBone
 	// ========== XXRenderObject ==========
 	namespace CSS
 	{
-		enum ImageRepeat {
-			NoRepeat = 0,
-			RepeatX  = 1,
-			RepeatY  = 2,
-			RepeatXY = RepeatX | RepeatY
-		};
 		template<class T>
-		inline bool isRepeatX(const T* t) { return (t->repeat & RepeatX) != 0; }
+		inline bool testValue(const T* t, ValueType value)
+		{
+			M_ASSERT(value < Value_BitFlagsEnd);
+			return (t->values & value) != 0;
+		}
 		template<class T>
-		inline bool isRepeatY(const T* t) { return (t->repeat & RepeatY) != 0; }
+		inline bool testNoValue(const T* t, ValueType value)
+		{
+			M_ASSERT(value < Value_BitFlagsEnd);
+			return (t->values & value) == 0;
+		}
+
 
 		// The RenderObjects are created when the RenderRule is acquired,
 		// but sometimes, the RenderRule is only used to detemine the properties
@@ -516,28 +521,24 @@ namespace MetalBone
 		{
 			inline BackgroundRenderObject();
 
-			unsigned int x, y, width, height;
-			unsigned int userWidth, userHeight;
-			ValueType    clip;
-			ValueType    alignX;
-			ValueType    alignY;
-			ImageRepeat  repeat;
-
-			unsigned short frameCount; // Do we need more frames?
-			bool infiniteLoop;
-
 			// We remember the brush's pointer, so that if the brush is recreated,
 			// we can recheck the background property again. But if a brush is recreated
 			// at the same position, we won't know.
-			ID2D1Brush* checkedBrush;
 			BrushHandle brush;
+			ID2D1Brush* checkedBrush;
+
+			unsigned int x, y, width, height;
+			unsigned int userWidth, userHeight;
+			unsigned int values;
+			unsigned short frameCount; // Do we need more frames?
+			bool infiniteLoop;
 		};
 
 
 		struct BorderImageRenderObject
 		{
 			inline BorderImageRenderObject();
-			ImageRepeat  repeat;
+			unsigned int values;
 			BrushHandle  brush;
 			MRect        widths;
 		};
@@ -558,8 +559,8 @@ namespace MetalBone
 
 			unsigned int width;
 			ValueType    style;
-			MColor       color;
 			BrushHandle  brush;
+			MColor       color;
 
 			void getBorderWidth(MRect&) const;
 			bool isVisible() const;
@@ -574,12 +575,12 @@ namespace MetalBone
 		{
 			ComplexBorderRenderObject();
 
-			bool uniform;
 			D2D1_RECT_U styles;
 			D2D1_RECT_U widths;
 			unsigned int radiuses[4]; // TL, TR, BL, BR
 			MColor      colors[4];    // T, R, B, L
 			BrushHandle brushes[4];   // T, R, B, L
+			bool uniform;
 
 			void getBorderWidth(MRect&) const;
 			bool isVisible() const;
@@ -605,20 +606,17 @@ namespace MetalBone
 
 			MFont     font;
 			MColor    color;
-			ValueType alignX;
-			ValueType alignY;
-			ValueType decoration; // none | underline | overline | line-through
+			MColor    outlineColor;
+			MColor    shadowColor;
+			unsigned int values;  // AlignmentXY, Decoration, OverFlow
 			ValueType lineStyle;
-			ValueType overflow;   // clip | ellipsis | wrap
 
-			char   outlineWidth;
-			char   outlineBlur;
-			MColor outlineColor;
+			short shadowOffsetX;
+			short shadowOffsetY;
+			char  shadowBlur;
 
-			char   shadowOffsetX;
-			char   shadowOffsetY;
-			char   shadowBlur;
-			MColor shadowColor;
+			char  outlineWidth;
+			char  outlineBlur;
 
 			unsigned int getGDITextFormat();
 			IDWriteTextFormat* createDWTextFormat();
@@ -631,21 +629,19 @@ namespace MetalBone
 		
 
 		inline BorderImageRenderObject::BorderImageRenderObject():
-			repeat(NoRepeat),widths(){}
+			values(Value_Unknown),widths(){}
 		inline GeometryRenderObject::GeometryRenderObject():
 			width(-1), height(-1), minWidth(-1),
 			minHeight(-1), maxWidth(-1), maxHeight(-1){}
 		inline TextRenderObject::TextRenderObject(const MFont& f):
-			font(f), alignX(Value_Left), alignY(Value_Center),
-			decoration(Value_None), lineStyle(Value_Solid), 
-			outlineWidth(0), outlineBlur(0), outlineColor(0),
-			shadowOffsetX(0), shadowOffsetY(0), shadowBlur(0), shadowColor(0){}
+			font(f), outlineColor(0), shadowColor(0),
+			values(Value_Unknown), lineStyle(Value_Solid), 
+			shadowOffsetX(0), shadowOffsetY(0), shadowBlur(0),
+			outlineWidth(0), outlineBlur(0){}
 		inline BackgroundRenderObject::BackgroundRenderObject():
-			x(0), y(0), width(0), height(0), userWidth(0),
-			userHeight(0), clip(Value_Margin),
-			alignX(Value_Left), alignY(Value_Top),
-			repeat(NoRepeat), frameCount(1),
-			infiniteLoop(true), checkedBrush(0){}
+			checkedBrush(0), x(0), y(0), width(0), height(0), userWidth(0),
+			userHeight(0), values(Value_Top | Value_Left | Value_Margin),
+			frameCount(1), infiniteLoop(true){}
 		inline SimpleBorderRenderObject::SimpleBorderRenderObject():
 			width(0),style(Value_Solid) { type = SimpleBorder; }
 		inline RadiusBorderRenderObject::RadiusBorderRenderObject():
@@ -859,18 +855,28 @@ namespace MetalBone
 
 		unsigned int TextRenderObject::getGDITextFormat()
 		{
-			unsigned int formatParam = overflow == Value_Wrap ? DT_WORDBREAK :
-				overflow == Value_Ellipsis ? DT_END_ELLIPSIS : DT_SINGLELINE;
-			switch(alignX) {
-				case Value_Center: formatParam |= DT_CENTER; break;
-				case Value_Right:  formatParam |= DT_RIGHT;  break;
-				default:           formatParam |= DT_LEFT;   break;
-			}
-			switch(alignY) {
-				case Value_Top:    formatParam |= DT_TOP;     break;
-				case Value_Bottom: formatParam |= DT_BOTTOM;  break;
-				default:           formatParam |= DT_VCENTER; break;
-			}
+			unsigned int formatParam = 0;
+
+			if(testValue(this, Value_Wrap))
+				formatParam = DT_WORDBREAK;
+			else if(testValue(this, Value_Ellipsis))
+				formatParam = DT_END_ELLIPSIS;
+			else
+				formatParam = DT_SINGLELINE;
+
+			if(testValue(this, Value_HCenter))
+				formatParam |= DT_CENTER;
+			else if(testValue(this, Value_Right))
+				formatParam |= DT_RIGHT;
+			else
+				formatParam |= DT_LEFT;
+
+			if(testValue(this, Value_Top))
+				formatParam |= DT_TOP;
+			else if(testValue(this, Value_Bottom))
+				formatParam |= DT_BOTTOM;
+			else
+				formatParam |= DT_VCENTER;
 			return formatParam;
 		}
 
@@ -883,16 +889,21 @@ namespace MetalBone
 				DWRITE_FONT_STRETCH_NORMAL,
 				96.f * font.pointSize() / 72.f, // 12 points = 1/6 logical inch = 96/6 DIPs (96 DIPs = 1 ich)
 				L"en-US", &tf); // Remark: don't know what the locale does.
-			switch(alignX) {
-				case Value_Center: tf->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);   break;
-				case Value_Right:  tf->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING); break;
-				default:           tf->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);  break;
-			}
-			switch(alignY) {
-				case Value_Top:    tf->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);   break;
-				case Value_Bottom: tf->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_FAR);    break;
-				default:           tf->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER); break;
-			}
+
+			if(testValue(this, Value_HCenter))
+				tf->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+			else if(testValue(this, Value_Right))
+				tf->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
+			else
+				tf->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+			if(testValue(this, Value_Top))
+				tf->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+			else if(testValue(this, Value_Bottom))
+				tf->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_FAR);
+			else
+				tf->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+
 			return tf;
 		}
 
@@ -921,6 +932,10 @@ namespace MetalBone
 				MSize getStringSize(const std::wstring&, int maxWidth);
 				void  getContentMargin(MRect&);
 
+
+				inline bool hasMargin() const;
+				inline bool hasPadding() const;
+
 			private:
 				void drawBackgrounds(const MRect& widgetRect, const MRect& clipRect,
 							ID2D1Geometry*, unsigned int frameIndex);
@@ -933,12 +948,6 @@ namespace MetalBone
 				void setSimpleBorderRO(MSSSPrivate::DeclMap::iterator&,  MSSSPrivate::DeclMap::iterator);
 				void setComplexBorderRO(MSSSPrivate::DeclMap::iterator&, MSSSPrivate::DeclMap::iterator);
 
-				int  refCount;
-				bool opaqueBackground;
-				bool hasMargin;
-				bool hasPadding;
-				int  totalFrameCount;
-
 				vector<BackgroundRenderObject*> backgroundROs;
 				BorderImageRenderObject*        borderImageRO;
 				BorderRenderObject*             borderRO;
@@ -946,8 +955,12 @@ namespace MetalBone
 				TextRenderObject*               textRO;
 				MCursor*                        cursor;
 
-				D2D_RECT_U margin;
-				D2D_RECT_U padding;
+				D2D1_RECT_U* margin;
+				D2D1_RECT_U* padding;
+
+				int  refCount;
+				int  totalFrameCount;
+				bool opaqueBackground;
 				// Since we only deal with GUI in the main thread,
 				// we can safely store the renderTarget in a static member for later use.
 				static ID2D1RenderTarget* workingRT;
@@ -960,14 +973,9 @@ namespace MetalBone
 	// ********** RenderRuleData Impl
 	ID2D1RenderTarget* RenderRuleData::workingRT = 0;
 	inline RenderRuleData::RenderRuleData():
-		refCount(1), opaqueBackground(false),
-		hasMargin(false), hasPadding(false),
-		totalFrameCount(1), borderImageRO(0),
-		borderRO(0), geoRO(0), textRO(0), cursor(0)
-	{
-		memset(&margin, 0,sizeof(D2D_RECT_U));
-		memset(&padding,0,sizeof(D2D_RECT_U));
-	}
+		borderImageRO(0), borderRO(0), geoRO(0),
+		textRO(0), cursor(0), margin(0), padding(0),
+		refCount(1), totalFrameCount(1), opaqueBackground(false){}
 	RenderRuleData::~RenderRuleData()
 	{
 		for(int i = backgroundROs.size() -1; i >=0; --i)
@@ -977,9 +985,15 @@ namespace MetalBone
 		delete geoRO;
 		delete cursor;
 		delete textRO;
+		delete margin;
+		delete padding;
 	}
 	inline unsigned int RenderRuleData::getTotalFrameCount()
 		{ return totalFrameCount; }
+	inline bool RenderRuleData::hasMargin() const
+		{ return margin != 0; }
+	inline bool RenderRuleData::hasPadding() const
+		{ return padding != 0; }
 	bool RenderRuleData::isBGSingleLoop()
 	{
 		for(unsigned int i = 0; i < backgroundROs.size(); ++i)
@@ -1042,21 +1056,21 @@ namespace MetalBone
 	}
 	void RenderRuleData::getContentMargin(MRect& r)
 	{
-		if(hasMargin)
+		if(hasMargin())
 		{
-			r.left   = margin.left;
-			r.right  = margin.right;
-			r.top    = margin.top;
-			r.bottom = margin.bottom;
+			r.left   = margin->left;
+			r.right  = margin->right;
+			r.top    = margin->top;
+			r.bottom = margin->bottom;
 		} else
 			memset(&r,0,sizeof(MRect));
 
-		if(hasPadding)
+		if(hasPadding())
 		{
-			r.left   += padding.left;
-			r.right  += padding.right;
-			r.top    += padding.top;
-			r.bottom += padding.bottom;
+			r.left   += padding->left;
+			r.right  += padding->right;
+			r.top    += padding->top;
+			r.bottom += padding->bottom;
 		}
 
 		if(borderRO)
@@ -1123,11 +1137,11 @@ namespace MetalBone
 		D2D1BrushPool::setWorkingRT(workingRT);
 
 		D2D1_RECT_F borderRect = widgetRectInRT;
-		if(hasMargin) {
-			borderRect.left   += (FLOAT)margin.left;
-			borderRect.right  -= (FLOAT)margin.right;
-			borderRect.top    += (FLOAT)margin.top;
-			borderRect.bottom -= (FLOAT)margin.bottom;
+		if(hasMargin()) {
+			borderRect.left   += (FLOAT)margin->left;
+			borderRect.right  -= (FLOAT)margin->right;
+			borderRect.top    += (FLOAT)margin->top;
+			borderRect.bottom -= (FLOAT)margin->bottom;
 		}
 
 		// We have to get the border geometry first if there's any.
@@ -1197,12 +1211,12 @@ namespace MetalBone
 		// === Text ===
 		if(!text.empty())
 		{
-			if(hasPadding)
+			if(hasPadding())
 			{
-				borderRect.left   += padding.left;
-				borderRect.top    += padding.top;
-				borderRect.right  -= padding.right;
-				borderRect.bottom -= padding.bottom;
+				borderRect.left   += padding->left;
+				borderRect.top    += padding->top;
+				borderRect.right  -= padding->right;
+				borderRect.bottom -= padding->bottom;
 			}
 
 			switch(MSSSPrivate::getTextRenderer())
@@ -1240,16 +1254,16 @@ namespace MetalBone
 			if(frameIndex >= bgro->frameCount)
 				frameIndex = frameIndex % bgro->frameCount;
 
-			if(bgro->clip != Value_Margin)
+			if(testNoValue(bgro,Value_Margin))
 			{
-				if(hasMargin) {
-					contentRect.left   += margin.left;
-					contentRect.top    += margin.top;
-					contentRect.right  -= margin.right;
-					contentRect.bottom -= margin.bottom;
+				if(hasMargin()) {
+					contentRect.left   += margin->left;
+					contentRect.top    += margin->top;
+					contentRect.right  -= margin->right;
+					contentRect.bottom -= margin->bottom;
 				}
 
-				if(bgro->clip != Value_Border) {
+				if(testNoValue(bgro,Value_Border)) {
 					if(borderRO != 0) {
 						MRect borderWidth;
 						borderRO->getBorderWidth(borderWidth);
@@ -1258,11 +1272,11 @@ namespace MetalBone
 						contentRect.right  -= borderWidth.right;
 						contentRect.bottom -= borderWidth.bottom;
 					}
-					if(hasPadding) {
-						contentRect.left   += padding.left;
-						contentRect.top    += padding.top;
-						contentRect.right  -= padding.right;
-						contentRect.bottom -= padding.bottom;
+					if(hasPadding()) {
+						contentRect.left   += padding->left;
+						contentRect.top    += padding->top;
+						contentRect.right  -= padding->right;
+						contentRect.bottom -= padding->bottom;
 					}
 				}
 			}
@@ -1295,7 +1309,7 @@ namespace MetalBone
 					{
 						if(totalFrameCount % bgro->frameCount != 0)
 							totalFrameCount *= bgro->frameCount;
-						bgro->repeat = NoRepeat;
+						bgro->values &= (~Value_Repeat);
 					}
 				}
 			}
@@ -1304,13 +1318,13 @@ namespace MetalBone
 			int dy = 0 - bgro->y;
 			if(bgro->width != 0)
 			{
-				if(bgro->alignX != Value_Left) {
-					if(bgro->alignX == Value_Center)
+				if(testNoValue(bgro,Value_Left)) {
+					if(testValue(bgro,Value_HCenter))
 						contentRect.left = (contentRect.left + contentRect.right - bgro->width) / 2;
 					else
 						contentRect.left = contentRect.right - bgro->width;
 				}
-				if(!isRepeatX(bgro)) {
+				if(testNoValue(bgro,Value_RepeatX)) {
 					int r = contentRect.left + bgro->width;
 					if(contentRect.right > r)
 						contentRect.right  = r;
@@ -1318,13 +1332,13 @@ namespace MetalBone
 			}
 			if(bgro->height != 0)
 			{
-				if(bgro->alignY != Value_Top) {
-					if(bgro->alignY == Value_Center)
+				if(testNoValue(bgro, Value_Top)) {
+					if(testValue(bgro, Value_VCenter))
 						contentRect.top = (contentRect.top + contentRect.bottom - bgro->height) / 2;
 					else
 						contentRect.top = contentRect.bottom - bgro->height;
 				}
-				if(!isRepeatY(bgro)) {
+				if(testNoValue(bgro, Value_RepeatY)) {
 					int b = contentRect.top + bgro->height;
 					if(contentRect.bottom > b)
 						contentRect.bottom = b;
@@ -1343,7 +1357,7 @@ namespace MetalBone
 			clip.right  = (FLOAT) min(contentRect.right ,cr.right);
 			clip.bottom = (FLOAT) min(contentRect.bottom,cr.bottom);
 
-			if(bgro->clip != Value_Border || borderRO == 0)
+			if(testNoValue(bgro,Value_Border) || borderRO == 0)
 				workingRT->FillRectangle(clip,brush);
 			else
 			{
@@ -1445,7 +1459,7 @@ namespace MetalBone
 			brush = borderImageRO->brush.getBorderPotion(TopCenter,borderImageRO->widths);
 			if(brush) {
 				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-				if(!isRepeatX(borderImageRO))
+				if(testNoValue(borderImageRO, Value_RepeatX))
 					matrix = D2D1::Matrix3x2F::Scale(scaleX,1.0f) * matrix;
 				brush->SetTransform(matrix);
 				workingRT->FillRectangle(drawRect,brush);
@@ -1459,7 +1473,7 @@ namespace MetalBone
 			brush = borderImageRO->brush.getBorderPotion(CenterLeft,borderImageRO->widths);
 			if(brush) {
 				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-				if(!isRepeatY(borderImageRO))
+				if(testNoValue(borderImageRO, Value_RepeatY))
 					matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
 				brush->SetTransform(matrix);
 				workingRT->FillRectangle(drawRect,brush);
@@ -1473,9 +1487,9 @@ namespace MetalBone
 			brush = borderImageRO->brush.getBorderPotion(Center,borderImageRO->widths);
 			if(brush) {
 				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-				if(!isRepeatX(borderImageRO))
-					matrix = D2D1::Matrix3x2F::Scale(scaleX, isRepeatY(borderImageRO) ? 1.0f : scaleY) * matrix; 
-				else if(!isRepeatY(borderImageRO))
+				if(testNoValue(borderImageRO, Value_RepeatX))
+					matrix = D2D1::Matrix3x2F::Scale(scaleX, testNoValue(borderImageRO, Value_RepeatY) ? scaleY : 1.0f) * matrix; 
+				else if(testNoValue(borderImageRO, Value_RepeatY))
 					matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
 				brush->SetTransform(matrix);
 				workingRT->FillRectangle(drawRect,brush);
@@ -1489,7 +1503,7 @@ namespace MetalBone
 			brush = borderImageRO->brush.getBorderPotion(CenterRight,borderImageRO->widths);
 			if(brush) {
 				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-				if(!isRepeatY(borderImageRO))
+				if(testNoValue(borderImageRO, Value_RepeatY))
 					matrix = D2D1::Matrix3x2F::Scale(1.0f,scaleY) * matrix;
 				brush->SetTransform(matrix);
 				workingRT->FillRectangle(drawRect,brush);
@@ -1503,7 +1517,7 @@ namespace MetalBone
 			brush = borderImageRO->brush.getBorderPotion(BottomCenter,borderImageRO->widths);
 			if(brush) {
 				D2D1::Matrix3x2F matrix(D2D1::Matrix3x2F::Translation(drawRect.left, drawRect.top));
-				if(!isRepeatX(borderImageRO))
+				if(testNoValue(borderImageRO, Value_RepeatX))
 					matrix = D2D1::Matrix3x2F::Scale(scaleX,1.0f) * matrix;
 				brush->SetTransform(matrix);
 				workingRT->FillRectangle(drawRect,brush);
@@ -1630,10 +1644,11 @@ namespace MetalBone
 				ID2D1Brush* shadowBrush = MSSSPrivate::getBrushPool().getSolidBrush(tro->shadowColor);
 				workingRT->DrawTextLayout(
 					D2D1::Point2F(drawRect.left + tro->shadowOffsetX, drawRect.top + tro->shadowOffsetY),
-					textLayout, shadowBrush);
+					textLayout, shadowBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
 			}
 			ID2D1Brush* textBrush = MSSSPrivate::getBrushPool().getSolidBrush(tro->color);
-			workingRT->DrawTextLayout(D2D1::Point2F(drawRect.left, drawRect.top), textLayout, textBrush);
+			workingRT->DrawTextLayout(D2D1::Point2F(drawRect.left, drawRect.top),
+				textLayout, textBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
 		}
 
 		SafeRelease(textFormat);
@@ -1681,19 +1696,24 @@ namespace MetalBone
 		if(hasOutline) // If we need to draw the outline, we have to use GDI+.
 		{
 			StringFormat sf;
-			if(tro->overflow == Value_Ellipsis) sf.SetTrimming(StringTrimmingEllipsisWord);
-			else sf.SetTrimming(StringTrimmingNone);
-			if(tro->overflow != Value_Wrap) sf.SetFormatFlags(StringFormatFlagsNoWrap);
-			switch(tro->alignX) {
-				case Value_Center: sf.SetAlignment(StringAlignmentCenter); break;
-				case Value_Right:  sf.SetAlignment(StringAlignmentFar);    break;
-				default:           sf.SetAlignment(StringAlignmentNear);   break;
-			}
-			switch(tro->alignY) {
-				case Value_Top:    sf.SetLineAlignment(StringAlignmentNear);   break;
-				case Value_Bottom: sf.SetLineAlignment(StringAlignmentFar);    break;
-				default:           sf.SetLineAlignment(StringAlignmentCenter); break;
-			}
+			if(testValue(textRO, Value_Ellipsis))
+				sf.SetTrimming(StringTrimmingEllipsisWord);
+			else
+				sf.SetTrimming(StringTrimmingNone);
+			if(testValue(textRO, Value_Wrap))
+				sf.SetFormatFlags(StringFormatFlagsNoWrap);
+			if(testValue(textRO, Value_HCenter))
+				sf.SetAlignment(StringAlignmentCenter);
+			else if(testValue(textRO, Value_Right))
+				sf.SetAlignment(StringAlignmentFar);
+			else
+				sf.SetAlignment(StringAlignmentNear);
+			if(testValue(textRO, Value_Top))
+				sf.SetLineAlignment(StringAlignmentNear);
+			else if(testValue(textRO, Value_Bottom))
+				sf.SetLineAlignment(StringAlignmentFar);
+			else
+				sf.SetLineAlignment(StringAlignmentCenter);
 
 			GraphicsPath textPath;
 			Font f(textDC);
@@ -1911,7 +1931,8 @@ namespace MetalBone
 	{
 		if(value.type == CssValue::Color) return true;
 
-		M_ASSERT_X(value.type == CssValue::Uri,"The brush value must be neither Color or Uri(for now)","isBrushValueOpaque()");
+		M_ASSERT_X(value.type == CssValue::Uri,
+			"The brush value must be neither Color or Uri(for now)","isBrushValueOpaque()");
 		const wstring* uri = value.data.vstring;
 		wstring ex = uri->substr(uri->size() - 3);
 		transform(ex.begin(),ex.end(),ex.begin(),::tolower);
@@ -1924,24 +1945,56 @@ namespace MetalBone
 	{
 		switch(prop) {
 
-		case Value_NoRepeat: object->repeat = CSS::NoRepeat; break;
-		case Value_RepeatX:  object->repeat = CSS::RepeatX;  break;
-		case Value_RepeatY:  object->repeat = CSS::RepeatY;  break;
-		case Value_Repeat:   object->repeat = CSS::RepeatXY; break;
+		case Value_RepeatX:
+		case Value_RepeatY:
+		case Value_Repeat:
+			object->values |= prop;
+			break;
 
 		case Value_Padding:
 		case Value_Content:
 		case Value_Border:
-		case Value_Margin:   object->clip = prop; break;
+		case Value_Margin:
+			{
+				unsigned int mask = Value_Padding | Value_Content | Value_Border | Value_Margin;
+				object->values &= (~mask);
+				object->values |= prop;
+				break;
+			}
+
+		case Value_NoRepeat:     object->values &= (~Value_Repeat); break;
+		case Value_SingleLoop:   object->infiniteLoop = false; break;
 
 		case Value_Left:
-		case Value_Right:	 object->alignX = prop; return true;
+		case Value_Right:
+			{
+				unsigned int mask = Value_Left | Value_Right | Value_HCenter;
+				object->values &= (~mask);
+				object->values |= prop;
+				return true;
+			}
 		case Value_Top:
-		case Value_Bottom:   object->alignY = prop; break;
+		case Value_Bottom:
+			{
+				unsigned int mask = Value_Top | Value_Bottom | Value_VCenter;
+				object->values &= (~mask);
+				object->values |= prop;
+				break;
+			}
 			// We both set alignment X & Y, because one may only specific a alignment value.
 		case Value_Center:
-			object->alignY = prop;
-			if(!isPrevPropAlignX) { object->alignX= prop; return true; }
+			{
+				unsigned int mask = Value_Top | Value_Bottom | Value_VCenter;
+				object->values &= (~mask);
+				object->values |= Value_VCenter;
+				if(!isPrevPropAlignX)
+				{
+					mask = Value_Left | Value_Right | Value_HCenter;
+					object->values &= (~mask);
+					object->values |= Value_HCenter;
+					return true;
+				}
+			}
 		}
 		return false;
 	}
@@ -1977,14 +2030,7 @@ namespace MetalBone
 		{
 			const CssValue& v = values.at(index);
 			if(v.type == CssValue::Identifier) {
-				if(v.data.videntifier == Value_SingleLoop)
-				{
-					newObject->infiniteLoop = false;
-				} else
-				{
-					isPropAlignX = setBGROProperty(newObject,
-						static_cast<ValueType>(v.data.vuint), isPropAlignX);
-				}
+				isPropAlignX = setBGROProperty(newObject, v.data.videntifier, isPropAlignX);
 			} else {
 				mWarning(v.type == CssValue::Length || v.type == CssValue::Number,
 					L"The rest of background css value should be of type 'length' or 'number'");
@@ -2011,6 +2057,9 @@ namespace MetalBone
 	// ********** Create the BorderImageRO
 	void RenderRuleData::createBorderImageRO(CssValueArray& values)
 	{
+		if(values.size() <= 1)
+			return;
+
 		borderImageRO = new BorderImageRenderObject();
 		borderImageRO->brush = MSSSPrivate::getBrushPool().getBitmapBrush(*values.at(0).data.vstring);
 
@@ -2019,14 +2068,16 @@ namespace MetalBone
 		if(values.at(endIndex).type == CssValue::Identifier)
 		{
 			if(values.at(endIndex-1).type == CssValue::Identifier) {
+
 				if(values.at(endIndex).data.vuint != Value_Stretch)
-					borderImageRO->repeat = RepeatY;
+					borderImageRO->values |= Value_RepeatY;
 				if(values.at(endIndex-1).data.vuint != Value_Stretch)
-					borderImageRO->repeat = (borderImageRO->repeat == RepeatY) ? RepeatXY : RepeatY;
+					borderImageRO->values |= Value_RepeatX;
+
 				endIndex -= 2;
 			} else {
 				if(values.at(endIndex).data.vuint != Value_Stretch)
-					borderImageRO->repeat = RepeatXY;
+					borderImageRO->values = Value_Repeat;
 				--endIndex;
 			}
 		}
@@ -2249,11 +2300,12 @@ namespace MetalBone
 				BackgroundRenderObject* o = createBackgroundRO(values);
 				if(isBrushValueOpaque(values.at(0)))
 				{
-					switch(o->clip) {
-					case Value_Margin: bgOpaqueType = OpaqueClipMargin; break;
-					case Value_Border: bgOpaqueType = OpaqueClipBorder; break;
-					default:           bgOpaqueType = OpaqueClipPadding;
-					}
+					if(testValue(o, Value_Margin))
+						bgOpaqueType = OpaqueClipMargin;
+					else if(testValue(o, Value_Border))
+						bgOpaqueType = OpaqueClipBorder;
+					else
+						bgOpaqueType = OpaqueClipPadding;
 				}
 
 				backgroundROs.push_back(o);
@@ -2374,28 +2426,32 @@ namespace MetalBone
 				switch(declIter->first)
 				{
 					case PT_Margin:
-						setD2DRectValue(margin,values);
-						hasMargin = true;
+						if(margin == 0)
+							margin = new D2D1_RECT_U();
+						setD2DRectValue(*margin,values);
 						break;
 					case PT_MarginTop:
 					case PT_MarginRight:
 					case PT_MarginBottom:
 					case PT_MarginLeft:
-						setD2DRectValue(margin, declIter->first - PT_MarginTop,
+						if(margin == 0)
+							margin = new D2D1_RECT_U();
+						setD2DRectValue(*margin, declIter->first - PT_MarginTop,
 							values.at(0).data.vuint);
-						hasMargin = true;
 						break;
 					case PT_Padding:
-						setD2DRectValue(padding,values);
-						hasPadding = true;
+						if(padding == 0)
+							padding = new D2D1_RECT_U();
+						setD2DRectValue(*padding,values);
 						break;
 					case PT_PaddingTop:
 					case PT_PaddingRight:
 					case PT_PaddingBottom:
 					case PT_PaddingLeft:
-						setD2DRectValue(padding, declIter->first - PT_PaddingTop,
+						if(padding == 0)
+							padding = new D2D1_RECT_U();
+						setD2DRectValue(*padding, declIter->first - PT_PaddingTop,
 							values.at(0).data.vuint);
-						hasPadding = true;
 						break;
 				}
 			}
@@ -2539,24 +2595,33 @@ namespace MetalBone
 					case PT_TextAlignment:
 						if(values.size()>1)
 						{
-							textRO->alignY = values.at(1).data.videntifier;
-							textRO->alignX = values.at(0).data.videntifier;
+							switch(values.at(1).data.videntifier) {
+								case Value_Top:    textRO->values |= Value_Top;     break;
+								case Value_Center: textRO->values |= Value_VCenter; break;
+								case Value_Bottom: textRO->values |= Value_Bottom;  break;
+							}
+							switch(values.at(0).data.videntifier) {
+								case Value_Left:   textRO->values |= Value_Left;    break;
+								case Value_Center: textRO->values |= Value_HCenter; break;
+								case Value_Right:  textRO->values |= Value_Right;   break;
+							}
 						} else {
-							ValueType vt = values.at(0).data.videntifier;
-							if(vt == Value_Center)
-								textRO->alignX = textRO->alignY = vt;
-							else if(vt == Value_Top || vt == Value_Bottom)
-								textRO->alignY = vt;
-							else
-								textRO->alignX = vt;
+							switch(values.at(0).data.videntifier) {
+								case Value_Center:
+									textRO->values |= (Value_HCenter | Value_VCenter); break;
+								case Value_Left:
+								case Value_Right:
+								case Value_Top:
+								case Value_Bottom:
+									textRO->values |= values.at(0).data.videntifier;
+							}
 						}
 						break;
-					case PT_TextDecoration:
-						textRO->decoration = values.at(0).data.videntifier; break;
-					case PT_TextUnderlineStyle:
-						textRO->lineStyle  = values.at(0).data.videntifier; break;
 					case PT_TextOverflow:
-						textRO->overflow   = values.at(0).data.videntifier; break;
+					case PT_TextDecoration:
+						textRO->values |= values.at(0).data.videntifier; break;
+					case PT_TextUnderlineStyle:
+						textRO->lineStyle = values.at(0).data.videntifier; break;
 				}
 				++declIter;
 			}
@@ -2564,14 +2629,14 @@ namespace MetalBone
 
 		END:// Check if this RenderRule is opaque.
 		int  opaqueCount  = 0;
-		bool opaqueBorder = (!hasMargin && bt == BT_Simple);
+		bool opaqueBorder = (!hasMargin() && bt == BT_Simple);
 		for(int i = bgOpaqueTypes.size() - 1; i >= 0 && opaqueCount == 0; --i)
 		{
 			switch(bgOpaqueTypes.at(i)) {
 				case OpaqueClipMargin:  ++opaqueCount; break;
 				case OpaqueClipBorder:  if(opaqueBorder) ++opaqueCount; break;
 				case OpaqueClipPadding:
-					if(opaqueBorder && !hasPadding)
+					if(opaqueBorder && !hasPadding())
 						++opaqueCount;
 					break;
 			}

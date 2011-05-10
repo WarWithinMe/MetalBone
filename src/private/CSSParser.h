@@ -51,29 +51,40 @@ namespace MetalBone
 		};
 
 		enum ValueType {
-			Value_Unknown,    Value_None,        Value_Transparent,
+			Value_Unknown,   
 
-			Value_Bold,
-			Value_Normal,     Value_Italic,      Value_Oblique,
-			Value_Clip,       Value_Ellipsis,    Value_Wrap,
-			Value_Underline,  Value_Overline,    Value_LineThrough,
+			Value_Clip      = 0x1,     Value_Ellipsis = 0x2,          Value_Wrap = 0x4,
+			Value_Underline = 0x8,     Value_Overline = 0x10,         Value_LineThrough = 0x20,
+
+			Value_Top       = 0x40,    Value_Right    = 0x80,
+			Value_Left      = 0x100,   Value_Bottom   = 0x200,
+			Value_HCenter   = 0x400,   Value_VCenter  = 0x800,
+
+			Value_Padding   = 0x1000,  Value_Border   = 0x2000,
+			Value_Content   = 0x4000,  Value_Margin   = 0x8000,
+			
+			Value_RepeatX   = 0x10000, Value_RepeatY  = 0x20000,
+			Value_Repeat    = Value_RepeatX | Value_RepeatY,
+			
+			Value_BitFlagsEnd,
+
+			Value_SingleLoop, 
+			Value_NoRepeat,   Value_Stretch,     Value_Center,
 
 			Value_Dashed,     Value_DotDash,     Value_DotDotDash,
 			Value_Dotted,     Value_Solid,       Value_Wave,
 
-			Value_Padding,    Value_Border,      Value_Content,    Value_Margin,
-			Value_Top,        Value_Right,       Value_Left,       Value_Bottom,    Value_Center,
-			Value_NoRepeat,   Value_RepeatX,     Value_RepeatY,    Value_Repeat,    Value_Stretch,
-			Value_True,
+			Value_Normal,     Value_Bold,        Value_Italic,        Value_Oblique,
+			Value_None,       Value_Transparent,
 
 			// The Cursor's order must be the same as MCursor::CursorType
 			Value_Default,   Value_AppStarting, Value_Cross,   Value_Hand,    Value_Help,    Value_IBeam,
 			Value_Wait,      Value_Forbidden,   Value_UpArrow, Value_SizeAll, Value_SizeVer, Value_SizeHor,
 			Value_SizeBDiag, Value_SizeFDiag,   Value_Blank,
 
-			Value_SingleLoop,
+			Value_True,
 
-			KnownValueCount
+			KnownValueCount = 50
 		};
 
 		struct Selector;
