@@ -257,8 +257,10 @@ namespace MetalBone
 					rtSize.height *= frameCount;
 
 					ID2D1BitmapRenderTarget* bitmapRT = 0;
-					workingRT->CreateCompatibleRenderTarget(0, &rtSize, &D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, 
-						D2D1_ALPHA_MODE_PREMULTIPLIED),D2D1_COMPATIBLE_RENDER_TARGET_OPTIONS_NONE,&bitmapRT);
+					D2D1_PIXEL_FORMAT pf = D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, 
+						D2D1_ALPHA_MODE_PREMULTIPLIED);
+					workingRT->CreateCompatibleRenderTarget(0, &rtSize, &pf, 
+						D2D1_COMPATIBLE_RENDER_TARGET_OPTIONS_NONE,&bitmapRT);
 					bitmapRT->BeginDraw();
 					for(unsigned int i = 0; i < frameCount; ++i)
 					{
@@ -1583,8 +1585,9 @@ namespace MetalBone
 		ID2D1TransformedGeometry* pTransformedGeometry = NULL;
 		mApp->getD2D1Factory()->CreateTransformedGeometry(pPathGeometry, &matrix, &pTransformedGeometry);
 		ID2D1StrokeStyle* pStrokeStyle;
-		mApp->getD2D1Factory()->CreateStrokeStyle(&D2D1::StrokeStyleProperties(
-			D2D1_CAP_STYLE_FLAT,D2D1_CAP_STYLE_FLAT,D2D1_CAP_STYLE_FLAT,D2D1_LINE_JOIN_ROUND),0,0,&pStrokeStyle);
+		D2D1_STROKE_STYLE_PROPERTIES strokeStyle = D2D1::StrokeStyleProperties(
+			D2D1_CAP_STYLE_FLAT,D2D1_CAP_STYLE_FLAT,D2D1_CAP_STYLE_FLAT,D2D1_LINE_JOIN_ROUND);
+		mApp->getD2D1Factory()->CreateStrokeStyle(&strokeStyle,0,0,&pStrokeStyle);
 		if(sbrush != 0)
 		{
 			// Draw shadow.

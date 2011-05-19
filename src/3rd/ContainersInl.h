@@ -371,13 +371,13 @@ namespace ThirdParty {
 			CastNode* GetHead() { return (CastNode*) m_pHead; }
 			const CastNode* GetHead() const { return (const CastNode*) m_pHead; }
 			__declspec(property(get=GetHead)) CastNode* _Head;
-			__declspec(property(get=GetHead)) const CastNode* _Head;
+// 			__declspec(property(get=GetHead)) const CastNode* _Head;
 
 			// Must have tail pointer.
 			CastNode* GetTail() { return (CastNode*) m_pTail; }
 			const CastNode* GetTail() const { return (const CastNode*) m_pTail; }
 			__declspec(property(get=GetTail)) CastNode* _Tail;
-			__declspec(property(get=GetTail)) const CastNode* _Tail;
+// 			__declspec(property(get=GetTail)) const CastNode* _Tail;
 
 			// Must have forward iteration
 			void InsertNext(CastNode& node, CastNode& pos) { zInsertNext<true>(node, pos); }
@@ -461,9 +461,9 @@ namespace ThirdParty {
 			CastNode* GetPrev()             { return (CastNode*) m_pPrev; }
 			const CastNode* GetPrev() const { return (const CastNode*) m_pPrev; }
 			__declspec(property(get=GetNext)) CastNode* _Next;
-			__declspec(property(get=GetNext)) const CastNode* _Next;
+// 			__declspec(property(get=GetNext)) const CastNode* _Next;
 			__declspec(property(get=GetPrev)) CastNode* _Prev;
-			__declspec(property(get=GetPrev)) const CastNode* _Prev;
+// 			__declspec(property(get=GetPrev)) const CastNode* _Prev;
 		};
 
 		//////////////////////////////////////////////////////////////////////

@@ -9,7 +9,7 @@
 //#pragma comment(linker,"\"/manifestdependency:type='Win32' name='Microsoft.Windows.GdiPlus' version='1.1.6001.18000' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 #include "mb_switch.h"
-#include <Windows.h>
+#include <windows.h>
 
 #ifdef _DEBUG
 #  if !defined(MB_DEBUG)
@@ -32,7 +32,7 @@
 #  ifdef MB_DECL_EXPORT
 #    define METALBONE_EXPORT __declspec(dllexport)
 #  else
-#    define METALBONE_EXPORT __declspec(dllexport)
+#    define METALBONE_EXPORT __declspec(dllimport)
 #  endif
 #else
 #  define METALBONE_EXPORT

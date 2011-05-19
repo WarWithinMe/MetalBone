@@ -260,24 +260,47 @@ namespace MetalBone
 
 		switch(msg) {
 
-		case WM_SETCURSOR:
-			return (LOWORD(lparam) == HTCLIENT) ? TRUE : ::DefWindowProcW(hwnd,msg,wparam,lparam);
-		case WM_MOUSEHOVER:
+		case WM_NCHITTEST:
 			{
-				if(xtr->widgetUnderMouse != 0)
+				LRESULT result;
+				if(!::DwmDefWindowProc(hwnd,msg,wparam,lparam,&result))
+					result = ::DefWindowProcW(hwnd,msg,wparam,lparam);
+				switch(result)
 				{
-					MToolTip* tip = xtr->widgetUnderMouse->getToolTip();
-					if(tip)
-					{
-						MRect rect;
-						::GetWindowRect(hwnd,&rect);
-						tip->show(rect.left + xtr->lastMouseX + 20,
-								  rect.top  + xtr->lastMouseY + 20);
-					}
+				case HTTOP:
+				case HTBOTTOM:
+					if(window->maxHeight == window->minHeight)
+						return HTBORDER;
+				case HTLEFT:
+				case HTRIGHT:
+					if(window->maxWidth == window->minWidth)
+						return HTBORDER;
+				case HTBOTTOMLEFT:
+				case HTBOTTOMRIGHT:
+				case HTTOPLEFT:
+				case HTTOPRIGHT:
+					if(window->maxHeight == window->minHeight ||
+						window->maxWidth == window->minWidth)
+						return HTBORDER;
+				case HTCLIENT:
+					// Check if the widget under the mouse is to
+					// simulate the Non-Client area.
+// 					{
+// 						MWidget* widgetUnderMouse = xtr->widgetUnderMouse;
+// 						int xpos = GET_X_LPARAM(lparam);
+// 						int ypos = GET_Y_LPARAM(lparam);
+// 
+// 						if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
+// 							{ widgetUnderMouse = window->findWidget(xpos, ypos); }
+// 
+// 						if(widgetUnderMouse->widgetRole() == WR_Normal)
+// 						{
+// 
+// 						}
+// 					}
+				default: return result;
 				}
-				xtr->bTrackingMouse = false;
 			}
-			break;
 		case WM_MOUSEMOVE:
 			{
 				int xpos = GET_X_LPARAM(lparam);
@@ -367,6 +390,24 @@ namespace MetalBone
 							rect.top + xtr->lastMouseY + 20);
 					}
 				}
+			}
+			break;
+		case WM_SETCURSOR:
+			return (LOWORD(lparam) == HTCLIENT) ? TRUE : ::DefWindowProcW(hwnd,msg,wparam,lparam);
+		case WM_MOUSEHOVER:
+			{
+				if(xtr->widgetUnderMouse != 0)
+				{
+					MToolTip* tip = xtr->widgetUnderMouse->getToolTip();
+					if(tip)
+					{
+						MRect rect;
+						::GetWindowRect(hwnd,&rect);
+						tip->show(rect.left + xtr->lastMouseX + 20,
+								  rect.top  + xtr->lastMouseY + 20);
+					}
+				}
+				xtr->bTrackingMouse = false;
 			}
 			break;
 		case WM_SYSKEYDOWN:
@@ -624,31 +665,6 @@ namespace MetalBone
 				xtr->m_renderTarget->Resize(D2D1::SizeU(LOWORD(lparam),HIWORD(lparam)));
 			}
 			break;
-		case WM_NCHITTEST:
-			{
-				LRESULT result;
-				if(!::DwmDefWindowProc(hwnd,msg,wparam,lparam,&result))
-					result = ::DefWindowProcW(hwnd,msg,wparam,lparam);
-				switch(result)
-				{
-				case HTTOP:
-				case HTBOTTOM:
-					if(window->maxHeight == window->minHeight)
-						return HTBORDER;
-				case HTLEFT:
-				case HTRIGHT:
-					if(window->maxWidth == window->minWidth)
-						return HTBORDER;
-				case HTBOTTOMLEFT:
-				case HTBOTTOMRIGHT:
-				case HTTOPLEFT:
-				case HTTOPRIGHT:
-					if(window->maxHeight == window->minHeight ||
-						window->maxWidth == window->minWidth)
-						return HTBORDER;
-				default: return result;
-				}
-			}
 		case WM_GETMINMAXINFO:
 			{
 				DWORD winStyle    = 0;

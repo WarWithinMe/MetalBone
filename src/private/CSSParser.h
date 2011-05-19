@@ -109,7 +109,7 @@ namespace MetalBone
 		{
 			std::vector<StyleRule*> styleRules;
 			bool operator<(const RenderRuleCacheKey& rhs) const;
-			RenderRuleCacheKey& operator=(RenderRuleCacheKey& rhs) { styleRules = rhs.styleRules; }
+			RenderRuleCacheKey& operator=(RenderRuleCacheKey& rhs) { styleRules = rhs.styleRules; return *this; }
 		};
 
 		struct CssValue

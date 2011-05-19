@@ -132,7 +132,7 @@ namespace MetalBone
 		return false;
 	}
 
-	const std::wstring& MWidget::windowTitle() const
+	std::wstring MWidget::windowTitle() const
 	{
 		if(m_windowExtras == 0)
 			return std::wstring();

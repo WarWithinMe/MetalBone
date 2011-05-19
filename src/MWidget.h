@@ -65,6 +65,24 @@ namespace MetalBone
 		WA_DontShowOnScreen   = 0x400 // If set, the widget won't do any painting. But it still receives mouse event.
 	};
 
+	// WidgetRole is used to make the widget to simulate the 
+	// Non-client area of the window. For example, if a widget
+	// is set to WR_Caption, when the mouse press on it, the 
+	// user can drag the window.
+	enum WidgetRole
+	{
+		WR_Normal      = 1,
+		WR_Caption     = HTCAPTION     - 2,
+		WR_Left        = HTLEFT        - 2,
+		WR_Right       = HTRIGHT       - 2,
+		WR_Top         = HTTOP         - 2,
+		WR_TopLeft     = HTTOPLEFT     - 2,
+		WR_TopRight    = HTTOPRIGHT    - 2,
+		WR_Bottom      = HTBOTTOM      - 2,
+		WR_BottomLeft  = HTBOTTOMLEFT  - 2,
+		WR_BottomRight = HTBOTTOMRIGHT - 2
+	};
+
 	enum WindowStates
 	{
 		WindowNoState = 0,
@@ -98,7 +116,7 @@ namespace MetalBone
 			inline void setObjectName(const std::wstring&);
 			inline const std::wstring& objectName()  const;
 			void setWindowTitle(const std::wstring&);
-			const std::wstring& windowTitle() const;
+			std::wstring windowTitle() const;
 
 			// Return the HWND handle contains this widget or NULL.
 			HWND windowHandle() const; 
@@ -117,6 +135,9 @@ namespace MetalBone
 			inline void setAttributes(WidgetAttributes,bool on = true);
 			inline bool testAttributes(WidgetAttributes) const;
 			inline unsigned int attributes() const;
+
+			inline void setWidgetRole(WidgetRole);
+			inline WidgetRole widgetRole() const;
 
 			void setStyleSheet(const std::wstring&);
 			void ensurePolished(); // Call ensurePolished() to set Geometry for this.
@@ -256,6 +277,8 @@ namespace MetalBone
 			unsigned int lastPseudo;
 			unsigned int mainPseudo;
 
+			char e_widgetRole;
+
 			FocusPolicy fp;
 			MToolTip* m_toolTip;
 			MCursor* m_cursor;
@@ -297,6 +320,8 @@ namespace MetalBone
 	inline MCursor*     MWidget::getCursor()                          { return m_cursor;      }
 	inline MWidget*     MWidget::windowWidget()                       { return m_topLevelParent;   }
 	inline void         MWidget::repaint()                            { repaint(0,0,width,height); }
+	inline void         MWidget::setWidgetRole(WidgetRole wr)         { e_widgetRole = wr; }
+	inline WidgetRole   MWidget::widgetRole() const                   { return (WidgetRole)e_widgetRole; }
 	inline unsigned int MWidget::getLastWidgetPseudo() const          { return lastPseudo;         }
 	inline void         MWidget::setObjectName(const std::wstring& n) { m_objectName = n;          }
 	inline bool         MWidget::testAttributes(WidgetAttributes a) const { return (m_attributes & a) != 0; }

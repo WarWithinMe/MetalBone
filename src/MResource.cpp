@@ -203,7 +203,7 @@ namespace MetalBone
 			if(title.size() > 0 && title.size() < 64)
 				wcscpy_s(data.szInfoTitle, 64, data.szInfoTitle);
 
-			return (bool)::Shell_NotifyIcon(NIM_MODIFY, &data);
+			return (::Shell_NotifyIcon(NIM_MODIFY, &data) == TRUE);
 		}
 
 		return false;
