@@ -167,5 +167,11 @@ void TestWidgetController::createWidgets()
 	mainWindow2->setGeometry(200,200,500,500);
 	mainWindow2->setAttributes(WA_DeleteOnClose);
 	mainWindow2->setWindowFlags(WF_AllowTransparency | WF_MinimizeButton);
-	mainWindow2->show();
+// 	mainWindow2->show();
+
+	MWidget* tRoleWidget = new MWidget();
+	tRoleWidget->setParent(mainWindow);
+	tRoleWidget->setGeometry(0,0,500,30);
+	tRoleWidget->setWidgetRole(WR_Caption);
+	tRoleWidget->show();
 }

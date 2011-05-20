@@ -32,6 +32,7 @@ namespace MetalBone
 
 		bool bTrackingMouse;
 		MWidget* widgetUnderMouse;
+		MWidget* currWidgetUnderMouse;
 		MWidget* focusedWidget;
 		int lastMouseX;
 		int lastMouseY;
@@ -48,7 +49,7 @@ namespace MetalBone
 	inline WindowExtras::WindowExtras():
 		m_wndHandle(NULL), m_dummyHandle(NULL),
 		m_renderTarget(0), m_rtHook(0), bTrackingMouse(false),
-		widgetUnderMouse(0), focusedWidget(0),
+		widgetUnderMouse(0), currWidgetUnderMouse(0), focusedWidget(0),
 		lastMouseX(0), lastMouseY(0){}
 	inline WindowExtras::~WindowExtras()
 	{

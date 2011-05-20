@@ -82,11 +82,9 @@
     <ClCompile Include="..\..\3rd\XUnzip.cpp" />
     <ClCompile Include="..\..\MApplication.cpp" />
     <ClCompile Include="..\..\MBGlobal.cpp" />
-    <ClCompile Include="..\..\MIcon.cpp" />
     <ClCompile Include="..\..\MRegion.cpp" />
     <ClCompile Include="..\..\MResource.cpp" />
     <ClCompile Include="..\..\MStyleSheet.cpp" />
-    <ClCompile Include="..\..\MSysTrayIcon.cpp" />
     <ClCompile Include="..\..\MWidget.cpp" />
     <ClCompile Include="..\..\private\CSSParser.cpp" />
     <ClCompile Include="main.cpp" />
@@ -100,11 +98,9 @@
     <ClInclude Include="..\..\MBGlobal.h" />
     <ClInclude Include="..\..\mb_switch.h" />
     <ClInclude Include="..\..\MEvent.h" />
-    <ClInclude Include="..\..\MIcon.h" />
     <ClInclude Include="..\..\MRegion.h" />
     <ClInclude Include="..\..\MResource.h" />
     <ClInclude Include="..\..\MStyleSheet.h" />
-    <ClInclude Include="..\..\MSysTrayIcon.h" />
     <ClInclude Include="..\..\MUtils.h" />
     <ClInclude Include="..\..\MWidget.h" />
     <ClInclude Include="..\..\private\CSSParser.h" />

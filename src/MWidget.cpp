@@ -28,6 +28,7 @@ namespace MetalBone
 		m_windowFlags(WF_Widget),
 		m_windowState(WindowNoState),
 		m_widgetState(MWS_Hidden),lastPseudo(0),
+		e_widgetRole(WR_Normal),
 		fp(NoFocus),m_toolTip(0),m_cursor(0)
 	{
 		M_ASSERT_X(mApp!=0, "MApplication must be created first.", "MWidget constructor");

@@ -283,21 +283,39 @@ namespace MetalBone
 						window->maxWidth == window->minWidth)
 						return HTBORDER;
 				case HTCLIENT:
-					// Check if the widget under the mouse is to
-					// simulate the Non-Client area.
-// 					{
-// 						MWidget* widgetUnderMouse = xtr->widgetUnderMouse;
-// 						int xpos = GET_X_LPARAM(lparam);
-// 						int ypos = GET_Y_LPARAM(lparam);
-// 
-// 						if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
-// 							{ widgetUnderMouse = window->findWidget(xpos, ypos); }
-// 
-// 						if(widgetUnderMouse->widgetRole() == WR_Normal)
-// 						{
-// 
-// 						}
-// 					}
+					{
+						// Check if the widget under the mouse is to
+						// simulate the Non-Client area.
+						
+						MWidget* currWidgetUnderMouse = xtr->widgetUnderMouse;
+						int xpos = GET_X_LPARAM(lparam) - window->pos().x;
+						int ypos = GET_Y_LPARAM(lparam) - window->pos().y;
+
+						// We will have to find the widget every time, if the
+						// widget is not WR_Normal. Because we do not store its
+						// position.
+						if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
+							{ currWidgetUnderMouse = window->findWidget(xpos, ypos); }
+
+						if(currWidgetUnderMouse == 0)
+						{
+							xtr->currWidgetUnderMouse = 0;
+							return HTNOWHERE;
+						}
+
+						if(currWidgetUnderMouse->widgetRole() == WR_Normal)
+						{
+							xtr->currWidgetUnderMouse = currWidgetUnderMouse;
+							return HTCLIENT;
+						} else
+						{
+							// We will receive WM_MOUSELEAVE if we were in the
+							// client area before.
+							// *WidgetRole is minus 2 to fit in the size of CHAR.
+							xtr->currWidgetUnderMouse = 0;
+							return 2 + currWidgetUnderMouse->widgetRole();
+						}
+					}
 				default: return result;
 				}
 			}
@@ -324,14 +342,10 @@ namespace MetalBone
 				}
 
 				// We could first check if the mouse is still over the last widget.
-				MWidget* cw = 0;
-				if(xpos >= 0 && ypos >= 0 && 
-					xpos <= window->width && ypos <= window->height)
-				{ cw = window->findWidget(xpos, ypos); }
-
 				MWidget* lastWidget = xtr->widgetUnderMouse;
+				MWidget* currWidget = xtr->currWidgetUnderMouse;
 				bool mouseMove = true;
-				if(lastWidget != cw)
+				if(lastWidget != currWidget)
 				{
 					if(lastWidget != 0)
 					{
@@ -346,20 +360,21 @@ namespace MetalBone
 						gArrowCursor.show(true);
 					}
 
-					if(cw != 0) {
+					if(currWidget != 0) {
 						MEvent enter(false);
-						cw->enterEvent(&enter);
+						currWidget->enterEvent(&enter);
 						mouseMove = !enter.isAccepted();
-						if(cw->testAttributes(WA_Hover))
-							cw->setWidgetState(MWS_UnderMouse,true);
-						instance->ssstyle.updateWidgetAppearance(cw);
+						if(currWidget->testAttributes(WA_Hover))
+							currWidget->setWidgetState(MWS_UnderMouse,true);
+						instance->ssstyle.updateWidgetAppearance(currWidget);
 					}
 				}
-				if(cw != 0) {
-					if(cw->focusPolicy() == MoveOverFocus)
-						cw->setFocus();
 
-					if(mouseMove && cw->testAttributes(WA_TrackMouseMove))
+				if(currWidget != 0) {
+					if(currWidget->focusPolicy() == MoveOverFocus)
+						currWidget->setFocus();
+
+					if(mouseMove && currWidget->testAttributes(WA_TrackMouseMove))
 					{
 						MRect rect;
 						::GetWindowRect(hwnd,&rect);
@@ -367,17 +382,18 @@ namespace MetalBone
 						MMouseEvent me(xpos, ypos, rect.left, rect.top, NoButton);
 						do 
 						{
-							if(cw->testAttributes(WA_TrackMouseMove))
-								cw->mouseMoveEvent(&me);
-							me.offsetPos(cw->x,cw->y);
-							cw = cw->m_parent;
-						} while (cw && !me.isAccepted() &&
-							!cw->testAttributes(WA_NoMousePropagation));
+							if(currWidget->testAttributes(WA_TrackMouseMove))
+								currWidget->mouseMoveEvent(&me);
+							me.offsetPos(currWidget->x,currWidget->y);
+							currWidget = currWidget->m_parent;
+						} while (currWidget && !me.isAccepted() &&
+							!currWidget->testAttributes(WA_NoMousePropagation));
 					}
 				}
-				xtr->widgetUnderMouse = cw;
+				xtr->widgetUnderMouse = currWidget;
+				xtr->currWidgetUnderMouse = 0;
 
-				MToolTip* thisTT = cw == 0 ? 0 : cw->getToolTip();
+				MToolTip* thisTT = currWidget == 0 ? 0 : currWidget->getToolTip();
 				if(thisTT && thisTT->isShowing())
 				{
 					if(thisTT->hidePolicy() == MToolTip::WhenMove)
