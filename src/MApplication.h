@@ -92,7 +92,7 @@ namespace MetalBone
 	inline MApplication* MApplication::instance()
 		{ return s_instance; }
 	inline void MApplication::exit(int ret)
-		{ PostQuitMessage(ret); }
+		{ ::PostQuitMessage(ret); }
 	inline unsigned int MApplication::winDpi() const
 		{ return windowsDPI; }
 }

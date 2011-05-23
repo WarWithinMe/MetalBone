@@ -2722,6 +2722,30 @@ namespace MetalBone
 		return *this;
 	}
 
+	int RenderRule::getGeometry(Geometry geo)
+	{
+		if(data == 0 || data->geoRO == 0)
+		{
+			if(geo == RRG_X || geo == RRG_Y)
+				return INT_MAX;
+			else
+				return -1;
+		}
+
+		switch(geo)
+		{
+			case RRG_X:         return data->geoRO->x;
+			case RRG_Y:         return data->geoRO->y;
+			case RRG_Width:     return data->geoRO->width;
+			case RRG_Height:    return data->geoRO->height;
+			case RRG_MinWidth:  return data->geoRO->minWidth;
+			case RRG_MinHeight: return data->geoRO->minHeight;
+			case RRG_MaxWidth:  return data->geoRO->maxWidth;
+			case RRG_MaxHeight: return data->geoRO->maxHeight;
+		}
+		return -1;
+	}
+
 	// ********** RenderRuleQuerier Impl 
 	RenderRuleQuerier::~RenderRuleQuerier()
 	{

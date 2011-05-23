@@ -307,8 +307,9 @@ namespace MetalBone
 
 		MRect rect(0,0,width,height);
 		generateStyleFlags(m_windowFlags,&winStyle,&winExStyle);
-
-		::AdjustWindowRectEx(&rect,winStyle,false,winExStyle);
+		if(!isLayered)
+			::AdjustWindowRectEx(&rect,winStyle,false,winExStyle);
+		
 		m_windowExtras->m_wndHandle = CreateWindowExW(winExStyle,
 			gMWidgetClassName,
 			m_windowExtras->m_windowTitle.c_str(),
@@ -328,6 +329,8 @@ namespace MetalBone
 				parentHandle,NULL,
 				mApp->getAppHandle(), NULL);
 			::SetLayeredWindowAttributes(m_windowExtras->m_dummyHandle,0,0,LWA_ALPHA);
+			::SetWindowPos(m_windowExtras->m_wndHandle,HWND_NOTOPMOST,
+				0,0,0,0,SWP_NOMOVE|SWP_NOZORDER|SWP_NOSIZE|SWP_FRAMECHANGED);
 		}
 
 		createRenderTarget();
@@ -673,7 +676,8 @@ namespace MetalBone
 
 			::MoveWindow(m_windowExtras->m_wndHandle, x, y, rect.width(), rect.height(), true);
 
-			m_windowExtras->m_renderTarget->Resize(D2D1::SizeU(vwidth, vheight));
+			if(m_windowExtras->m_renderTarget)
+				m_windowExtras->m_renderTarget->Resize(D2D1::SizeU(vwidth, vheight));
 
 		} else if(!isHidden())
 			repaint(); // Update the new rect.

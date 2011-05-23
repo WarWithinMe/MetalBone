@@ -57,6 +57,17 @@ namespace MetalBone
 				MSize getStringSize(const std::wstring&, int maxWidth = INT_MAX);
 				void getContentMargin(MRect&);
 
+				enum Geometry
+				{
+					RRG_X,          RRG_Y,
+					RRG_Width,      RRG_Height,
+					RRG_MinWidth,   RRG_MinHeight,
+					RRG_MaxWidth,   RRG_MaxHeight
+				};
+				// If x or y not exist, return INT_MAX.
+				// If others not exist, return -1.
+				int getGeometry(Geometry);
+
 				MCursor* getCursor();
 
 				inline bool operator==(const RenderRule&) const;
