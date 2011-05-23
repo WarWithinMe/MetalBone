@@ -36,6 +36,7 @@ namespace MetalBone
 			PT_Padding,                PT_PaddingTop,                 PT_PaddingRight,
 			PT_PaddingBottom,          PT_PaddingLeft,
 
+			PT_PosX,                   PT_PosY,
 			PT_Width,                  PT_Height,
 			PT_MinimumWidth,           PT_MinimumHeight,
 			PT_MaximumWidth,           PT_MaximumHeight,

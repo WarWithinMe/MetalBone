@@ -80,6 +80,7 @@
     <ClInclude Include="..\..\MBGlobal.h" />
     <ClInclude Include="..\..\mb_switch.h" />
     <ClInclude Include="..\..\MRegion.h" />
+    <ClInclude Include="..\..\MUtils.h" />
     <ClInclude Include="assert.h" />
     <ClInclude Include="ContainersInl.h" />
     <ClInclude Include="GObjBase.h" />

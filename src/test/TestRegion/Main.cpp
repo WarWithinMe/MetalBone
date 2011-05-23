@@ -167,7 +167,7 @@ void AddRandomRects(GdiRgn& rgnGdi, MyRgn& rgnMy, MRegion& mRegion)
 		CvtRect(rc, cc);
 		rgnMy.AddCube(cc);
 
-		mRegion.addRect(rc);
+		mRegion.addRect(MRect(rc));
 	}
 }
 
@@ -220,7 +220,7 @@ void TestEqual(GdiRgn& rgnGdi, MRegion& mRgn)
 
 	MRegion rgnMyTst;
 	for (size_t i = 0; i < nRects; i++)
-		rgnMyTst.addRect(pRects[i]);
+		rgnMyTst.addRect(MRect(pRects[i]));
 
 	ASSERT(rgnMyTst.isEqual(mRgn));
 
@@ -234,7 +234,7 @@ void TestEqual(GdiRgn& rgnGdi, MRegion& mRgn)
 // 	}
 // 	ASSERT(!it);
 
-	RECT boundingRect;
+	MRect boundingRect;
 	mRgn.getBounds(boundingRect);
 
 	RECT rc;
@@ -246,15 +246,15 @@ void TestEqual(GdiRgn& rgnGdi, MRegion& mRgn)
 	POINT p;
 	p.x = boundingRect.left;
 	p.y = boundingRect.top;
-	bb = mRgn.isPointInside(p);
+	bb = mRgn.isPointInside(MPoint(p));
 	ASSERT(bb == PtInRegion(rgnGdi.getValue(),boundingRect.left,boundingRect.top));
 	p.x = boundingRect.right;
 	p.y = boundingRect.bottom;
-	bb = mRgn.isPointInside(p);
+	bb = mRgn.isPointInside(MPoint(p));
 	ASSERT(bb == PtInRegion(rgnGdi.getValue(),boundingRect.right,boundingRect.bottom));
-	bb = mRgn.isRectPartlyInside(boundingRect);
+	bb = mRgn.isRectPartlyInside(MRect(boundingRect));
 	ASSERT(bb == RectInRegion(rgnGdi.getValue(),&boundingRect));
-	bb = mRgn.isRectFullyInside(boundingRect);
+	bb = mRgn.isRectFullyInside(MRect(boundingRect));
 }
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)

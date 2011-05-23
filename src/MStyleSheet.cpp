@@ -513,6 +513,7 @@ namespace MetalBone
 		{
 			inline GeometryRenderObject();
 
+			int x       , y;
 			int width   , height;
 			int minWidth, minHeight;
 			int maxWidth, maxHeight;
@@ -633,6 +634,7 @@ namespace MetalBone
 		inline BorderImageRenderObject::BorderImageRenderObject():
 			values(Value_Unknown),widths(){}
 		inline GeometryRenderObject::GeometryRenderObject():
+			x(INT_MAX),y(INT_MAX), 
 			width(-1), height(-1), minWidth(-1),
 			minHeight(-1), maxWidth(-1), maxHeight(-1){}
 		inline TextRenderObject::TextRenderObject(const MFont& f):
@@ -1098,6 +1100,11 @@ namespace MetalBone
 	{
 		if(geoRO == 0)
 			return false;
+
+		if(geoRO->x != INT_MAX)
+			w->move(geoRO->x, geoRO->y == INT_MAX ? w->pos().y : geoRO->y);
+		else if(geoRO->y != INT_MAX)
+			w->move(w->pos().x, geoRO->y);
 
 		MSize size  = w->size();
 		MSize size2 = size;
@@ -1842,7 +1849,9 @@ namespace MetalBone
 			::DrawTextW(textDC, (LPWSTR)text.c_str(), -1, &drawRect, formatParam);
 		}
 
-		// Remark: Maybe we could make fixAlpha an option.
+		// Remark: Maybe we could make fixAlpha an option;
+		// Restrict the fixing area to the Text's bounding rect,
+		// not the entire drawing rect.
 		bool fixAlpha = true;
 		if(fixAlpha)
 		{
@@ -1865,8 +1874,9 @@ namespace MetalBone
 			unsigned int* pixel = (unsigned int*)pvBits;
 			for(int i = width * height - 1; i >= 0; --i)
 			{
-				BYTE* component = (BYTE*)(pixel + i); 
-				component[3] = 0xFF;
+				BYTE* component = (BYTE*)(pixel + i);
+				if(component[3] == 0)
+					component[3] = 0xFF;
 			}
 
 			::SetDIBitsToDevice(textDC, drawRect.left, drawRect.top,
@@ -2008,7 +2018,18 @@ namespace MetalBone
 		vector<BackgroundRenderObject*>::iterator iterEnd = bgros.end();
 		while(iter != iterEnd) { setBGROProperty(*iter,prop,isPrevPropAlignX); ++iter; }
 	}
-	// Background: { Brush/Image frame-count Repeat Clip Alignment pos-x pos-y width height }*;
+
+	// Background CSS Syntax:
+	// General -  [ Brush/Image frame-count Repeat Clip Alignment pos-x pos-y width height ];
+	// Details -
+	// 1. The color or image must be the first value.
+	// 2. If the second value is Number, then it's considered to be frame-count.
+	// 3. Repeat, Clip, Alignment can be random order. And they don't have to be
+	//    in the declaration.
+	// 4. If we meet a Number, which is not in the second position, we consider it
+	//    as pos-x, and if there're Numbers afterwards, they are considered as
+	//    pos-y, width, height in order.
+	// 
 	// If we want to make it more like CSS3 syntax,
 	// we can parse a CSS3 syntax background into multiple Background Declarations.
 	BackgroundRenderObject* RenderRuleData::createBackgroundRO(CssValueArray& values)
@@ -2042,15 +2063,15 @@ namespace MetalBone
 
 				if(++index >= values.size()) { break; }
 				if(values.at(index).type == CssValue::Identifier) { continue; }
-				newObject->y = v.data.vuint;
+				newObject->y = values.at(index).data.vuint;
 
 				if(++index >= values.size()) { break; }
 				if(values.at(index).type == CssValue::Identifier) { continue; }
-				newObject->userWidth = v.data.vuint;
+				newObject->userWidth = values.at(index).data.vuint;
 
 				if(++index >= values.size()) { break; }
 				if(values.at(index).type == CssValue::Identifier) { continue; }
-				newObject->userHeight = v.data.vuint;
+				newObject->userHeight = values.at(index).data.vuint;
 			}
 			++index;
 		}
@@ -2058,6 +2079,8 @@ namespace MetalBone
 	}
 
 	// ********** Create the BorderImageRO
+	// BorderImage CSS Syntax:
+	// General - [ Image, Number{0,4}, (Repeat,Stretch){0,2} ]
 	void RenderRuleData::createBorderImageRO(CssValueArray& values)
 	{
 		if(values.size() <= 1)
@@ -2473,6 +2496,9 @@ namespace MetalBone
 					int data = values.at(0).data.vint;
 					switch(declIter->first)
 					{
+
+						case PT_PosX:         geoRO->x         = data; break;
+						case PT_PosY:         geoRO->y         = data; break;
 						case PT_Width:        geoRO->width     = data; break;
 						case PT_Height:       geoRO->height    = data; break;
 						case PT_MinimumWidth: geoRO->minWidth  = data; break;
@@ -2481,9 +2507,9 @@ namespace MetalBone
 						case PT_MaximumHeight:geoRO->maxHeight = data; break;
 					}
 				}
-				
-			} while(++declIter != declIterEnd);
-			if(++declIter == declIterEnd) goto END;
+
+				if(++declIter == declIterEnd) goto END;
+			 } while(declIter->first <= PT_MaximumHeight);
 		}
 
 		// --- Cursor ---

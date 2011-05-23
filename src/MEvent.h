@@ -1,5 +1,6 @@
 #pragma once
 #include "MBGlobal.h"
+#include "MUtils.h"
 
 namespace MetalBone
 {
@@ -33,12 +34,12 @@ namespace MetalBone
 	{
 		public:
 			inline MResizeEvent(long oldWidth, long oldHeight, long newWidth, long newHeight);
-			inline SIZE getOldSize() const;
-			inline SIZE getNewSize() const;
+			inline MSize getOldSize() const;
+			inline MSize getNewSize() const;
 
 		private:
-			SIZE oldSize;
-			SIZE newSize;
+			MSize oldSize;
+			MSize newSize;
 	};
 
 
@@ -118,9 +119,9 @@ namespace MetalBone
 		newSize.cx = nw;
 		newSize.cy = nh;
 	}
-	inline SIZE MResizeEvent::getOldSize() const
+	inline MSize MResizeEvent::getOldSize() const
 		{ return oldSize; }
-	inline SIZE MResizeEvent::getNewSize() const
+	inline MSize MResizeEvent::getNewSize() const
 		{ return newSize; }
 
 	inline MMouseEvent::MMouseEvent(int x, int y, int gx, int gy,MouseButton b):

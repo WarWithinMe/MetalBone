@@ -20,7 +20,8 @@ namespace MetalBone
 
 			inline void setWidth (long width);
 			inline void setHeight(long height);
-			inline void resize   (long width, long height);
+			inline MSize& resize (long width, long height);
+			inline MSize& enlarge(long wDelta,long hDelta);
 
 			inline long getWidth () const;
 			inline long getHeight() const;
@@ -48,7 +49,8 @@ namespace MetalBone
 			inline explicit MPoint(POINT);
 			inline MPoint(const MPoint& pt);
 
-			inline void move(long x, long y);
+			inline MPoint& move(long x, long y);
+			inline MPoint& offset(long x, long y);
 
 			inline bool operator==(const MPoint&) const;
 			inline bool operator!=(const MPoint&) const;
@@ -136,7 +138,8 @@ namespace MetalBone
 	inline       MSize::MSize    (const MSize& sz) { cx = sz.cx; cy = sz.cy; }
 	inline void  MSize::setWidth (long w)          { cx = w; }
 	inline void  MSize::setHeight(long h)          { cy = h; }
-	inline void  MSize::resize   (long w, long h)  { cx = w; cy = h; }
+	inline MSize& MSize::resize  (long w, long h)  { cx = w; cy = h; return *this; }
+	inline MSize& MSize::enlarge (long w, long h)  { cx += w, cy += h; return *this; }
 	inline long  MSize::getWidth () const          { return cx; }
 	inline long  MSize::getHeight() const          { return cy; }
 	inline long& MSize::width    ()                { return cx; }
@@ -153,7 +156,8 @@ namespace MetalBone
 	inline       MPoint::MPoint    (long cx, long cy)       { x = cx; y = cy; }
 	inline       MPoint::MPoint    (POINT pt)               { x = pt.x; y = pt.y; }
 	inline       MPoint::MPoint    (const MPoint& pt)       { x = pt.x; y = pt.y; }
-	inline void  MPoint::move      (long cx, long cy)       { x = cx; y = cy; }
+	inline MPoint& MPoint::move    (long cx, long cy)       { x = cx; y = cy; return *this; }
+	inline MPoint& MPoint::offset  (long cx, long cy)       { x += cx; y += cy; return *this; }
 	inline bool  MPoint::operator==(const MPoint& pt) const { return (x == pt.x && y == pt.y); }
 	inline bool  MPoint::operator!=(const MPoint& pt) const { return (x != pt.x || y != pt.y); }
 	inline bool  MPoint::operator==(const POINT& pt)  const { return (x == pt.x && y == pt.y); }

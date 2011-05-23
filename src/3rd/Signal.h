@@ -4,6 +4,7 @@
  *  A lightweight signals and slots implementation using fast delegates
  *
  *  Created by Patrick Hogan on 5/18/09.
+ *  URL: https://github.com/pbhogan/Signals
  *
  */
 

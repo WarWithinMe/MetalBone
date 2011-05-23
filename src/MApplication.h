@@ -58,6 +58,10 @@ namespace MetalBone
 			// ===== Only support 'px' unit. If a unit is not 'px', it's considered to be 'pt'
 			// ===== Do not support Color Name 
 			void setStyleSheet(const std::wstring& css);
+			// Load StyleSheet from a text file, if isAscii is true,
+			// it will be parsed as Ascii Text File. Otherwise,
+			// it will be parsed as UTF-8 Text File.
+			void loadStyleSheetFromFile(const std::wstring& path, bool isAscii = true);
 			MStyleSheetStyle* getStyleSheet();
 
 			ID2D1Factory*       getD2D1Factory();

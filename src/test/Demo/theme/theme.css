@@ -1,0 +1,82 @@
+#SettingWindow {
+	border-image: url(theme\SA_BG.png) 90 20 51 28;
+	margin: 90 20 51 28;
+	width: 480;
+	height:435;
+}
+
+#TabItem{
+	color: #FFFFFF;
+}
+
+#TabItem : checked {
+	border-image: url(theme\SATabItemChecked.png) 1 2 1 2;
+	color: #A1E73B;
+}
+
+#SettingWindow #RedTrafficLight {
+	background: url(theme\SAElements.png) no-repeat 0 95 15 15;
+	width: 15;
+	height:15;
+	x:454;
+	y:12;
+}
+
+#SettingWindow #RedTrafficLight : hover {
+	background: url(theme\SAElements.png) no-repeat 15 95 15 15;
+}
+
+#SettingWindow #RedTrafficLight : pressed {
+	background: url(theme\SAElements.png) no-repeat 30 95 15 15;
+}
+
+#SettingWindow #CloseButton {
+	background: url(theme\SAElements.png) no-repeat 0 0 79 30;
+	width:79;
+	height:30;
+	x:376;
+	y:391;
+}
+
+#SettingWindow #CloseButton : hover {
+	background: url(theme\SAElements.png) no-repeat 0 32 79 30;
+}
+
+#SettingWindow #CloseButton : pressed {
+	background: url(theme\SAElements.png) no-repeat 0 64 79 30;
+}
+
+#SettingWindow #StatusLabel {
+	width:332;
+	height:25;
+	x:25;
+	y:393;
+	font: 9px Î¢ÈíÑÅºÚ;
+	text-shadow: 0 1 0 #FFFFFFFF;
+	color: #FF4A4A4A;
+}
+
+#SettingWindow #TitleLabel {
+	width:420;
+	height:18;
+	x:30;
+	y:12;
+	font: 12px Î¢ÈíÑÅºÚ;
+	text-shadow: 0 -1 0 #FF000000;
+	color: #FFFFFFFF;
+	text-align: center;
+}
+
+#SettingWindow #Resizer {
+	width:9;
+	height:9;
+	x:461;
+	y:416;
+}
+
+#SettingWindow #ContentArea {
+	width:444;
+	height:287;
+	x:18;
+	y:96;
+}

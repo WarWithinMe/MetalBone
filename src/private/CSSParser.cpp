@@ -88,7 +88,9 @@ namespace MetalBone
 			{ L"text-overflow",              PT_TextOverflow            },
 			{ L"text-shadow",                PT_TextShadow              },
 			{ L"text-underline-style",       PT_TextUnderlineStyle      },
-			{ L"width",                      PT_Width                   }
+			{ L"width",                      PT_Width                   },
+			{ L"x",                          PT_PosX                    },
+			{ L"y",                          PT_PosY                    }
 		};
 		static const CSSValuePair knownValues[KnownValueCount - 1] = {
 			{ L"bold",         Value_Bold        },
@@ -516,8 +518,14 @@ Selector::Selector(const std::wstring* css, int index, int length)
 		{
 			wchar_t byte = css->at(index);
 			if(iswspace(byte))
-				newBS = true;
-			else if(byte == L'>')
+			{
+				while((++index) < length) {
+					if(css->at(index) == L':')
+						{ --index; break; }
+					else if(!iswspace(css->at(index)))
+						{ newBS = true; --index; break; }
+				}
+			}else if(byte == L'>')
 			{
 				newBS = true;
 				sel->relationToNext = BasicSelector::MatchNextIfParent;
@@ -538,6 +546,10 @@ Selector::Selector(const std::wstring* css, int index, int length)
 						sel->addPseudoAndClearInput(pseudo);
 
 					buffer = &pseudo; // And Skip ':';
+					while((++index) < length) {
+						if(!iswspace(css->at(index)))
+						{ --index; break; }
+					}
 				}else if(byte != L'*') // Don't add (*)
 					buffer->append(1,byte);
 			}

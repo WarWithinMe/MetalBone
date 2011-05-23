@@ -28,7 +28,7 @@ class NewWidget : public MWidget
 };
 class ChildWidget : public NewWidget
 {
-	virtual void doStyleSheetDraw(ID2D1RenderTarget* rt,const RECT& widgetRectInRT, const RECT& clipRectInRT)
+	virtual void doStyleSheetDraw(ID2D1RenderTarget* rt,const MRect& widgetRectInRT, const MRect& clipRectInRT)
 	{
 		std::wstring text = L"Î¢ÈíÑÅºÚ";
 		mApp->getStyleSheet()->draw(this,rt,widgetRectInRT,clipRectInRT,text);
@@ -37,7 +37,7 @@ class ChildWidget : public NewWidget
 class CheckBox    : public NewWidget {};
 class Button      : public NewWidget
 {
-	virtual void doStyleSheetDraw(ID2D1RenderTarget* rt,const RECT& widgetRectInRT, const RECT& clipRectInRT)
+	virtual void doStyleSheetDraw(ID2D1RenderTarget* rt,const MRect& widgetRectInRT, const MRect& clipRectInRT)
 	{
 		std::wstring text = L"Î¢ÈíÑÅºÚ";
 		mApp->getStyleSheet()->draw(this,rt,widgetRectInRT,clipRectInRT,text);

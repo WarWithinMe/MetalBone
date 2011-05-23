@@ -11,6 +11,7 @@
 #include <d2d1.h>
 #include <dwrite.h>
 #include <wincodec.h>
+#include <fstream>
 
 namespace MetalBone
 {
@@ -91,6 +92,47 @@ namespace MetalBone
 	void  MApplication::setStyleSheet(const std::wstring& css)      { mImpl->ssstyle.setAppSS(css);  }
 	void  MApplication::setCustomWindowProc(WinProc proc)           { mImpl->customWndProc = proc;   }
 
+	void MApplication::loadStyleSheetFromFile(const std::wstring& path, bool isAscii)
+	{
+		if(isAscii)
+		{
+			std::wifstream cssReader;
+			cssReader.imbue(std::locale(".936"));
+			cssReader.open(path.c_str(),std::ios_base::in);
+			std::wstring wss((std::istreambuf_iterator<wchar_t>(cssReader)),
+				std::istreambuf_iterator<wchar_t>());
+			setStyleSheet(wss);
+		} else
+		{
+			// UTF-8
+			HANDLE specFile = ::CreateFileW(path.c_str(),GENERIC_READ,
+				0,0,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0);
+
+			if(specFile == INVALID_HANDLE_VALUE) return;
+
+			DWORD size = ::GetFileSize(specFile, 0);
+			DWORD bytesRead = 0;
+			char* buffer = new char[size];
+
+			::ReadFile(specFile, buffer, size, &bytesRead, 0);
+			::CloseHandle(specFile);
+
+			bool hasBOM = false;
+			if(bytesRead >= 3 && buffer[0] == (char)0xEF &&
+				buffer[1] == (char)0xBB && buffer[2] == (char)0xBF)
+			{ hasBOM = true; bytesRead -= 3; }
+
+			if(bytesRead == 0) return;
+
+			wchar_t* strBuf = new wchar_t[bytesRead];
+			bytesRead = ::MultiByteToWideChar(CP_UTF8,0, hasBOM ? buffer+3 : buffer,
+				bytesRead, strBuf, bytesRead);
+			std::wstring wss(strBuf, bytesRead);
+			setStyleSheet(wss);
+		}
+		
+	}
+
 	void MApplication::setupRegisterClass(WNDCLASSW& wc)
 	{
 		wc.style         = CS_DBLCLKS | CS_HREDRAW | CS_VREDRAW;
@@ -165,12 +207,12 @@ namespace MetalBone
 
 		if(oldFocus != 0) {
 			oldFocus->setWidgetState(MWS_Focused,false);
-			instance->ssstyle.updateWidgetAppearance(oldFocus);
+			oldFocus->updateSSAppearance();
 		}
 
 		if(w != 0) {
 			w->setWidgetState(MWS_Focused,true);
-			instance->ssstyle.updateWidgetAppearance(w);
+			w->updateSSAppearance();
 			w->focusEvent();
 		}
 	}
@@ -233,8 +275,8 @@ namespace MetalBone
 			window = instance->findWidgetByHandle<true>(hwnd);
 			if (window == 0) RET_DEFPROC;
 
-			long newX = LOWORD(lparam);
-			long newY = HIWORD(lparam);
+			long newX = (short)LOWORD(lparam);
+			long newY = (short)HIWORD(lparam);
 			if(window->x != newX || window->y != newY)
 			{
 				window->x = newX;
@@ -271,10 +313,12 @@ namespace MetalBone
 				case HTBOTTOM:
 					if(window->maxHeight == window->minHeight)
 						return HTBORDER;
+					break;
 				case HTLEFT:
 				case HTRIGHT:
 					if(window->maxWidth == window->minWidth)
 						return HTBORDER;
+					break;
 				case HTBOTTOMLEFT:
 				case HTBOTTOMRIGHT:
 				case HTTOPLEFT:
@@ -282,6 +326,7 @@ namespace MetalBone
 					if(window->maxHeight == window->minHeight ||
 						window->maxWidth == window->minWidth)
 						return HTBORDER;
+					break;
 				case HTCLIENT:
 					{
 						// Check if the widget under the mouse is to
@@ -316,11 +361,16 @@ namespace MetalBone
 							return 2 + currWidgetUnderMouse->widgetRole();
 						}
 					}
-				default: return result;
 				}
+				return result;
 			}
 		case WM_MOUSEMOVE:
 			{
+				// At first, I check the widget under mouse in responding
+				// to this message. Then I found that I have to check the
+				// widget in WM_NCHITTEST. So now, the widget under mouse
+				// must be check before processing this message.
+				
 				int xpos = GET_X_LPARAM(lparam);
 				int ypos = GET_Y_LPARAM(lparam);
 
@@ -330,6 +380,10 @@ namespace MetalBone
 				xtr->lastMouseX = xpos;
 				xtr->lastMouseY = ypos;
 
+				// Remark: Sometimes when the mouse is out of the window
+				// we will keep receiving WM_SYSTIMER. I suspect that it
+				// was caused by TrackMouseEvent. But I don't know how to
+				// fix it, or even how it happens.
 				if(!window->m_windowExtras->bTrackingMouse)
 				{
 					TRACKMOUSEEVENT tme = {0};
@@ -341,7 +395,6 @@ namespace MetalBone
 					window->m_windowExtras->bTrackingMouse = true;
 				}
 
-				// We could first check if the mouse is still over the last widget.
 				MWidget* lastWidget = xtr->widgetUnderMouse;
 				MWidget* currWidget = xtr->currWidgetUnderMouse;
 				bool mouseMove = true;
@@ -351,7 +404,7 @@ namespace MetalBone
 					{
 						lastWidget->leaveEvent();
 						lastWidget->setWidgetState(MWS_Pressed | MWS_UnderMouse, false);
-						instance->ssstyle.updateWidgetAppearance(lastWidget);
+						lastWidget->updateSSAppearance();
 
 						MToolTip* tip = lastWidget->getToolTip();
 						if(tip) tip->hide();
@@ -366,7 +419,7 @@ namespace MetalBone
 						mouseMove = !enter.isAccepted();
 						if(currWidget->testAttributes(WA_Hover))
 							currWidget->setWidgetState(MWS_UnderMouse,true);
-						instance->ssstyle.updateWidgetAppearance(currWidget);
+						currWidget->updateSSAppearance();
 					}
 				}
 
@@ -409,6 +462,9 @@ namespace MetalBone
 			}
 			break;
 		case WM_SETCURSOR:
+			if(LOWORD(lparam) != HTCLIENT)
+				::DefWindowProcW(hwnd,msg,wparam,lparam);
+			return TRUE;
 			return (LOWORD(lparam) == HTCLIENT) ? TRUE : ::DefWindowProcW(hwnd,msg,wparam,lparam);
 		case WM_MOUSEHOVER:
 			{
@@ -542,7 +598,7 @@ namespace MetalBone
 					{
 						// Only change the state if the user press left button
 						cw->setWidgetState(MWS_Pressed,true);
-						instance->ssstyle.updateWidgetAppearance(cw);
+						cw->updateSSAppearance();
 					}
 
 					MWidget* pc = cw;
@@ -588,7 +644,7 @@ namespace MetalBone
 						(msg == WM_RBUTTONUP ? RightButton : MiddleButton));
 					if(btn == LeftButton) {
 						cw->setWidgetState(MWS_Pressed, false);
-						instance->ssstyle.updateWidgetAppearance(cw);
+						cw->updateSSAppearance();
 					}
 
 					MRect rect;
@@ -603,8 +659,8 @@ namespace MetalBone
 						cw = cw->m_parent;
 					} while (cw && !me.isAccepted() &&
 						cw->testAttributes(WA_NoMousePropagation));
-					::ReleaseCapture();
 				}
+				::ReleaseCapture();
 				MToolTip::hideAll();
 			}
 			break;
@@ -624,7 +680,7 @@ namespace MetalBone
 						(msg == WM_RBUTTONDBLCLK ? RightButton : MiddleButton));
 					if(btn == LeftButton) {
 						cw->setWidgetState(MWS_Pressed,true);
-						instance->ssstyle.updateWidgetAppearance(cw);
+						cw->updateSSAppearance();
 					}
 
 					RECT rect;
@@ -644,12 +700,31 @@ namespace MetalBone
 			break;
 
 		case WM_ACTIVATEAPP:
-			::SendMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(-1,-1));
+			if(wparam == FALSE)
+			{
+				if(window->m_windowExtras->bTrackingMouse = true)
+				{
+					TRACKMOUSEEVENT tme = {0};
+					tme.cbSize      = sizeof(TRACKMOUSEEVENT);
+					tme.dwFlags     = TME_HOVER | TME_LEAVE | TME_CANCEL;
+					tme.hwndTrack   = hwnd;
+					::TrackMouseEvent(&tme);
+				}
+				window->m_windowExtras->bTrackingMouse = true;
+
+				xtr->currWidgetUnderMouse = 0;
+				::SendMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(-1,-1));
+
+				window->m_windowExtras->bTrackingMouse = false;
+			}
 			break;
 		case WM_MOUSELEAVE:
 			if(window->m_windowExtras->bTrackingMouse)
+			{
+				xtr->currWidgetUnderMouse = 0;
 				::SendMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(-1,-1));
-			window->m_windowExtras->bTrackingMouse = false;
+				window->m_windowExtras->bTrackingMouse = false;
+			}
 			break;
 		case WM_CLOSE:
 			{
@@ -673,13 +748,7 @@ namespace MetalBone
 
 			if(window->width == LOWORD(lparam) && window->height == HIWORD(lparam))
 				return 0;
-			{
-				MResizeEvent ev(window->width,window->height,LOWORD(lparam),HIWORD(lparam));
-				window->width  = LOWORD(lparam);
-				window->height = HIWORD(lparam);
-				window->resizeEvent(&ev);
-				xtr->m_renderTarget->Resize(D2D1::SizeU(LOWORD(lparam),HIWORD(lparam)));
-			}
+			window->resize(LOWORD(lparam), HIWORD(lparam));
 			break;
 		case WM_GETMINMAXINFO:
 			{
@@ -706,6 +775,14 @@ namespace MetalBone
 		case WM_SHOWWINDOW:
 			if(lparam == 0)
 				wparam == TRUE ? window->show() : window->hide();
+			RET_DEFPROC;
+		case WM_NCCALCSIZE:
+			// Remark: This message is only received when the size of the
+			// window changes. But if we move the window without receiving
+			// this message, the window will jump after we stop moving it.
+			if(window->windowFlags() & WF_AllowTransparency)
+				return 0;
+
 			RET_DEFPROC;
 		case WM_SYSCOMMAND:
 			// Only intercept this message when the window is layered window.

@@ -73,10 +73,10 @@ namespace MetalBone
 			m_toolTip = new MToolTip(tip);
 	}
 
-	unsigned int MWidget::getWidgetPseudo(bool mark)
+	unsigned int MWidget::getWidgetPseudo(bool mark, unsigned int initP)
 	{
-		unsigned int pseudo = CSS::PC_Default;
-		// Only set pseudo to hover if it's not pressed.
+		unsigned int pseudo = initP;
+		// Only set pseudo 'hover' if it's not pressed.
 		if(testWidgetState(MWS_Pressed))
 			pseudo |= CSS::PC_Pressed;
 		else if(testWidgetState(MWS_UnderMouse))
@@ -212,7 +212,7 @@ namespace MetalBone
 		if((flags & 0xFE) == 0)
 		{ // WF_Widget
 			if(flags & WF_AllowTransparency)
-				winStyle |= WS_POPUP;
+				winStyle |= (WS_POPUP | WS_SIZEBOX); // Must have WS_SIZEBOX to make WidgetRole work.
 			else if(!customized)
 				winStyle |= WS_TILEDWINDOW;
 		}else if(flags & WF_Popup)
@@ -625,49 +625,58 @@ namespace MetalBone
 		else if(vheight > maxHeight) { vheight = maxHeight; }
 
 		bool sizeChanged = (vwidth != width || vheight != height);
+		bool posChanged  = (vx != x || vy != y);
 
-		if(!sizeChanged && vx == x && vy == y)
+		if(sizeChanged)
+		{
+			MResizeEvent ev(width,height,vwidth,vheight);
+			width  = vwidth;
+			height = vheight;
+
+			resizeEvent(&ev);
+			if(!ev.isAccepted())
+			{
+				sizeChanged = false;
+				width  = ev.getOldSize().width();
+				height = ev.getOldSize().height();
+			}
+		}
+
+		if(!sizeChanged && !posChanged)
 			return;
 
-		MResizeEvent ev(width,height,vwidth,vheight);
-
-		if(isHidden()) {
-			x = vx;
-			y = vy;
-
-			if(sizeChanged)
-			{
-				width  = vwidth;
-				height = vheight;
-				resizeEvent(&ev);
-			}
-		} else
-		{
-			if(m_parent != 0) {
-				// If is a child widget, we need to update the old region within the parent.
-				m_parent->repaint(x,y,width,height);
-				x = vx;
-				y = vy;
-				if(sizeChanged)
-				{
-					width  = vwidth;
-					height = vheight;
-					resizeEvent(&ev);
-				}
-				// Update the new rect.
-				repaint();
-			}
+		if(!isHidden() && m_parent != 0) {
+			// If is a child widget, we need to update the old region within the parent.
+			m_parent->repaint(x,y,width,height);
 		}
+
+		x = vx;
+		y = vy;
+
 		if(m_windowExtras != 0)
 		{
-			// It's a window. We change the size of it. And Windows will repaint it automatically.
 			MRect rect(0, 0, width, height);
-			DWORD winStyle   = 0;
-			DWORD winExStyle = 0;
-			generateStyleFlags(m_windowFlags, &winStyle, &winExStyle);
-			::AdjustWindowRectEx(&rect, winStyle, false, winExStyle);
+
+			if(m_windowFlags & WF_AllowTransparency)
+			{
+				if(sizeChanged)
+					repaint();
+			} else
+			{
+				DWORD winStyle   = 0;
+				DWORD winExStyle = 0;
+				generateStyleFlags(m_windowFlags, &winStyle, &winExStyle);
+				::AdjustWindowRectEx(&rect, winStyle, false, winExStyle);
+
+				// Moving a normal window will repaint it automatically.
+			}
+
 			::MoveWindow(m_windowExtras->m_wndHandle, x, y, rect.width(), rect.height(), true);
-		}
+
+			m_windowExtras->m_renderTarget->Resize(D2D1::SizeU(vwidth, vheight));
+
+		} else if(!isHidden())
+			repaint(); // Update the new rect.
 	}
 
 	bool MWidget::isVisible() const

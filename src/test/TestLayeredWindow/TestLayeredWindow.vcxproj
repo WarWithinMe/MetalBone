@@ -82,6 +82,7 @@
     <ClCompile Include="..\..\3rd\XUnzip.cpp" />
     <ClCompile Include="..\..\MApplication.cpp" />
     <ClCompile Include="..\..\MBGlobal.cpp" />
+    <ClCompile Include="..\..\MCommonWidgets.cpp" />
     <ClCompile Include="..\..\MRegion.cpp" />
     <ClCompile Include="..\..\MResource.cpp" />
     <ClCompile Include="..\..\MStyleSheet.cpp" />
@@ -97,6 +98,7 @@
     <ClInclude Include="..\..\MApplication.h" />
     <ClInclude Include="..\..\MBGlobal.h" />
     <ClInclude Include="..\..\mb_switch.h" />
+    <ClInclude Include="..\..\MCommonWidgets.h" />
     <ClInclude Include="..\..\MEvent.h" />
     <ClInclude Include="..\..\MRegion.h" />
     <ClInclude Include="..\..\MResource.h" />

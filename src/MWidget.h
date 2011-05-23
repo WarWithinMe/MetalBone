@@ -3,6 +3,8 @@
 #include "MBGlobal.h"
 #include "MEvent.h"
 #include "MUtils.h"
+#include "MApplication.h"
+#include "MStyleSheet.h"
 
 #include <string>
 #include <list>
@@ -115,6 +117,10 @@ namespace MetalBone
 
 			inline void setObjectName(const std::wstring&);
 			inline const std::wstring& objectName()  const;
+
+			// One can only set the window title after the window
+			// is created. The window is created when the first
+			// time it shows.
 			void setWindowTitle(const std::wstring&);
 			std::wstring windowTitle() const;
 
@@ -208,7 +214,9 @@ namespace MetalBone
 			inline MSize  maxSize()  const;
 			inline MRect  geometry() const; 
 			inline void move   (long x, long y);
+			inline void move   (MPoint pos);
 			inline void resize (long width, long height);
+			inline void resize (MSize size);
 			void setGeometry   (long x, long y, long width, long height);
 			void setMinimumSize(long minWidth, long minHeight);
 			void setMaximumSize(long maxWidth, long maxHeight);
@@ -217,7 +225,7 @@ namespace MetalBone
 			// These function SHOULD only be used by StyleSheetStyle.
 			// The StyleSheetStyle calls this to determine which RenderRule is needed.
 			virtual unsigned int getLastWidgetPseudo() const;
-			virtual unsigned int getWidgetPseudo(bool markAsLast = false);
+			virtual unsigned int getWidgetPseudo(bool markAsLast = false, unsigned int initPseudo = 0);
 			void ssSetOpaque(bool opaque);
 
 
@@ -250,6 +258,14 @@ namespace MetalBone
 
 			virtual void doStyleSheetDraw(ID2D1RenderTarget*,
 				const MRect& widgetRectInRT, const MRect& clipRectInRT);
+
+			// When your widget's pseudo state changed, call this function
+			// to request a update for your widget (if necessary, i.e. the
+			// new pseudo results in a new RenderRule different from the 
+			// current one).
+			// One can also call repaint() directly, instead of this function
+			// to update your widget.
+			inline void updateSSAppearance();
 
 
 		private:
@@ -323,13 +339,18 @@ namespace MetalBone
 	inline void         MWidget::setWidgetRole(WidgetRole wr)         { e_widgetRole = wr; }
 	inline WidgetRole   MWidget::widgetRole() const                   { return (WidgetRole)e_widgetRole; }
 	inline unsigned int MWidget::getLastWidgetPseudo() const          { return lastPseudo;         }
+	inline void         MWidget::updateSSAppearance()                 { mApp->getStyleSheet()->updateWidgetAppearance(this); }
 	inline void         MWidget::setObjectName(const std::wstring& n) { m_objectName = n;          }
 	inline bool         MWidget::testAttributes(WidgetAttributes a) const { return (m_attributes & a) != 0; }
 	inline bool         MWidget::testWidgetState(unsigned int s)    const { return (m_widgetState & s) != 0; }
 	inline void MWidget::move(long xpos, long ypos)
-		{ if(xpos != x && ypos != y) setGeometry(xpos,ypos,width,height); }
+		{ if(xpos != x || ypos != y) setGeometry(xpos,ypos,width,height); }
+	inline void MWidget::move(MPoint pos)
+		{ if(pos.x != x || pos.y != y) setGeometry(pos.x,pos.y,width,height); }
 	inline void MWidget::resize(long w, long h)
-		{ if(w != width && h != height) setGeometry(x,y,w,h); }
+		{ if(w != width || h != height) setGeometry(x,y,w,h); }
+	inline void MWidget::resize(MSize size)
+		{ if(size.width() != width || size.height() != height) setGeometry(x,y,size.width(),size.height()); }
 	inline void MWidget::setAttributes(WidgetAttributes attr, bool on)
 		{ on ? (m_attributes |= attr) : (m_attributes &= (~attr)); }
 	inline void MWidget::setWidgetState(unsigned int s, bool on)

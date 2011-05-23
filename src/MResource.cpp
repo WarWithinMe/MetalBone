@@ -552,7 +552,7 @@ namespace MetalBone
 		// Search for sharing.
 		unsigned int style = bold ? MFontData::Bold : MFontData::None;
 		if(italic) style |= MFontData::Italic;
-		unsigned int ptSize = pixelUnit ? size * mApp->winDpi() / 72 : size;
+		unsigned int ptSize = pixelUnit ? size * 72 / mApp->winDpi() : size;
 
 		std::pair<MFontData::FontCache::iterator, MFontData::FontCache::iterator>
 			cIts = MFontData::cache.equal_range(faceName);

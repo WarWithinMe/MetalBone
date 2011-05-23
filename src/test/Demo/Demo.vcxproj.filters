@@ -1,62 +1,33 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Source">
-      <UniqueIdentifier>{35aa0d2f-fded-4fab-a165-6fb1012b16eb}</UniqueIdentifier>
-    </Filter>
     <Filter Include="ExternMB">
-      <UniqueIdentifier>{f9ec6ff2-5940-4eb1-84e3-57d004740c39}</UniqueIdentifier>
+      <UniqueIdentifier>{1124e974-6c33-4f05-8181-7faee0a0d1c3}</UniqueIdentifier>
     </Filter>
     <Filter Include="ExternMB\Header">
-      <UniqueIdentifier>{dcf26ff1-d20b-4fd9-9da2-05cd8f706e6c}</UniqueIdentifier>
+      <UniqueIdentifier>{ef85c641-c913-4030-9abc-7f361d12ce36}</UniqueIdentifier>
     </Filter>
     <Filter Include="ExternMB\Header\3rd">
-      <UniqueIdentifier>{28608bc6-e0f8-4e21-ba38-b7482dcda3e9}</UniqueIdentifier>
+      <UniqueIdentifier>{3709481f-5b26-4c63-a881-bad626a25e5e}</UniqueIdentifier>
     </Filter>
     <Filter Include="ExternMB\Header\private">
-      <UniqueIdentifier>{6893d7c4-d2f9-43fa-81fc-3c06a978f721}</UniqueIdentifier>
+      <UniqueIdentifier>{69c56438-65d8-448f-ac19-725c42bdfc6e}</UniqueIdentifier>
     </Filter>
     <Filter Include="ExternMB\Source">
-      <UniqueIdentifier>{0c661907-9483-4a04-9bf2-5a4222d8c510}</UniqueIdentifier>
+      <UniqueIdentifier>{ba5616eb-5736-4cd9-8ca6-e9d56c7b4a28}</UniqueIdentifier>
     </Filter>
     <Filter Include="ExternMB\Source\3rd">
-      <UniqueIdentifier>{b886fdcd-a224-4391-ae4a-f546b938f31a}</UniqueIdentifier>
+      <UniqueIdentifier>{be06f959-0de6-44dd-abc9-7b37a58c804d}</UniqueIdentifier>
     </Filter>
     <Filter Include="ExternMB\Source\private">
-      <UniqueIdentifier>{9c0a3aa4-9a05-4f41-876b-b767c1dd79a8}</UniqueIdentifier>
+      <UniqueIdentifier>{ee805522-6d8f-405b-952f-db539851f96d}</UniqueIdentifier>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="main.cpp">
-      <Filter>Source</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\MApplication.cpp">
-      <Filter>ExternMB\Source</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\MBGlobal.cpp">
-      <Filter>ExternMB\Source</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\MCommonWidgets.cpp">
-      <Filter>ExternMB\Source</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\MRegion.cpp">
-      <Filter>ExternMB\Source</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\MResource.cpp">
-      <Filter>ExternMB\Source</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\MStyleSheet.cpp">
-      <Filter>ExternMB\Source</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\MWidget.cpp">
-      <Filter>ExternMB\Source</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\3rd\XUnzip.cpp">
-      <Filter>ExternMB\Source\3rd</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\private\CSSParser.cpp">
-      <Filter>ExternMB\Source\private</Filter>
-    </ClCompile>
+    <Filter Include="Source">
+      <UniqueIdentifier>{fab99780-51f7-4d65-948c-e4fc00137547}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header">
+      <UniqueIdentifier>{dc66ed5d-87f9-443b-927e-9fbb7f61d6cc}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\MApplication.h">
@@ -110,5 +81,43 @@
     <ClInclude Include="..\..\private\MWidget_p.h">
       <Filter>ExternMB\Header\private</Filter>
     </ClInclude>
+    <ClInclude Include="MainWindow.h">
+      <Filter>Header</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\MApplication.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MBGlobal.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MCommonWidgets.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MRegion.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MResource.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MStyleSheet.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MWidget.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\3rd\XUnzip.cpp">
+      <Filter>ExternMB\Source\3rd</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\private\CSSParser.cpp">
+      <Filter>ExternMB\Source\private</Filter>
+    </ClCompile>
+    <ClCompile Include="MainWindow.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
