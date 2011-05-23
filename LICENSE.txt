@@ -1,4 +1,4 @@
-﻿This library is released under the LGPL license with these additions:
+﻿This library is released under the LGPL license with these additions (a.k.a WWM License):
 
 1.If any of these additions is contrary to the LGPL license, follow these additions.
 2.Qihoo 360 Technology Co Ltd and its employees cannot use the whole or part of this library. They're forbidden to use/copy (disguisely) this library for any purpose.
