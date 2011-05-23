@@ -173,7 +173,7 @@ namespace MetalBone
 	void MWidget::closeWindow() 
 	{
 		if(hasWindow())
-			::SendMessage(m_windowExtras->m_wndHandle,WM_CLOSE,0,0);
+			::PostMessage(m_windowExtras->m_wndHandle,WM_CLOSE,0,0);
 	}
 
 	extern void generateStyleFlags(unsigned int flags, DWORD* winStyleOut, DWORD* winExStyleOut)

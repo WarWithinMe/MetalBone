@@ -2056,7 +2056,7 @@ namespace MetalBone
 			if(v.type == CssValue::Identifier) {
 				isPropAlignX = setBGROProperty(newObject, v.data.videntifier, isPropAlignX);
 			} else {
-				mWarning(v.type == CssValue::Length || v.type == CssValue::Number,
+				mWarning(v.type != CssValue::Length && v.type != CssValue::Number,
 					L"The rest of background css value should be of type 'length' or 'number'");
 
 				newObject->x = v.data.vuint;

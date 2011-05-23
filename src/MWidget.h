@@ -195,7 +195,7 @@ namespace MetalBone
 			// If isWindow() return false, nothing happen.
 			void showMaximized();
 			void showMinimized();
-			// Use SendMessage() to send a WM_CLOSE msg to the window.
+			// Use PossMessage() to send a WM_CLOSE msg to the window.
 			// The window is then closed, and closeEvent() is called.
 			void closeWindow();
 
