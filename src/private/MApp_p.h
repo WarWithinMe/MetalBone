@@ -1,44 +1,47 @@
 #pragma once
+
 #include "MStyleSheet.h"
+
 namespace MetalBone
 {
-	// ========== MApplicationData ==========
-	struct MApplicationData
-	{
-		inline MApplicationData(bool hwAccelerated);
-		// Window procedure
-		static LRESULT CALLBACK windowProc(HWND, UINT, WPARAM, LPARAM);
+    struct MApplicationData
+    {
+        inline MApplicationData(bool hwAccelerated);
+        // Window procedure
+        static LRESULT CALLBACK windowProc(HWND, UINT, WPARAM, LPARAM);
 
-		template<bool matchDummy>
-		MWidget* findWidgetByHandle(HWND handle) const;
-		static inline void removeTLW(MWidget* w);
-		static inline void insertTLW(MWidget* w);
+        template<bool matchDummy>
+        MWidget* findWidgetByHandle(HWND handle) const;
 
-		std::set<MWidget*>  topLevelWindows;
-		bool                quitOnLastWindowClosed;
-		bool                hardwareAccelerated;
-		HINSTANCE           appHandle;
-		MStyleSheetStyle    ssstyle;
+        static inline void removeTLW(MWidget* w);
+        static inline void insertTLW(MWidget* w);
 
-		ID2D1Factory*       d2d1Factory;
-		IDWriteFactory*     dwriteFactory;
-		IWICImagingFactory* wicFactory;
+        std::set<MWidget*>  topLevelWindows;
+        bool                quitOnLastWindowClosed;
+        bool                hardwareAccelerated;
+        HINSTANCE           appHandle;
+        MStyleSheetStyle    ssstyle;
 
-		ULONG_PTR gdiPlusToken;
+        ID2D1Factory*       d2d1Factory;
+        IDWriteFactory*     dwriteFactory;
+        IWICImagingFactory* wicFactory;
 
-		static MApplication::WinProc customWndProc;
-		static MApplicationData*     instance;
-		static void setFocusWidget(MWidget*);
-	};
+        ULONG_PTR           gdiPlusToken;
 
-	inline MApplicationData::MApplicationData(bool hwAccelerated):
-		quitOnLastWindowClosed(true), hardwareAccelerated(hwAccelerated)
-		{ instance = this; }
-	inline void MApplicationData::removeTLW(MWidget* w)
-		{ if(instance) instance->topLevelWindows.erase(w); }
-	inline void MApplicationData::insertTLW(MWidget* w)
-		{ if(instance) instance->topLevelWindows.insert(w); }
+        static MApplication::WinProc customWndProc;
+        static MApplicationData*     instance;
 
-	extern wchar_t gMWidgetClassName[];
-	extern MCursor gArrowCursor;
+        static void setFocusWidget(MWidget*);
+    };
+    
+    extern wchar_t gMWidgetClassName[];
+    extern MCursor gArrowCursor;
+
+    inline MApplicationData::MApplicationData(bool hwAccelerated):
+        quitOnLastWindowClosed(true), hardwareAccelerated(hwAccelerated)
+        { instance = this; }
+    inline void MApplicationData::removeTLW(MWidget* w)
+        { if(instance) instance->topLevelWindows.erase(w); }
+    inline void MApplicationData::insertTLW(MWidget* w)
+        { if(instance) instance->topLevelWindows.insert(w); }
 }

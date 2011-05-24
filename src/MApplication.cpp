@@ -16,7 +16,7 @@
 namespace MetalBone
 {
 	extern wchar_t gMWidgetClassName[] = L"MetalBone Widget";
-	extern MCursor gArrowCursor = MCursor(MCursor::ArrowCursor);
+	extern MCursor gArrowCursor(MCursor::ArrowCursor);
 
 	// ========== MApplication Impl ==========
 	MApplication* MApplication::s_instance = 0;

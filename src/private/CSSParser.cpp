@@ -1,4 +1,5 @@
 #include "CSSParser.h"
+#include "MStyleSheet.h"
 #include <string>
 #include <sstream>
 

@@ -1,5 +1,17 @@
 #pragma once
 
+/* ========== Switches ========== */
+// If defined, MetalBone is not exported.
+//#define METALBONE_LIBRARY
+//#define MB_DECL_EXPORT
+#define STRIP_METALBONE_NAMESPACE
+#define MB_DEBUGBREAK_INSTEADOF_ABORT
+// Use MSVC to compile, currently only MSVC is supported
+#ifndef MSVC
+#  define MSVC
+#endif
+/* ========== Switches ========== */
+
 #pragma comment(lib, "gdiplus.lib")       // Gdi+
 #pragma comment(lib, "windowscodecs.lib") // WIC
 #pragma comment(lib, "d2d1.lib")          // Direct2D
@@ -8,7 +20,6 @@
 #pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 //#pragma comment(linker,"\"/manifestdependency:type='Win32' name='Microsoft.Windows.GdiPlus' version='1.1.6001.18000' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
-#include "mb_switch.h"
 #include <windows.h>
 
 #ifdef _DEBUG
@@ -64,10 +75,10 @@ METALBONE_EXPORT void dumpMemory(LPCVOID address, SIZE_T size); // dumpMemory() 
 
 template<class Interface>
 inline void SafeRelease(Interface*& comObject) {
-	if(comObject != 0) {
-		comObject->Release();
-		comObject = 0;
-	}
+    if(comObject != 0) {
+        comObject->Release();
+        comObject = 0;
+    }
 }
 
 #ifndef GET_X_LPARAM
@@ -82,3 +93,7 @@ inline void SafeRelease(Interface*& comObject) {
   using namespace MetalBone;
   using namespace MetalBone::ThirdParty::Gallant;
 #endif
+
+#define MB_DISABLE_COPY(TypeName) \
+    TypeName(const TypeName&);             \
+    const TypeName& operator=(const TypeName&)
