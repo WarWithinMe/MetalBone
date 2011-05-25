@@ -1,29 +1,29 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="ExternMB">
-      <UniqueIdentifier>{39b0ffc0-a215-4d25-bf88-afa87e3b6fbf}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ExternMB\Header">
-      <UniqueIdentifier>{4d223a74-f596-4850-9f2b-7c2ca5a7f6ee}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ExternMB\Header\3rd">
-      <UniqueIdentifier>{0030f3e8-ecd3-4125-a448-08f6dced1475}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ExternMB\Source">
-      <UniqueIdentifier>{f3a7360a-6cdf-4a44-971f-04ffb971917a}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="ExternMB\Source\3rd">
-      <UniqueIdentifier>{8cd6d2ac-b6dc-4529-8a34-fc7f642bcdcc}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source">
       <UniqueIdentifier>{ca25f9d5-9117-4705-a5db-ad78064acc8c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ExternMB">
+      <UniqueIdentifier>{aff6af1c-403a-4891-8609-0f89786d6a99}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ExternMB\Header">
+      <UniqueIdentifier>{393a4326-f16a-4f06-81f5-6e997c2c81dd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ExternMB\Header\3rd">
+      <UniqueIdentifier>{132b85d3-a80e-468f-9645-c8ad82812d3e}</UniqueIdentifier>
+    </Filter>
     <Filter Include="ExternMB\Header\private">
-      <UniqueIdentifier>{026bdfa2-8681-4785-bdd4-f6698a0ab325}</UniqueIdentifier>
+      <UniqueIdentifier>{0d27c305-e9f9-4635-af10-f1276625d8df}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ExternMB\Source">
+      <UniqueIdentifier>{235bf069-c3f5-4aa3-be4d-00afc93d2c7d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ExternMB\Source\3rd">
+      <UniqueIdentifier>{9db022d7-e9c9-4a8b-9cf7-15ab46f43ebb}</UniqueIdentifier>
     </Filter>
     <Filter Include="ExternMB\Source\private">
-      <UniqueIdentifier>{ffc2e337-69bc-48ee-a899-172c6226cb1d}</UniqueIdentifier>
+      <UniqueIdentifier>{b8c406a3-ec90-4c61-b74c-81c10af17d97}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -34,6 +34,9 @@
       <Filter>ExternMB\Source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\MBGlobal.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MCommonWidgets.cpp">
       <Filter>ExternMB\Source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\MRegion.cpp">
@@ -48,27 +51,27 @@
     <ClCompile Include="..\..\MWidget.cpp">
       <Filter>ExternMB\Source</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\private\CSSParser.cpp">
-      <Filter>ExternMB\Source\private</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\3rd\XUnzip.cpp">
       <Filter>ExternMB\Source\3rd</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\MCommonWidgets.cpp">
-      <Filter>ExternMB\Source</Filter>
+    <ClCompile Include="..\..\private\CSSParser.cpp">
+      <Filter>ExternMB\Source\private</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\private\MD2DPaintContextData.cpp">
+      <Filter>ExternMB\Source\private</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\MApplication.h">
       <Filter>ExternMB\Header</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\MWidget.h">
+    <ClInclude Include="..\..\MBGlobal.h">
       <Filter>ExternMB\Header</Filter>
     </ClInclude>
     <ClInclude Include="..\..\mb_switch.h">
       <Filter>ExternMB\Header</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\MBGlobal.h">
+    <ClInclude Include="..\..\MCommonWidgets.h">
       <Filter>ExternMB\Header</Filter>
     </ClInclude>
     <ClInclude Include="..\..\MEvent.h">
@@ -83,16 +86,25 @@
     <ClInclude Include="..\..\MStyleSheet.h">
       <Filter>ExternMB\Header</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\MUtils.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MWidget.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MD2DPaintContext.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\3rd\ContainersInl.h">
+      <Filter>ExternMB\Header\3rd</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\3rd\Delegate.h">
       <Filter>ExternMB\Header\3rd</Filter>
     </ClInclude>
     <ClInclude Include="..\..\3rd\Signal.h">
       <Filter>ExternMB\Header\3rd</Filter>
     </ClInclude>
     <ClInclude Include="..\..\3rd\XUnzip.h">
-      <Filter>ExternMB\Header\3rd</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\3rd\Delegate.h">
       <Filter>ExternMB\Header\3rd</Filter>
     </ClInclude>
     <ClInclude Include="..\..\private\CSSParser.h">
@@ -104,11 +116,8 @@
     <ClInclude Include="..\..\private\MWidget_p.h">
       <Filter>ExternMB\Header\private</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\MUtils.h">
-      <Filter>ExternMB\Header</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\MCommonWidgets.h">
-      <Filter>ExternMB\Header</Filter>
+    <ClInclude Include="..\..\private\MD2DPaintContextData.h">
+      <Filter>ExternMB\Header\private</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

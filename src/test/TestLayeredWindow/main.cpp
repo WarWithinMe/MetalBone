@@ -30,19 +30,19 @@ class NewWidget : public MWidget
 };
 class ChildWidget : public NewWidget
 {
-	virtual void doStyleSheetDraw(ID2D1RenderTarget* rt,const MRect& widgetRectInRT, const MRect& clipRectInRT)
+	virtual void doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT)
 	{
 		std::wstring text = L"Î¢ÈíÑÅºÚ";
-		mApp->getStyleSheet()->draw(this,rt,widgetRectInRT,clipRectInRT,text);
+		mApp->getStyleSheet()->draw(this,widgetRectInRT,clipRectInRT,text);
 	}
 };
 class CheckBox    : public NewWidget {};
 class Button      : public NewWidget
 {
-	virtual void doStyleSheetDraw(ID2D1RenderTarget* rt,const MRect& widgetRectInRT, const MRect& clipRectInRT)
+	virtual void doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT)
 	{
 		std::wstring text = L"Î¢ÈíÑÅºÚ";
-		mApp->getStyleSheet()->draw(this,rt,widgetRectInRT,clipRectInRT,text);
+		mApp->getStyleSheet()->draw(this,widgetRectInRT,clipRectInRT,text);
 	}
 };
 
@@ -167,7 +167,7 @@ void TestWidgetController::createWidgets()
 	mainWindow2->setGeometry(200,200,500,500);
 	mainWindow2->setAttributes(WA_DeleteOnClose);
 	mainWindow2->setWindowFlags(WF_AllowTransparency | WF_MinimizeButton);
-// 	mainWindow2->show();
+	mainWindow2->show();
 
 	MWidget* tRoleWidget = new MWidget();
 	tRoleWidget->setParent(mainWindow);

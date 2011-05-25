@@ -26,8 +26,7 @@ namespace MetalBone
 
         protected:
             virtual void mouseReleaseEvent(MMouseEvent*);
-            virtual void doStyleSheetDraw(ID2D1RenderTarget*,
-                const MRect& widgetRectInRT, const MRect& clipRectInRT);
+            virtual void doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT);
 
         private:
             std::wstring s_text;

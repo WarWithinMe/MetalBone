@@ -12,7 +12,7 @@ namespace MetalBone
 			public:
 				void setText(const std::wstring&);
 			protected:
-				void doStyleSheetDraw(ID2D1RenderTarget*, const MRect&,const MRect&);
+				void doStyleSheetDraw(const MRect&,const MRect&);
 			private:
 				std::wstring text;
 		};

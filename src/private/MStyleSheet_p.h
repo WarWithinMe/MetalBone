@@ -1,5 +1,6 @@
 #pragma once
 #include "CSSParser.h"
+#include "MD2DPaintContext.h"
 
 #include <map>
 #include <d2d1.h>
@@ -9,91 +10,6 @@ using namespace std::tr1;
 
 namespace MetalBone
 {
-    enum BorderImagePortion
-    {
-        TopCenter = 0 ,
-        CenterLeft    ,
-        Center        ,
-        CenterRight   ,
-        BottomCenter  ,
-        Conner
-    };
-
-    struct NewBrushInfo
-    {
-        unsigned int frameCount;
-    };
-
-    struct BrushHandle
-    {
-        enum  Type { Unknown, Solid, Gradient, Bitmap };
-
-        void** brushPosition;
-        Type   type;
-
-        inline BrushHandle();
-        inline BrushHandle(Type,void**);
-        inline BrushHandle(const BrushHandle&);
-
-        inline const BrushHandle& operator=(const BrushHandle&);
-
-        // Get the recently created brush info.
-        inline static const NewBrushInfo& getNewBrushInfo();
-
-        // Never call Release() on the returned ID2D1Brush,
-        // Because it will free the brush. 
-        inline operator ID2D1Brush*() const;
-        inline ID2D1Brush* getBrush() const;
-
-        ID2D1BitmapBrush* getBorderPotion(BorderImagePortion, const MRect& widths);
-    };
-
-    class D2D1BrushPool
-    {
-        public:
-            D2D1BrushPool ();
-            ~D2D1BrushPool();
-
-            BrushHandle getSolidBrush (MColor);
-            BrushHandle getBitmapBrush(const wstring&);
-
-            void removeCache();
-
-            // Sets the renderTarget, so that we can use it to 
-            // create brushes.
-            inline void static setWorkingRT(ID2D1RenderTarget*);
-
-        private:
-            struct PortionBrushes
-            {
-                PortionBrushes () { memset(b,0,sizeof(ID2D1BitmapBrush*) * 5); }
-                ~PortionBrushes() { for(int i =0; i<5; ++i) SafeRelease(b[i]); }
-                ID2D1BitmapBrush* b[5];
-            };
-
-            typedef unordered_map<void**,  MColor>                     SolidColorMap;
-            typedef unordered_map<void**,  wstring>                    BitmapPathMap;
-            typedef unordered_map<MColor,  ID2D1SolidColorBrush*>      SolidBrushMap;
-            typedef unordered_map<wstring, ID2D1BitmapBrush*>          BitmapBrushMap;
-            typedef unordered_map<ID2D1BitmapBrush*, PortionBrushes>   PortionBrushMap;
-
-            SolidBrushMap   solidBrushCache;
-            SolidColorMap   solidColorMap;
-            BitmapPathMap   bitmapPathMap;
-            BitmapBrushMap  bitmapBrushCache;
-            PortionBrushMap biPortionCache;
-
-            NewBrushInfo    newBrushInfo; // Store the recently created brush infomation.
-
-            void createBrush(const BrushHandle*);
-            void createBorderImageBrush(const BrushHandle*, const MRect&);
-
-            static ID2D1RenderTarget* workingRT;
-            static D2D1BrushPool*     instance;
-
-            friend struct BrushHandle;
-    };
-
     namespace CSS
     { 
         enum   PropertyType;
@@ -110,15 +26,11 @@ namespace MetalBone
             MSSSPrivate ();
             ~MSSSPrivate();
 
-            inline static unsigned int   gdiRenderMaxFontSize();
-            inline static D2D1BrushPool& getBrushPool();
-
         private:
             void setAppSS(const wstring&);
             void setWidgetSS(MWidget*, const wstring&);
             void clearRRCacheRecursively(MWidget*);
-            void discardResource(ID2D1RenderTarget* = 0);
-            void draw(MWidget*, ID2D1RenderTarget*, const MRect&, const MRect&, const wstring&, int);
+            void draw(MWidget*, const MRect&, const MRect&, const wstring&, int);
             void polish(MWidget*);
 
             inline void removeCache(MWidget*);
@@ -176,13 +88,11 @@ namespace MetalBone
             QuerierStyleRuleMap  querierStyleRuleCache;
             QuerierRenderRuleMap querierRenderRuleCache;
             StyleSheet*          appStyleSheet; // Application specific StyleSheets
-            D2D1BrushPool        brushPool;
             RenderRuleMap        renderRuleCollection;
             MTimer               aniBGTimer;
             AniWidgetIndexMap    widgetAniBGIndexMap;
 
             static MSSSPrivate* instance;
-            static unsigned int maxGdiFontPtSize;
 
             friend class MStyleSheetStyle;
     };
@@ -206,7 +116,7 @@ namespace MetalBone
             // We remember the brush's pointer, so that if the brush is recreated,
             // we can recheck the background property again. But if a brush is recreated
             // at the same position, we won't know.
-            BrushHandle    brush;
+            D2DBrushHandle brush;
             ID2D1Brush*    checkedBrush;
             unsigned int   x, y, width, height;
             unsigned int   userWidth, userHeight;
@@ -218,9 +128,8 @@ namespace MetalBone
         struct BorderImageRenderObject
         {
             inline BorderImageRenderObject();
-            unsigned int values;
-            BrushHandle  brush;
-            MRect        widths;
+            D2DBrushHandle brush;
+            unsigned int   values;
         };
 
         struct BorderRenderObject
@@ -236,10 +145,10 @@ namespace MetalBone
         {
             inline SimpleBorderRenderObject();
 
-            unsigned int width;
-            ValueType    style;
-            BrushHandle  brush;
-            MColor       color;
+            D2DBrushHandle brush;
+            unsigned int   width;
+            ValueType      style;
+            bool           isColorTransparent;
 
             void getBorderWidth(MRect&) const;
             bool isVisible()            const;
@@ -254,21 +163,18 @@ namespace MetalBone
         {
             ComplexBorderRenderObject();
 
-            D2D1_RECT_U  styles;
-            D2D1_RECT_U  widths;
-            unsigned int radiuses[4]; // TL, TR, BL, BR
-            MColor       colors[4];   // T, R, B, L
-            BrushHandle  brushes[4];  // T, R, B, L
-            bool         uniform;
+            D2DBrushHandle brushes[4];  // T, R, B, L
+            RectU          styles;
+            RectU          widths;
+            unsigned int   radiuses[4]; // TL, TR, BL, BR
+            bool           uniform;
+            bool           isTransparent;
 
             void getBorderWidth(MRect&) const;
             bool isVisible()            const;
-            void checkUniform();
 
             ID2D1Geometry* createGeometry(const D2D1_RECT_F&);
             void draw(ID2D1RenderTarget*,ID2D1Geometry*,const D2D1_RECT_F&);
-
-            void setColors(const CssValueArray&,size_t startIndex,size_t endIndexPlus);
         };
 
         // TextRenderObject is intended to use GDI to render text,
@@ -304,24 +210,24 @@ namespace MetalBone
             inline RenderRuleData();
             ~RenderRuleData();
 
-            void init(MSSSPrivate::DeclMap&);
-            // Return true if we changed the widget's size
-            bool setGeometry(MWidget*);
-            void draw(ID2D1RenderTarget*,const MRect&,const MRect&,const wstring&,unsigned int);
-
-            MSize getStringSize(const std::wstring&, int maxWidth);
-            void  getContentMargin(MRect&);
-
-            bool  isBGSingleLoop();
-            inline unsigned int getTotalFrameCount();
-            inline bool         hasMargin()  const;
-            inline bool         hasPadding() const;
+            void draw(MD2DPaintContext&,const MRect&,const MRect&,const wstring&,unsigned int);
 
             void drawBackgrounds(const MRect& widgetRect, const MRect& clipRect, ID2D1Geometry*, unsigned int frameIndex);
-            void drawBorderImage(const MRect& widgetRect, const MRect& clipRect);
             void drawGdiText    (const D2D1_RECT_F& borderRect, const MRect& clipRect, const wstring& text);
             void drawD2DText    (const D2D1_RECT_F& borderRect, const wstring& text);
 
+            // Return true if we changed the widget's size
+            bool  setGeometry(MWidget*);
+            MSize getStringSize(const std::wstring&, int maxWidth);
+            MRect getContentMargin();
+
+            inline bool         hasMargin()          const;
+            inline bool         hasPadding()         const;
+            inline bool         isBGSingleLoop()     const;
+            inline unsigned int getTotalFrameCount() const;
+
+            // Initialization
+            void init(MSSSPrivate::DeclMap&);
             BackgroundRenderObject* createBackgroundRO(CssValueArray&);
             void createBorderImageRO(CssValueArray&);
             void setSimpleBorderRO  (MSSSPrivate::DeclMap::iterator&, MSSSPrivate::DeclMap::iterator);
@@ -333,51 +239,39 @@ namespace MetalBone
             GeometryRenderObject*           geoRO;
             TextRenderObject*               textRO;
             MCursor*                        cursor;
+            RectU*                          margin;
+            RectU*                          padding;
 
-            D2D1_RECT_U* margin;
-            D2D1_RECT_U* padding;
             int    refCount;
             int    totalFrameCount;
             bool   opaqueBackground;
 
-            // Since we only deal with GUI in the main thread,
-            // we can safely store the renderTarget in a static member for later use.
             static ID2D1RenderTarget* workingRT;
         };
     }
+
+
+
 
     inline RenderRuleData::RenderRuleData():
         borderImageRO(0), borderRO(0), geoRO(0),
         textRO(0), cursor(0), margin(0), padding(0),
         refCount(1), totalFrameCount(1), opaqueBackground(false){}
-    inline unsigned int RenderRuleData::getTotalFrameCount()
+    inline unsigned int RenderRuleData::getTotalFrameCount() const
         { return totalFrameCount; }
     inline bool RenderRuleData::hasMargin() const
         { return margin != 0; }
     inline bool RenderRuleData::hasPadding() const
         { return padding != 0; }
-
-    inline BrushHandle::BrushHandle():type(Unknown),brushPosition(0){}
-    inline BrushHandle::BrushHandle(Type t, void** p):
-        type(t),brushPosition(p){}
-    inline BrushHandle::BrushHandle(const BrushHandle& rhs):
-        type(rhs.type),brushPosition(rhs.brushPosition){}
-    inline const BrushHandle& BrushHandle::operator=(const BrushHandle& rhs) 
-        { type = rhs.type; brushPosition = rhs.brushPosition; return *this; }
-    inline const NewBrushInfo& BrushHandle::getNewBrushInfo()
-        { return D2D1BrushPool::instance->newBrushInfo; }
-    inline BrushHandle::operator ID2D1Brush*() const
+    inline bool RenderRuleData::isBGSingleLoop() const
     {
-        if(*brushPosition == 0) D2D1BrushPool::instance->createBrush(this);
-        return reinterpret_cast<ID2D1Brush*>(*brushPosition);
+        for(unsigned int i = 0; i < backgroundROs.size(); ++i)
+        {
+            if(backgroundROs.at(i)->infiniteLoop)
+                return false;
+        }
+        return true;
     }
-    inline ID2D1Brush* BrushHandle::getBrush() const
-    {
-        if(*brushPosition == 0) D2D1BrushPool::instance->createBrush(this);
-        return reinterpret_cast<ID2D1Brush*>(*brushPosition);
-    }
-    inline void D2D1BrushPool::setWorkingRT(ID2D1RenderTarget* rt)
-        { workingRT = rt; }
 
     inline RenderRule MSSSPrivate::getRenderRule(MWidget* w, unsigned int p)
         { return getRenderRule(w,p,widgetRenderRuleCache,widgetStyleRuleCache); }
@@ -397,12 +291,8 @@ namespace MetalBone
         querierStyleRuleCache.erase(q);
         querierRenderRuleCache.erase(q);
     }
-    inline unsigned int MSSSPrivate::gdiRenderMaxFontSize()
-        { return maxGdiFontPtSize; }
-    inline D2D1BrushPool& MSSSPrivate::getBrushPool()
-        { return instance->brushPool; }
     inline BorderImageRenderObject::BorderImageRenderObject():
-        values(Value_Unknown),widths(){}
+        values(Value_Unknown){}
     inline GeometryRenderObject::GeometryRenderObject():
         x(INT_MAX),y(INT_MAX), 
         width(-1), height(-1), minWidth(-1),
@@ -425,5 +315,5 @@ namespace MetalBone
     int  SimpleBorderRenderObject::getWidth() const
         { return width; }
     bool SimpleBorderRenderObject::isVisible() const
-        { return !(width == 0 || color.isTransparent()); }
+        { return !(width == 0 || isColorTransparent); }
 }

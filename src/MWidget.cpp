@@ -3,8 +3,10 @@
 #include "MStyleSheet.h"
 #include "MResource.h"
 #include "MRegion.h"
+#include "MD2DPaintContext.h"
 #include "private/MApp_p.h"
 #include "private/MWidget_p.h"
+#include "private/MD2DPaintContextData.h"
 
 #include <list>
 #include <set>
@@ -16,6 +18,14 @@
 
 namespace MetalBone
 {
+    WindowExtras::~WindowExtras()
+    {
+        delete m_pcData;
+        if(m_dummyHandle != NULL)
+            ::DestroyWindow(m_dummyHandle);
+        ::DestroyWindow(m_wndHandle);
+    }
+
 	// ========== MWidget ==========
 	MWidget::MWidget(MWidget* parent)
 		: m_parent(parent),
@@ -158,18 +168,6 @@ namespace MetalBone
 		}
 	}
 
-	ID2D1RenderTarget* MWidget::getRenderTarget() 
-	{
-		if(this == m_topLevelParent) {
-			if(m_windowExtras == 0) return 0;
-
-			return m_windowExtras->m_rtHook ? m_windowExtras->m_rtHook :
-				m_windowExtras->m_renderTarget;
-		} else {
-			return m_topLevelParent->getRenderTarget();
-		}
-	}
-
 	void MWidget::closeWindow() 
 	{
 		if(hasWindow())
@@ -270,7 +268,8 @@ namespace MetalBone
 			m_windowExtras->m_dummyHandle = NULL;
 		}
 
-		SafeRelease(m_windowExtras->m_renderTarget);
+        delete m_windowExtras->m_pcData;
+        m_windowExtras->m_pcData = 0;
 
 		// We destroy the window first, then remove it from the
 		// TLW collection, so that MApplication won't exit even if
@@ -333,7 +332,7 @@ namespace MetalBone
 				0,0,0,0,SWP_NOMOVE|SWP_NOZORDER|SWP_NOSIZE|SWP_FRAMECHANGED);
 		}
 
-		createRenderTarget();
+        m_windowExtras->m_pcData = new MD2DPaintContextData(this);
 	}
 
 	void MWidget::setTopLevelParentRecursively(MWidget* w)
@@ -410,7 +409,8 @@ namespace MetalBone
 		{
 			::DestroyWindow(m_windowExtras->m_wndHandle);
 			m_windowExtras->m_wndHandle = NULL;
-			SafeRelease(m_windowExtras->m_renderTarget);
+            delete m_windowExtras->m_pcData;
+            m_windowExtras->m_pcData = 0;
 			createWnd();
 
 			if(!isHidden())
@@ -676,8 +676,8 @@ namespace MetalBone
 
 			::MoveWindow(m_windowExtras->m_wndHandle, x, y, rect.width(), rect.height(), true);
 
-			if(m_windowExtras->m_renderTarget)
-				m_windowExtras->m_renderTarget->Resize(D2D1::SizeU(vwidth, vheight));
+            if(m_windowExtras->m_pcData)
+                m_windowExtras->m_pcData->resize(vwidth,vheight);
 
 		} else if(!isHidden())
 			repaint(); // Update the new rect.
@@ -747,25 +747,6 @@ namespace MetalBone
 		}
 	}
 
-	void MWidget::createRenderTarget()
-	{
-		M_ASSERT(m_windowExtras != 0);
-		mWarning(m_windowExtras->m_renderTarget != 0,
-			L"We don't remember to release the created renderTarget");
-		SafeRelease(m_windowExtras->m_renderTarget);
-
-		D2D1_RENDER_TARGET_PROPERTIES p = D2D1::RenderTargetProperties();
-		p.usage  = D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE;
-		p.type   = mApp->isHardwareAccerated() ? 
-				D2D1_RENDER_TARGET_TYPE_HARDWARE : D2D1_RENDER_TARGET_TYPE_SOFTWARE;
-		p.pixelFormat.format    = DXGI_FORMAT_B8G8R8A8_UNORM;
-		p.pixelFormat.alphaMode = D2D1_ALPHA_MODE_PREMULTIPLIED;
-
-		mApp->getD2D1Factory()->CreateHwndRenderTarget(p,
-			D2D1::HwndRenderTargetProperties(m_windowExtras->m_wndHandle,D2D1::SizeU(width,height)),
-			&m_windowExtras->m_renderTarget);
-	}
-
 	// Windows has told us that we can now repaint the window.
 	void MWidget::drawWindow()
 	{
@@ -775,8 +756,9 @@ namespace MetalBone
 		bool fullWindowUpdate = false;
 		MRect windowUpdateRect(width,height,0,0);
 
-		ID2D1RenderTarget* rt = getRenderTarget();
-		rt->BeginDraw();
+        MD2DPaintContext context(this);
+        ID2D1RenderTarget* rt = context.getRenderTarget();
+        m_windowExtras->m_pcData->beginDraw();
 
 		// Calculate which widget needs to be redraw.
 		DirtyChildrenHash& childUpdatedHash  = m_windowExtras->childUpdatedHash;
@@ -968,7 +950,7 @@ namespace MetalBone
 			}
 		}
 
-		HRESULT result;
+		bool result;
 		int retryTimes = 3;
 		do
 		{
@@ -977,7 +959,7 @@ namespace MetalBone
 			{
 				ID2D1GdiInteropRenderTarget* gdiRT;
 				HDC dc;
-				m_windowExtras->m_renderTarget->QueryInterface(&gdiRT);
+                rt->QueryInterface(&gdiRT);
 				gdiRT->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&dc);
 
 				BLENDFUNCTION blend = {AC_SRC_OVER,0,255,AC_SRC_ALPHA};
@@ -997,28 +979,22 @@ namespace MetalBone
 				gdiRT->ReleaseDC(0);
 				gdiRT->Release();
 			}
-			result = getRenderTarget()->EndDraw();
-
-			if(result == D2DERR_RECREATE_TARGET)
-			{
-				SafeRelease(m_windowExtras->m_renderTarget);
-				createRenderTarget();
-				mApp->getStyleSheet()->discardResource(m_windowExtras->m_renderTarget);
-			}
-		} while (FAILED(result) && (--retryTimes >= 0));
+			result = m_windowExtras->m_pcData->endDraw();
+		} while (!result && (--retryTimes >= 0));
 
 		m_windowExtras->clearUpdateQueue();
 	}
 
-	void MWidget::doStyleSheetDraw(ID2D1RenderTarget* rt,const MRect& wr, const MRect& cr)
-		{ mApp->getStyleSheet()->draw(this,rt,wr,cr); }
+	void MWidget::doStyleSheetDraw(const MRect& wr, const MRect& cr)
+		{ mApp->getStyleSheet()->draw(this,wr,cr); }
 
 	void MWidget::draw(int xOffsetInWnd, int yOffsetInWnd, bool drawMySelf)
 	{
 		WindowExtras* tlpWE = m_topLevelParent->m_windowExtras;
 		if(drawMySelf)
 		{
-			ID2D1RenderTarget* rt = getRenderTarget();
+            MD2DPaintContext context(this);
+            ID2D1RenderTarget* rt = context.getRenderTarget();
 			MRegion& updateRegion = tlpWE->passiveUpdateWidgets[this];
 
 			// Draw the background with CSS
@@ -1033,7 +1009,7 @@ namespace MetalBone
 					rt->PushAxisAlignedClip(clipRect, D2D1_ANTIALIAS_MODE_ALIASED);
 					MRect widgetRect(xOffsetInWnd,yOffsetInWnd,
 						xOffsetInWnd+width, yOffsetInWnd+height);
-					doStyleSheetDraw(rt,widgetRect,clipRect);
+					doStyleSheetDraw(widgetRect,clipRect);
 					rt->PopAxisAlignedClip();
 
 					++iter;

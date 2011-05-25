@@ -30,6 +30,6 @@ namespace MetalBone
 
 	unsigned int MButton::getWidgetPseudo(bool markAsLast, unsigned int initP)
 		{ return MWidget::getWidgetPseudo(markAsLast, b_isChecked ? CSS::PC_Checked : 0); }
-	void MButton::doStyleSheetDraw(ID2D1RenderTarget* rt, const MRect& widgetRectInRT, const MRect& clipRectInRT)
-		{ mApp->getStyleSheet()->draw(this,rt,widgetRectInRT,clipRectInRT,s_text); }
+	void MButton::doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT)
+		{ mApp->getStyleSheet()->draw(this,widgetRectInRT,clipRectInRT,s_text); }
 }

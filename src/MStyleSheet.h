@@ -16,6 +16,7 @@ namespace MetalBone
 {
     class MSSSPrivate;
     class MStyleSheetStyle;
+    class MD2DPaintContext;
     class MWidget;
     class MCursor;
     namespace CSS
@@ -34,6 +35,13 @@ namespace MetalBone
             knownPseudoCount = 20
         };
 
+        enum TextRenderer
+        {
+            Gdi,
+            Direct2D,
+            AutoDetermine
+        };
+
         struct RenderRuleData;
         class METALBONE_EXPORT RenderRule
         {
@@ -45,18 +53,6 @@ namespace MetalBone
                 RenderRule(const RenderRule& d);
                 ~RenderRule();
 
-                inline bool isValid() const;
-                bool opaqueBackground() const;
-
-                void draw(ID2D1RenderTarget*,
-                    const MRect& widgetRectInRT,
-                    const MRect& clipRectInRT,
-                    const std::wstring& text = std::wstring(),
-                    unsigned int frameIndex = 0);
-
-                MSize getStringSize(const std::wstring&, int maxWidth = INT_MAX);
-                void getContentMargin(MRect&);
-
                 enum Geometry
                 {
                     RRG_X,          RRG_Y,
@@ -64,26 +60,46 @@ namespace MetalBone
                     RRG_MinWidth,   RRG_MinHeight,
                     RRG_MaxWidth,   RRG_MaxHeight
                 };
+
                 // If x or y not exist, return INT_MAX.
                 // If others not exist, return -1.
-                int getGeometry(Geometry);
-
+                int      getGeometry(Geometry);
+                MSize    getStringSize(const std::wstring&, int maxWidth = INT_MAX);
+                MRect    getContentMargin();
                 MCursor* getCursor();
+
+                bool opaqueBackground() const;
+
+                void draw(MD2DPaintContext& context,
+                    const MRect& widgetRectInRT,
+                    const MRect& clipRectInRT,
+                    const std::wstring& text = std::wstring(),
+                    unsigned int frameIndex = 0);
 
                 inline bool operator==(const RenderRule&) const;
                 inline bool operator!=(const RenderRule&) const;
                 const RenderRule& operator=(const RenderRule& other);
                 inline operator bool() const;
+                inline bool isValid() const;
 
+                // If TextRenderer is AutoDetermine, we use GDI to render text when the font size is
+                // no bigger than maxGdiFontPtSize.
+                static inline void setTextRenderer(TextRenderer, unsigned int maxGdiFontPtSize = 16);
+                static inline TextRenderer getTextRenderer();
+                static inline unsigned int getMaxGdiFontPtSize();
 
             private:
                 void init();
                 inline RenderRuleData* operator->();
                 RenderRuleData* data;
 
+                static unsigned int maxGdiFontPtSize;
+                static TextRenderer textRenderer;
+
             friend class MSSSPrivate;
             friend class MStyleSheetStyle;
         };
+
         class METALBONE_EXPORT RenderRuleQuerier
         {
             public:
@@ -122,22 +138,11 @@ namespace MetalBone
     class METALBONE_EXPORT MStyleSheetStyle
     {
         public:
-            enum TextRenderer
-            {
-                Gdi,
-                Direct2D,
-                AutoDetermine
-            };
-
             void setAppSS(const std::wstring& css);
             void setWidgetSS(MWidget* w, const std::wstring& css);
             void polish(MWidget* w);
 
-            // 1.Since the brush is shared among every render rule. It's necessary to ensure
-            // every ID2D1RenderTarget (rt) passed in can use resources created by
-            // the other ID2D1RenderTarget.
-            // 2.clipRect should be equal to or inside the widgetRect.
-            void draw(MWidget* w, ID2D1RenderTarget* rt,
+            void draw(MWidget* w,
                 const MRect& widgetRectInRT,
                 const MRect& clipRectInRT,
                 const std::wstring& text = std::wstring(),
@@ -152,19 +157,11 @@ namespace MetalBone
             // If the MWidget needs to update, this function calls MWidget::repaint();
             void updateWidgetAppearance(MWidget*);
 
-            // If TextRenderer is AutoDetermine, we use GDI to render text when the font size is
-            // no bigger than maxGdiFontPtSize.
-            static void setTextRenderer(TextRenderer, unsigned int maxGdiFontPtSize = 16);
-            static inline TextRenderer getTextRenderer();
-
-            void discardResource(ID2D1RenderTarget*);
-
             MStyleSheetStyle();
             ~MStyleSheetStyle();
 
         private:
             MSSSPrivate* mImpl;
-            static TextRenderer textRenderer;
     };
 
 
@@ -197,6 +194,13 @@ namespace MetalBone
         { return mobjectName; }
     inline const std::wstring& CSS::RenderRuleQuerier::className() const
         { return mclassName; }
-    MStyleSheetStyle::TextRenderer MStyleSheetStyle::getTextRenderer()
+    CSS::TextRenderer CSS::RenderRule::getTextRenderer()
         { return textRenderer; }
+    void CSS::RenderRule::setTextRenderer(TextRenderer tr, unsigned int maxSize)
+    {
+        textRenderer = tr;
+        maxGdiFontPtSize = maxSize;
+    }
+    unsigned int CSS::RenderRule::getMaxGdiFontPtSize()
+        { return maxGdiFontPtSize; }
 } // namespace MetalBone

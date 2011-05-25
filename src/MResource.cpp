@@ -4,6 +4,9 @@
 #include "MWidget.h"
 #include "3rd/XUnzip.h"
 
+#include "MD2DPaintContext.h"
+#include "private/MD2DPaintContextData.h"
+
 #define MAX_TOOLTIP_WIDTH 350
 #define TRAY_ICON_MESSAGE (WM_USER+100)
 
@@ -222,12 +225,14 @@ namespace MetalBone
 			inline bool hasRenderRule();
 			inline void hide();
 			void show(const std::wstring&, long x, long y);
+            void createRenderTarget();
 
 		private:
 			bool isShown;
 			HWND winHandle;
 			ID2D1HwndRenderTarget* rt;
 			CSS::RenderRuleQuerier rrQuerier;
+            MD2DPaintContextData* contextData;
 
 			long width;
 			long height;
@@ -242,18 +247,12 @@ namespace MetalBone
 			gMWidgetClassName, L"", WS_POPUP,
 			0,0,1,1, NULL, NULL, mApp->getAppHandle(), NULL);
 
-		D2D1_RENDER_TARGET_PROPERTIES p = D2D1::RenderTargetProperties();
-		p.usage  = D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE;
-		p.pixelFormat.format    = DXGI_FORMAT_B8G8R8A8_UNORM;
-		p.pixelFormat.alphaMode = D2D1_ALPHA_MODE_PREMULTIPLIED;
-		p.type   = mApp->isHardwareAccerated() ? 
-			D2D1_RENDER_TARGET_TYPE_HARDWARE : D2D1_RENDER_TARGET_TYPE_SOFTWARE;
-		mApp->getD2D1Factory()->CreateHwndRenderTarget(p,
-			D2D1::HwndRenderTargetProperties(winHandle,D2D1::SizeU(width,height)), &rt);
+        createRenderTarget();
+        contextData = new MD2DPaintContextData(rt);
 	}
 	inline ToolTipWidget::~ToolTipWidget()
 	{
-		SafeRelease(rt);
+        delete contextData;
 		::DestroyWindow(winHandle);
 	}
 	inline bool ToolTipWidget::hasRenderRule()
@@ -263,6 +262,19 @@ namespace MetalBone
 		::ShowWindow(winHandle, SW_HIDE);
 		isShown = false;
 	}
+
+    void ToolTipWidget::createRenderTarget()
+    {
+        SafeRelease(rt);
+        D2D1_RENDER_TARGET_PROPERTIES p = D2D1::RenderTargetProperties();
+        p.usage  = D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE;
+        p.pixelFormat.format    = DXGI_FORMAT_B8G8R8A8_UNORM;
+        p.pixelFormat.alphaMode = D2D1_ALPHA_MODE_PREMULTIPLIED;
+        p.type   = mApp->isHardwareAccerated() ? 
+            D2D1_RENDER_TARGET_TYPE_HARDWARE : D2D1_RENDER_TARGET_TYPE_SOFTWARE;
+        mApp->getD2D1Factory()->CreateHwndRenderTarget(p,
+            D2D1::HwndRenderTargetProperties(winHandle,D2D1::SizeU(width,height)), &rt);
+    }
 
 	void ToolTipWidget::show(const std::wstring& tip, long x, long y)
 	{
@@ -276,8 +288,7 @@ namespace MetalBone
 		CSS::RenderRule rule = mApp->getStyleSheet()->getRenderRule(&rrQuerier);
 
 		MSize size = rule.getStringSize(tip, MAX_TOOLTIP_WIDTH);
-		MRect marginRect;
-		rule.getContentMargin(marginRect);
+		MRect marginRect = rule.getContentMargin();
 		size.cx += (marginRect.left + marginRect.right);
 		size.cy += (marginRect.top  + marginRect.bottom);
 
@@ -293,9 +304,10 @@ namespace MetalBone
 		HDC dc;
 		MRect drawRect(0,0,width,height);
 
-		rt->BeginDraw();
-		rt->Clear();
-		rule.draw(rt, drawRect, drawRect, tip);
+        MD2DPaintContext context(contextData);
+        contextData->beginDraw();
+        rt->Clear();
+		rule.draw(context, drawRect, drawRect, tip);
 
 		rt->QueryInterface(&gdiRT);
 		gdiRT->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&dc);
@@ -320,7 +332,8 @@ namespace MetalBone
 
 		gdiRT->ReleaseDC(0);
 		gdiRT->Release();
-		rt->EndDraw();
+        if(rt->EndDraw() == D2DERR_RECREATE_TARGET)
+            createRenderTarget();
 	}
 
 	static ToolTipWidget* toolTipWidget = 0;

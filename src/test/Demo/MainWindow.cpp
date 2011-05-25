@@ -13,8 +13,8 @@ namespace Demo {
 		repaint();
 	}
 
-	void SALabel::doStyleSheetDraw(ID2D1RenderTarget* rt, const MRect& widgetRectInRT, const MRect& clipRectInRT)
-		{ mApp->getStyleSheet()->draw(this,rt,widgetRectInRT,clipRectInRT,text); }
+	void SALabel::doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT)
+		{ mApp->getStyleSheet()->draw(this,widgetRectInRT,clipRectInRT,text); }
 
 	SAMainWindow::SAMainWindow()
 	{

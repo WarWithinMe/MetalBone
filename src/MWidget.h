@@ -153,7 +153,6 @@ namespace MetalBone
             // rect(5,5,10,10) and rect(30,30,35,35) will results in a rect(5,5,35,35) 
             inline void repaint();
             void repaint(int x, int y, unsigned int width, unsigned int height);
-            ID2D1RenderTarget* getRenderTarget();
 
             // Sets the owner of this Window to the Window contains p.
             // If this widget is not a window, nothing happens.
@@ -256,8 +255,9 @@ namespace MetalBone
             
             virtual void resizeEvent(MResizeEvent*)     {}
 
-            virtual void doStyleSheetDraw(ID2D1RenderTarget*,
-                const MRect& widgetRectInRT, const MRect& clipRectInRT);
+            virtual void recreateResource()             {}
+
+            virtual void doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT);
 
             // When your widget's pseudo state changed, call this function
             // to request a update for your widget (if necessary, i.e. the
@@ -305,7 +305,6 @@ namespace MetalBone
             inline void setWidgetState(unsigned int, bool on);
             inline bool testWidgetState(unsigned int) const;
 
-            void createRenderTarget();
             void destroyWnd();
             void createWnd();
 
@@ -313,6 +312,7 @@ namespace MetalBone
             void draw(int xOffsetInWnd, int yOffsetInWnd, bool drawMySelf);
 
         friend struct MApplicationData;
+        friend class  MD2DPaintContext;
     };
 
 

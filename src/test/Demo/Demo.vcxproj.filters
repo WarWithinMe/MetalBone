@@ -84,6 +84,12 @@
     <ClInclude Include="MainWindow.h">
       <Filter>Header</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\MD2DPaintContext.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\private\MD2DPaintContextData.h">
+      <Filter>ExternMB\Header\private</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\MApplication.cpp">
@@ -118,6 +124,9 @@
     </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\private\MD2DPaintContextData.cpp">
+      <Filter>ExternMB\Source\private</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

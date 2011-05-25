@@ -1,4 +1,5 @@
 #pragma once
+#include "MRegion.h"
 namespace MetalBone
 {
     enum WidgetState
@@ -16,10 +17,11 @@ namespace MetalBone
     typedef std::tr1::unordered_map<MWidget*,MRegion> DrawRegionHash;
     typedef std::tr1::unordered_map<MWidget*,bool>    DirtyChildrenHash;
 
+    class MD2DPaintContextData;
     struct WindowExtras
     {
         inline WindowExtras();
-        inline ~WindowExtras();
+        ~WindowExtras();
 
         DrawRectHash           updateWidgets;
         DrawRegionHash         passiveUpdateWidgets;
@@ -29,8 +31,8 @@ namespace MetalBone
         // We send WM_PAINT messages to that window.
         HWND                   m_wndHandle;
         HWND                   m_dummyHandle;
-        ID2D1HwndRenderTarget* m_renderTarget;
-        ID2D1RenderTarget*     m_rtHook;
+        MD2DPaintContextData*  m_pcData;
+
         MWidget*               focusedWidget;
         MWidget*               widgetUnderMouse;
         MWidget*               currWidgetUnderMouse;
@@ -47,16 +49,9 @@ namespace MetalBone
 
     inline WindowExtras::WindowExtras():
         m_wndHandle(NULL), m_dummyHandle(NULL),
-        m_renderTarget(0), m_rtHook(0), bTrackingMouse(false),
+        m_pcData(0),bTrackingMouse(false),
         widgetUnderMouse(0), currWidgetUnderMouse(0), focusedWidget(0),
         lastMouseX(0), lastMouseY(0){}
-    inline WindowExtras::~WindowExtras()
-    {
-        SafeRelease(m_renderTarget);
-        if(m_dummyHandle != NULL)
-            ::DestroyWindow(m_dummyHandle);
-        ::DestroyWindow(m_wndHandle);
-    }
     inline void WindowExtras::clearUpdateQueue()
     {
         updateWidgets.clear();

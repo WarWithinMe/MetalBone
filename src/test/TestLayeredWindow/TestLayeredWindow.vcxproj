@@ -88,6 +88,7 @@
     <ClCompile Include="..\..\MStyleSheet.cpp" />
     <ClCompile Include="..\..\MWidget.cpp" />
     <ClCompile Include="..\..\private\CSSParser.cpp" />
+    <ClCompile Include="..\..\private\MD2DPaintContextData.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -99,6 +100,7 @@
     <ClInclude Include="..\..\MBGlobal.h" />
     <ClInclude Include="..\..\mb_switch.h" />
     <ClInclude Include="..\..\MCommonWidgets.h" />
+    <ClInclude Include="..\..\MD2DPaintContext.h" />
     <ClInclude Include="..\..\MEvent.h" />
     <ClInclude Include="..\..\MRegion.h" />
     <ClInclude Include="..\..\MResource.h" />
@@ -107,6 +109,7 @@
     <ClInclude Include="..\..\MWidget.h" />
     <ClInclude Include="..\..\private\CSSParser.h" />
     <ClInclude Include="..\..\private\MApp_p.h" />
+    <ClInclude Include="..\..\private\MD2DPaintContextData.h" />
     <ClInclude Include="..\..\private\MWidget_p.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
