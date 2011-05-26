@@ -58,7 +58,7 @@ namespace MetalBone
         public:
             inline D2DImageHandle():pdata(0){}
             inline D2DImageHandle(const D2DImageHandle& rhs):pdata(rhs.pdata){}
-            inline const D2DImageHandle& operator=(const D2DImageHandle& rhs){ pdata = rhs.pdata; }
+            inline const D2DImageHandle& operator=(const D2DImageHandle& rhs){ pdata = rhs.pdata; return *this; }
 
             inline operator ID2D1Bitmap*() const;
             inline ID2D1Bitmap* getImage() const;

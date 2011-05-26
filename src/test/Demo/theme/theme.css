@@ -5,15 +5,6 @@
 	height:435;
 }
 
-#TabItem{
-	color: #FFFFFF;
-}
-
-#TabItem : checked {
-	border-image: url(theme\SATabItemChecked.png) 1 2 1 2;
-	color: #A1E73B;
-}
-
 #SettingWindow #RedTrafficLight {
 	background: url(theme\SAElements.png) no-repeat 0 95 15 15;
 	width: 15;
@@ -79,4 +70,46 @@
 	height:287;
 	x:18;
 	y:96;
+}
+
+#TabBar {
+	x:14;
+	y:28;
+	width:452;
+	height:57;
+}
+
+#TabBar #Tab{
+	color: #FFFFFF;
+	font: 12px Î¢ÈíÑÅºÚ;
+	min-width: 60;
+	height: 57;
+	text-align: center bottom;
+	margin: 2 5 3 5;
+}
+
+#TabBar #Tab : checked{
+	border: none;
+	border-image: url(theme\SATabItemChecked.png) 2;
+	color: #a1e73b;
+}
+
+#TabBar #LeftButton{
+	width: 15;
+	height: 57;
+	background: url(theme\TabLRElements.png) no-repeat 0 0 15 57;
+}
+
+#TabBar #LeftButton : hover{
+	background: url(theme\TabLRElements.png) no-repeat 30 0 15 57;
+}
+
+#TabBar #RightButton{
+	width: 15;
+	height: 57;
+	background: url(theme\TabLRElements.png) no-repeat 15 0 15 57;
+}
+
+#TabBar #RightButton : hover{
+	background: url(theme\TabLRElements.png) no-repeat 45 0 15 57;
 }

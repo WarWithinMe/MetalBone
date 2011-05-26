@@ -188,8 +188,15 @@ namespace MetalBone
             // The widget can be invisible while it's not hidden.
             // The widget is not visible because its parent is not visible,
             // or if during last redraw, the widget doesn't redraw itself.
-            bool isVisible() const;
-            bool isHidden() const;
+            bool isVisible()  const;
+            bool isHidden()   const;
+            bool isDisabled() const;
+
+            // After calling show() on a Window widget, the window is
+            // ensured to be created.
+            void show();
+            void hide();
+            void setEnabled(bool enabled);
 
             // If isWindow() return false, nothing happen.
             void showMaximized();
@@ -198,10 +205,7 @@ namespace MetalBone
             // The window is then closed, and closeEvent() is called.
             void closeWindow();
 
-            // After calling show() on a Window widget, the window is
-            // ensured to be created.
-            void show();
-            void hide();
+
 
             // Raise the widget to the top or lower to the bottom of its parent.
             void raise();

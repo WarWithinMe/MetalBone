@@ -55,7 +55,8 @@ namespace MetalBone
 		while(it != itEnd)
 		{
 			MWidget* child = *(it++);
-			if(child->isHidden() || (ignoreMouse && child->testAttributes(WA_MouseThrough)))
+			if(child->isDisabled() || child->isHidden() ||
+                (ignoreMouse && child->testAttributes(WA_MouseThrough)))
 				continue;
 
 			if(px >= child->x && py >= child->y &&
@@ -91,6 +92,9 @@ namespace MetalBone
 			pseudo |= CSS::PC_Pressed;
 		else if(testWidgetState(MWS_UnderMouse))
 			pseudo |= CSS::PC_Hover;
+
+        if(testWidgetState(MWS_Disabled))
+            pseudo |= CSS::PC_Disabled;
 
 		if(testWidgetState(MWS_Focused))
 			pseudo |= CSS::PC_Focus;
@@ -461,8 +465,28 @@ namespace MetalBone
 		return false;
 	}
 
+    void MWidget::setEnabled(bool enabled)
+    {
+        bool currentDisabled = (m_widgetState & MWS_Disabled) != 0;
+        if(currentDisabled != enabled) return;
+
+        if(enabled)
+        {
+            m_widgetState &= (~MWS_Disabled);
+            updateSSAppearance();
+        } else
+        {
+            unsigned int mask = MWS_UnderMouse | MWS_Focused | MWS_Pressed;
+            m_widgetState &= (~mask);
+            m_widgetState |= MWS_Disabled;
+            updateSSAppearance();
+        }
+    }
+
 	bool MWidget::isHidden() const
 		{ return (m_widgetState & MWS_Hidden) != 0; }
+    bool MWidget::isDisabled() const
+        { return (m_widgetState & MWS_Disabled) != 0; }
 	void MWidget::setStyleSheet(const std::wstring& css)
 		{ mApp->getStyleSheet()->setWidgetSS(this,css); }
 	void MWidget::ensurePolished()
@@ -710,9 +734,6 @@ namespace MetalBone
 		if(ax >= (int)width || ay >= (int)height || right <= 0 || bottom <= 0)
 			return;
 
-		right  = min(right, (int)width);
-		bottom = min(bottom,(int)height);
-
 		// If the widget needs to draw itself, we marks it invisible at this time,
 		// And if it does draw itself during next redrawing. It's visible.
 		m_widgetState &= (~MWS_Visible);
@@ -726,6 +747,9 @@ namespace MetalBone
 			if(parent->isHidden()) return;
 			parent = parent->m_parent;
 		}
+
+        right  = min(right, (int)width);
+        bottom = min(bottom,(int)height);
 		m_topLevelParent->m_windowExtras->addToRepaintMap(this, ax, ay, right, bottom);
 
 		// Tells Windows that we need to update, we don't care the clip region.

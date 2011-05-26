@@ -7,21 +7,6 @@ namespace MetalBone
 {
 	namespace Demo
 	{
-		class SALabel : public MetalBone::MWidget
-		{
-			public:
-				void setText(const std::wstring&);
-			protected:
-				void doStyleSheetDraw(const MRect&,const MRect&);
-			private:
-				std::wstring text;
-		};
-
-		class SATabBar : public MetalBone::MWidget
-		{
-
-		};
-
 		class SAMainWindow : public MetalBone::MWidget
 		{
 			public:
@@ -33,10 +18,10 @@ namespace MetalBone
 				MetalBone::MButton redxButton;
 				MetalBone::MButton closeButton;
 
-				SALabel titleLabel;
-				SALabel statusLabel;
+				MetalBone::MLabel titleLabel;
+				MetalBone::MLabel statusLabel;
 
-				SATabBar tabBar;
+				MetalBone::MTabBar tabBar;
 				MetalBone::MWidget contentWidget;
 				MetalBone::MWidget resizer;
 

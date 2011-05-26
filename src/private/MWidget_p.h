@@ -10,7 +10,8 @@ namespace MetalBone
         MWS_Visible     = 0x8,
         MWS_UnderMouse  = 0x10,
         MWS_Focused     = 0x20,
-        MWS_Pressed     = 0x40
+        MWS_Pressed     = 0x40,
+        MWS_Disabled    = 0x80
     };
 
     typedef std::tr1::unordered_map<MWidget*,MRect>   DrawRectHash;

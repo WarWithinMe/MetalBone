@@ -1,6 +1,12 @@
 #pragma once
 
 #include "MWidget.h"
+#include "MD2DPaintContext.h"
+#include "MResource.h"
+
+// MButton
+// MLabel
+// MTabBar
 
 namespace MetalBone
 {
@@ -33,6 +39,80 @@ namespace MetalBone
             bool         b_checkable;
             bool         b_isChecked;
     };
+
+    class MLabel : public MWidget
+    {
+        public:
+            void setText(const std::wstring& t)
+            {
+                if(text == t) return;
+                text = t;
+                repaint();
+            }
+        protected:
+            void doStyleSheetDraw(const MRect& wr, const MRect& cr)
+                { mApp->getStyleSheet()->draw(this,wr,cr,text); }
+        private:
+            std::wstring text;
+    };
+
+    class MTabBar : public MWidget
+    {
+        public:
+            MTabBar();
+
+            int  addTab        (const std::wstring& text, const std::wstring& imagePath = std::wstring());
+            void removeTab     (int id);
+            void selectTab     (int id);
+            void updateTabText (int id, const std::wstring& text);
+            void updateTabImage(int id, const std::wstring& imagePath);
+
+            Signal1<int> tabSelected;
+
+        protected:
+            void resizeEvent(MResizeEvent*);
+            void mousePressEvent(MMouseEvent*);
+            void doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT);
+
+        private:
+            struct TabData
+            {
+                std::wstring   text;
+                D2DImageHandle icon;
+                int            id;
+                int            width;
+            };
+
+            std::map<int, TabData> tabs;
+            CSS::RenderRuleQuerier tabQuerier;
+
+            MButton leftButton;
+            MButton rightButton;
+
+            MTimer slideTimer;
+
+            int minTabWidth;
+            int tabHeight;
+            int topMargin;
+            int leftMargin;
+            int rightMargin;
+
+            int totalWidth;
+            int shownStartIndex;
+            int shownEndIndex;
+            int slideToOffset;
+            int offset;
+            int slideFactor;
+
+            int checkedID;
+
+            void updateLayout();
+            void slideToIndex(int index);
+            void onSlideTimer();
+            void onLeftButton();
+            void onRightButton();
+    };
+
 
     inline MButton::MButton(MWidget* parent):MWidget(parent),b_checkable(false),b_isChecked(false){}
     inline bool MButton::isCheckbale() const { return b_checkable; }

@@ -5,17 +5,6 @@
 namespace MetalBone {
 namespace Demo {
 
-	void SALabel::setText(const std::wstring& t)
-	{
-		if(text == t) return;
-
-		text = t;
-		repaint();
-	}
-
-	void SALabel::doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT)
-		{ mApp->getStyleSheet()->draw(this,widgetRectInRT,clipRectInRT,text); }
-
 	SAMainWindow::SAMainWindow()
 	{
 		setWindowFlags(WF_AllowTransparency | WF_MinimizeButton);
@@ -68,6 +57,15 @@ namespace Demo {
 		statusLabel.setText(L"这是MetalBone Demo.");
 
 		setAttributes(WA_DeleteOnClose);
+
+        tabBar.addTab(L"常规设置",L"theme\\icon1.png");
+        tabBar.addTab(L"设置2",L"theme\\icon2.png");
+        tabBar.addTab(L"用户",L"theme\\icon3.png");
+        tabBar.addTab(L"常规设置2",L"theme\\icon4.png");
+        tabBar.addTab(L"常规设置3",L"theme\\icon5.png");
+        tabBar.addTab(L"zh",L"theme\\icon6.png");
+        tabBar.addTab(L"很长很长的设置名字",L"theme\\icon7.png");
+        tabBar.addTab(L"关于插件",L"theme\\icon8.png");
 	}
 
 	void SAMainWindow::resizeEvent(MResizeEvent* ev)
