@@ -7,7 +7,7 @@ namespace MetalBone
 {
 	namespace Demo
 	{
-		class SAMainWindow : public MetalBone::MWidget
+		class SAMainWindow : public MWidget
 		{
 			public:
 				SAMainWindow();
@@ -15,15 +15,14 @@ namespace MetalBone
 				virtual void resizeEvent(MResizeEvent*);
 
 			private:
-				MetalBone::MButton redxButton;
-				MetalBone::MButton closeButton;
-
-				MetalBone::MLabel titleLabel;
-				MetalBone::MLabel statusLabel;
-
-				MetalBone::MTabBar tabBar;
-				MetalBone::MWidget contentWidget;
-				MetalBone::MWidget resizer;
+				MButton    redxButton;
+				MButton    closeButton;
+				MLabel     titleLabel;
+				MLabel     statusLabel;
+				MTabBar    tabBar;
+				MWidget    contentWidget;
+				MWidget    resizer;
+                MScrollBar scrollBar;
 
 				inline void closeBtnClicked() { closeWindow(); }
 		};

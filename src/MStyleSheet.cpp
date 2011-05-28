@@ -372,9 +372,9 @@ namespace MetalBone
 			return false;
 
 		if(geoRO->x != INT_MAX)
-			w->move(geoRO->x, geoRO->y == INT_MAX ? w->pos().y : geoRO->y);
+			w->move(geoRO->x, geoRO->y == INT_MAX ? w->y() : geoRO->y);
 		else if(geoRO->y != INT_MAX)
-			w->move(w->pos().x, geoRO->y);
+			w->move(w->x(), geoRO->y);
 
 		MSize size  = w->size();
 		MSize size2 = size;
@@ -2015,10 +2015,10 @@ namespace MetalBone
 	MSSSPrivate* MSSSPrivate::instance = 0;
     void MSSSPrivate::polish(MWidget* w)
     {
-        RenderRule rule = getRenderRule(w, PC_Default);
+        RenderRule rule = getRenderRule(w, w->getWidgetPseudo());
         if(rule) rule->setGeometry(w);
 
-        RenderRule hoverRule = getRenderRule(w, PC_Hover);
+        RenderRule hoverRule = getRenderRule(w, w->getWidgetPseudo(false,PC_Hover));
         if(hoverRule && hoverRule != rule)
             w->setAttributes(WA_Hover);
 

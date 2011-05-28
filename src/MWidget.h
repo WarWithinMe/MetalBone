@@ -146,7 +146,7 @@ namespace MetalBone
             inline WidgetRole widgetRole() const;
 
             void setStyleSheet(const std::wstring&);
-            void ensurePolished(); // Call ensurePolished() to set Geometry for this.
+            virtual void ensurePolished(); // Call ensurePolished() to set Geometry for this.
 
             // Calling repaint() several times will result in a larger repaint
             // rect, which encloses every specific repaint rect. Such as, call for
@@ -205,17 +205,27 @@ namespace MetalBone
             // The window is then closed, and closeEvent() is called.
             void closeWindow();
 
+            // After calling grabMouse(), the widget will receive all the
+            // mouse event until releaseMouse() is called. MetalBone will
+            // call grabMouse() for the widget when the mouse button is down
+            // and releaseMouse() when the mouse button is up.
+            void grabMouse();
+            void releaseMouse();
 
 
             // Raise the widget to the top or lower to the bottom of its parent.
             void raise();
             void lower();
 
+            inline long   x()        const;
+            inline long   y()        const;
+            inline long   width()    const;
+            inline long   height()   const;
             inline MPoint pos()      const;
             inline MSize  size()     const;
             inline MSize  minSize()  const;
             inline MSize  maxSize()  const;
-            inline MRect  geometry() const; 
+            inline MRect  geometry() const;
             inline void move   (long x, long y);
             inline void move   (MPoint pos);
             inline void resize (long width, long height);
@@ -280,14 +290,14 @@ namespace MetalBone
             // children[0] is the bottom-most child.
             MWidgetList m_children;
 
-            long x;
-            long y;
-            long width;
-            long height;
-            long minWidth;
-            long minHeight;
-            long maxWidth;
-            long maxHeight;
+            long l_x;
+            long l_y;
+            long l_width;
+            long l_height;
+            long l_minWidth;
+            long l_minHeight;
+            long l_maxWidth;
+            long l_maxHeight;
 
             unsigned int m_attributes;
             unsigned int m_windowFlags;
@@ -324,11 +334,15 @@ namespace MetalBone
 
 
     inline const std::wstring& MWidget::objectName()   const          { return m_objectName; }
-    inline MSize        MWidget::size()                const          { return MSize(width,height); }
-    inline MSize        MWidget::minSize()             const          { return MSize(minWidth,minHeight); }
-    inline MSize        MWidget::maxSize()             const          { return MSize(maxWidth,maxHeight); }
-    inline MPoint       MWidget::pos()                 const          { return MPoint(x,y); }
-    inline MRect        MWidget::geometry()            const          { return MRect(x,y,x+width,y+height); }
+    inline long         MWidget::x()                   const          { return l_x; }
+    inline long         MWidget::y()                   const          { return l_y; }
+    inline long         MWidget::width()               const          { return l_width; }
+    inline long         MWidget::height()              const          { return l_height; }
+    inline MSize        MWidget::size()                const          { return MSize(l_width,l_height); }
+    inline MSize        MWidget::minSize()             const          { return MSize(l_minWidth,l_minHeight); }
+    inline MSize        MWidget::maxSize()             const          { return MSize(l_maxWidth,l_maxHeight); }
+    inline MPoint       MWidget::pos()                 const          { return MPoint(l_x,l_y); }
+    inline MRect        MWidget::geometry()            const          { return MRect(l_x,l_y,l_x+l_width,l_y+l_height); }
     inline MWidget*     MWidget::parent()              const          { return m_parent;      }
     inline unsigned int MWidget::windowFlags()         const          { return m_windowFlags; }
     inline unsigned int MWidget::attributes()          const          { return m_attributes;  }
@@ -338,7 +352,7 @@ namespace MetalBone
     inline MToolTip*    MWidget::getToolTip()                         { return m_toolTip;     }
     inline MCursor*     MWidget::getCursor()                          { return m_cursor;      }
     inline MWidget*     MWidget::windowWidget()                       { return m_topLevelParent;   }
-    inline void         MWidget::repaint()                            { repaint(0,0,width,height); }
+    inline void         MWidget::repaint()                            { repaint(0,0,l_width,l_height); }
     inline void         MWidget::setWidgetRole(WidgetRole wr)         { e_widgetRole = wr; }
     inline WidgetRole   MWidget::widgetRole() const                   { return (WidgetRole)e_widgetRole; }
     inline unsigned int MWidget::getLastWidgetPseudo() const          { return lastPseudo;         }
@@ -347,13 +361,13 @@ namespace MetalBone
     inline bool         MWidget::testAttributes(WidgetAttributes a) const { return (m_attributes & a) != 0; }
     inline bool         MWidget::testWidgetState(unsigned int s)    const { return (m_widgetState & s) != 0; }
     inline void MWidget::move(long xpos, long ypos)
-        { if(xpos != x || ypos != y) setGeometry(xpos,ypos,width,height); }
+        { if(xpos != l_x || ypos != l_y) setGeometry(xpos,ypos,l_width,l_height); }
     inline void MWidget::move(MPoint pos)
-        { if(pos.x != x || pos.y != y) setGeometry(pos.x,pos.y,width,height); }
+        { if(pos.x != l_x || pos.y != l_y) setGeometry(pos.x,pos.y,l_width,l_height); }
     inline void MWidget::resize(long w, long h)
-        { if(w != width || h != height) setGeometry(x,y,w,h); }
+        { if(w != l_width || h != l_height) setGeometry(l_x,l_y,w,h); }
     inline void MWidget::resize(MSize size)
-        { if(size.width() != width || size.height() != height) setGeometry(x,y,size.width(),size.height()); }
+        { if(size.width() != l_width || size.height() != l_height) setGeometry(l_x,l_y,size.width(),size.height()); }
     inline void MWidget::setAttributes(WidgetAttributes attr, bool on)
         { on ? (m_attributes |= attr) : (m_attributes &= (~attr)); }
     inline void MWidget::setWidgetState(unsigned int s, bool on)

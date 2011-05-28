@@ -37,10 +37,13 @@ namespace MetalBone
         MWidget*               focusedWidget;
         MWidget*               widgetUnderMouse;
         MWidget*               currWidgetUnderMouse;
+        MWidget*               mouseGrabber;
         int                    lastMouseX;
         int                    lastMouseY;
         bool                   bTrackingMouse;
 
+        inline void grabMouse(MWidget*);
+        inline void releaseMouse();
 
         inline void clearUpdateQueue();
         inline void addToRepaintMap(MWidget* w,int left,int top,int right,int bottom);
@@ -51,7 +54,8 @@ namespace MetalBone
     inline WindowExtras::WindowExtras():
         m_wndHandle(NULL), m_dummyHandle(NULL),
         m_pcData(0),bTrackingMouse(false),
-        widgetUnderMouse(0), currWidgetUnderMouse(0), focusedWidget(0),
+        widgetUnderMouse(0), currWidgetUnderMouse(0),
+        mouseGrabber(0), focusedWidget(0),
         lastMouseX(0), lastMouseY(0){}
     inline void WindowExtras::clearUpdateQueue()
     {
@@ -75,5 +79,18 @@ namespace MetalBone
             updateRect.top    = top;
             updateRect.bottom = bottom;
         }
+    }
+
+    inline void WindowExtras::grabMouse(MWidget* w)
+    {
+        if(w == mouseGrabber) return;
+        mouseGrabber = w;
+        ::SetCapture(m_wndHandle);
+    }
+
+    inline void WindowExtras::releaseMouse()
+    {
+        mouseGrabber = 0;
+        ::ReleaseCapture();
     }
 }

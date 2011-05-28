@@ -228,6 +228,17 @@ namespace MetalBone
 		return result;
 	}
 
+    void mapWindowCoorToChild(MWidget* child, int* xpos, int* ypos)
+    {
+        MWidget* w = child;
+        while(w->parent() != 0)
+        {
+            *xpos -= w->x();
+            *ypos -= w->y();
+            w = w->parent();
+        }
+    }
+
 #define RET_DEFPROC return ::DefWindowProcW(hwnd,msg,wparam,lparam)
 
 	LRESULT MApplicationData::windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -264,7 +275,7 @@ namespace MetalBone
 					if(updateRect == clientRect)
 						window->m_windowExtras->clearUpdateQueue();
 
-					window->m_windowExtras->addToRepaintMap(window,0,0,window->width,window->height);
+					window->m_windowExtras->addToRepaintMap(window,0,0,window->l_width,window->l_height);
 				}
 			}
 
@@ -277,14 +288,14 @@ namespace MetalBone
 
 			long newX = (short)LOWORD(lparam);
 			long newY = (short)HIWORD(lparam);
-			if(window->x != newX || window->y != newY)
+			if(window->l_x != newX || window->l_y != newY)
 			{
-				window->x = newX;
-				window->y = newY;
+				window->l_x = newX;
+				window->l_y = newY;
 				if(window->m_windowFlags & WF_AllowTransparency)
 				{
 					BLENDFUNCTION blend = {AC_SRC_OVER,0,255,AC_SRC_ALPHA};
-					POINT windowPos = {window->x, window->y};
+					POINT windowPos = {window->l_x, window->l_y};
 					UPDATELAYEREDWINDOWINFO info = {};
 					info.cbSize   = sizeof(UPDATELAYEREDWINDOWINFO);
 					info.dwFlags  = ULW_ALPHA;
@@ -311,20 +322,20 @@ namespace MetalBone
 				{
 				case HTTOP:
 				case HTBOTTOM:
-					if(window->maxHeight == window->minHeight)
+					if(window->l_maxHeight == window->l_minHeight)
 						return HTBORDER;
 					break;
 				case HTLEFT:
 				case HTRIGHT:
-					if(window->maxWidth == window->minWidth)
+					if(window->l_maxWidth == window->l_minWidth)
 						return HTBORDER;
 					break;
 				case HTBOTTOMLEFT:
 				case HTBOTTOMRIGHT:
 				case HTTOPLEFT:
 				case HTTOPRIGHT:
-					if(window->maxHeight == window->minHeight ||
-						window->maxWidth == window->minWidth)
+					if(window->l_maxHeight == window->l_minHeight ||
+						window->l_maxWidth == window->l_minWidth)
 						return HTBORDER;
 					break;
 				case HTCLIENT:
@@ -333,8 +344,8 @@ namespace MetalBone
 						// simulate the Non-Client area.
 						
 						MWidget* currWidgetUnderMouse = xtr->widgetUnderMouse;
-						int xpos = GET_X_LPARAM(lparam) - window->pos().x;
-						int ypos = GET_Y_LPARAM(lparam) - window->pos().y;
+						int xpos = GET_X_LPARAM(lparam) - window->x();
+						int ypos = GET_Y_LPARAM(lparam) - window->y();
 
 						// We will have to find the widget every time, if the
 						// widget is not WR_Normal. Because we do not store its
@@ -370,15 +381,23 @@ namespace MetalBone
 				// to this message. Then I found that I have to check the
 				// widget in WM_NCHITTEST. So now, the widget under mouse
 				// must be check before processing this message.
-				
 				int xpos = GET_X_LPARAM(lparam);
 				int ypos = GET_Y_LPARAM(lparam);
 
-				if(xpos == xtr->lastMouseX && ypos == xtr->lastMouseY)
-					return 0;
+                if(xtr->mouseGrabber)
+                {
+                    // The xpos and ypos is in the Window Client Area Coordinate.
+                    xtr->lastMouseX = xpos;
+                    xtr->lastMouseY = ypos;
+                    xtr->currWidgetUnderMouse = xtr->mouseGrabber;
+                }
 
-				xtr->lastMouseX = xpos;
-				xtr->lastMouseY = ypos;
+                if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
+                {
+                    xtr->lastMouseX = xpos;
+                    xtr->lastMouseY = ypos;
+                    xtr->currWidgetUnderMouse = window->findWidget(xpos, ypos);
+                }
 
 				// Remark: Sometimes when the mouse is out of the window
 				// we will keep receiving WM_SYSTIMER. I suspect that it
@@ -397,7 +416,6 @@ namespace MetalBone
 
 				MWidget* lastWidget = xtr->widgetUnderMouse;
 				MWidget* currWidget = xtr->currWidgetUnderMouse;
-				bool mouseMove = true;
 				if(lastWidget != currWidget)
 				{
 					if(lastWidget != 0)
@@ -412,41 +430,70 @@ namespace MetalBone
 						// The mouse moves into the window, we set it to the default.
 						gArrowCursor.show(true);
 					}
-
-					if(currWidget != 0) {
-						MEvent enter(false);
-						currWidget->enterEvent(&enter);
-						mouseMove = !enter.isAccepted();
-						if(currWidget->testAttributes(WA_Hover))
-							currWidget->setWidgetState(MWS_UnderMouse,true);
-						currWidget->updateSSAppearance();
-					}
 				}
 
 				if(currWidget != 0) {
+
+                    int localPosX = xtr->lastMouseX;
+                    int localPosY = xtr->lastMouseY;
+                    mapWindowCoorToChild(currWidget, &localPosX, &localPosY);
+
+                    bool mouseMove    = true;
+                    bool crossBounds  = lastWidget != currWidget;
+                    bool insideWidget = (localPosX >=0 && localPosY >=0 &&
+                        localPosX <= currWidget->width() && localPosY <= currWidget->height());
+
+                    if(!crossBounds)
+                    {
+                        if(currWidget->testWidgetState(MWS_UnderMouse))
+                            { if(!insideWidget) crossBounds = true; }
+                        else if(insideWidget) { crossBounds = true; }
+                    }
+                    if(crossBounds)
+                    {
+                        if(insideWidget)
+                        {
+                            MEvent enter(false);
+                            currWidget->enterEvent(&enter);
+                            mouseMove = !enter.isAccepted();
+                            unsigned int state = MWS_UnderMouse;
+                            if((wparam & MK_LBUTTON) != 0) state |= MWS_Pressed;
+                            currWidget->setWidgetState(state, true);
+                        } else
+                        {
+                            currWidget->leaveEvent();
+                            currWidget->setWidgetState(MWS_UnderMouse | MWS_Pressed, false);
+                            MToolTip* tip = lastWidget->getToolTip();
+                            if(tip) tip->hide();
+                        }
+                    }
+                    currWidget->updateSSAppearance();
+
 					if(currWidget->focusPolicy() == MoveOverFocus)
 						currWidget->setFocus();
 
-					if(mouseMove && currWidget->testAttributes(WA_TrackMouseMove))
+					if(mouseMove && (wparam != 0 || currWidget->testAttributes(WA_TrackMouseMove)))
 					{
 						MRect rect;
 						::GetWindowRect(hwnd,&rect);
 						rect.offset(xtr->lastMouseX, xtr->lastMouseY);
-						MMouseEvent me(xpos, ypos, rect.left, rect.top, NoButton);
-						do 
+
+                        MMouseEvent me(localPosX, localPosY, rect.left, rect.top, wparam);
+                        MWidget* eventWidget = currWidget;
+						do
 						{
-							if(currWidget->testAttributes(WA_TrackMouseMove))
-								currWidget->mouseMoveEvent(&me);
-							me.offsetPos(currWidget->x,currWidget->y);
-							currWidget = currWidget->m_parent;
-						} while (currWidget && !me.isAccepted() &&
-							!currWidget->testAttributes(WA_NoMousePropagation));
+                            if(wparam != 0 || eventWidget->testAttributes(WA_TrackMouseMove))
+                                { eventWidget->mouseMoveEvent(&me); }
+
+							me.offsetPos(eventWidget->l_x,eventWidget->l_y);
+							eventWidget = eventWidget->m_parent;
+
+						} while (eventWidget && !me.isAccepted() &&
+							!eventWidget->testAttributes(WA_NoMousePropagation));
 					}
 				}
-				xtr->widgetUnderMouse = currWidget;
-				xtr->currWidgetUnderMouse = 0;
 
-				MToolTip* thisTT = currWidget == 0 ? 0 : currWidget->getToolTip();
+				MToolTip* thisTT = xtr->widgetUnderMouse == 0 ? 0 : xtr->widgetUnderMouse->getToolTip();
 				if(thisTT && thisTT->isShowing())
 				{
 					if(thisTT->hidePolicy() == MToolTip::WhenMove)
@@ -459,6 +506,9 @@ namespace MetalBone
 							rect.top + xtr->lastMouseY + 20);
 					}
 				}
+
+                xtr->widgetUnderMouse = currWidget;
+                xtr->currWidgetUnderMouse = 0;
 			}
 			break;
 		case WM_SETCURSOR:
@@ -584,10 +634,11 @@ namespace MetalBone
 				::SetFocus(hwnd);
 				int xpos = GET_X_LPARAM(lparam);
 				int ypos = GET_Y_LPARAM(lparam);
-				if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
-					::SendMessage(hwnd,WM_MOUSEMOVE,wparam,lparam);
+                // Send NCHITTEST to determine the widget under mouse
+                if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
+                    ::SendMessage(hwnd,WM_NCHITTEST,wparam,lparam);
 
-				MWidget* cw = xtr->widgetUnderMouse;
+				MWidget* cw = xtr->mouseGrabber ? xtr->mouseGrabber : xtr->widgetUnderMouse;
 				if(cw != 0)
 				{
 					if(cw->focusPolicy() == ClickFocus)
@@ -601,29 +652,23 @@ namespace MetalBone
 						cw->updateSSAppearance();
 					}
 
-					MWidget* pc = cw;
-					MWidget* pp = cw->m_parent;
-					while(pp != 0)
-					{
-						xpos -= pc->x;
-						ypos -= pc->y;
-						pc = pp; pp = pc->m_parent;
-					}
-
 					MRect rect;
 					::GetWindowRect(hwnd,&rect);
+                    mapWindowCoorToChild(cw, &xpos, &ypos);
 					MMouseEvent me(xpos, ypos,
 						rect.left + xtr->lastMouseX,
-						rect.top  + xtr->lastMouseY, btn);
+						rect.top  + xtr->lastMouseY, wparam);
 					me.ignore();
 					do {
 						cw->mousePressEvent(&me);
-						me.offsetPos(cw->x,cw->y);
-						cw = cw->m_parent;
-					} while (cw && !me.isAccepted() &&
-						cw->testAttributes(WA_NoMousePropagation));
+						me.offsetPos(cw->l_x,cw->l_y);
 
-					::SetCapture(hwnd);
+                        if(me.isAccepted()) break;
+						cw = cw->m_parent;
+
+					} while (cw && cw->testAttributes(WA_NoMousePropagation));
+
+                    cw->grabMouse();
 				}
 				MToolTip::hideAll();
 			}
@@ -634,12 +679,15 @@ namespace MetalBone
 			{
 				int xpos = GET_X_LPARAM(lparam);
 				int ypos = GET_Y_LPARAM(lparam);
+                // Send NCHITTEST to determine the widget under mouse
 				if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
-					::SendMessage(hwnd,WM_MOUSEMOVE,wparam,lparam);
+					::SendMessage(hwnd,WM_NCHITTEST,wparam,lparam);
 
-				MWidget* cw = xtr->widgetUnderMouse;
+				MWidget* cw = xtr->mouseGrabber ? xtr->mouseGrabber : xtr->widgetUnderMouse;
 				if(cw != 0)
 				{
+                    cw->releaseMouse();
+
 					MouseButton btn = (msg == WM_LBUTTONUP ? LeftButton :
 						(msg == WM_RBUTTONUP ? RightButton : MiddleButton));
 					if(btn == LeftButton) {
@@ -649,18 +697,21 @@ namespace MetalBone
 
 					MRect rect;
 					::GetWindowRect(hwnd,&rect);
+                    mapWindowCoorToChild(cw, &xpos, &ypos);
 					MMouseEvent me(xpos, ypos,
 						rect.left + xtr->lastMouseX,
-						rect.top  + xtr->lastMouseY, btn);
+						rect.top  + xtr->lastMouseY, wparam);
 					me.ignore();
 					do {
 						cw->mouseReleaseEvent(&me);
-						me.offsetPos(cw->x,cw->y);
+						me.offsetPos(cw->l_x,cw->l_y);
+                        
+                        if(me.isAccepted()) break;
 						cw = cw->m_parent;
-					} while (cw && !me.isAccepted() &&
-						cw->testAttributes(WA_NoMousePropagation));
+
+					} while (cw && cw->testAttributes(WA_NoMousePropagation));
 				}
-				::ReleaseCapture();
+
 				MToolTip::hideAll();
 			}
 			break;
@@ -673,7 +724,7 @@ namespace MetalBone
 				if(xpos != xtr->lastMouseX || ypos != xtr->lastMouseY)
 					::SendMessage(hwnd,WM_MOUSEMOVE,wparam,lparam);
 
-				MWidget* cw = xtr->widgetUnderMouse;
+				MWidget* cw = xtr->mouseGrabber ? xtr->mouseGrabber : xtr->widgetUnderMouse;
 				if(cw != 0)
 				{
 					MouseButton btn = (msg == WM_LBUTTONDBLCLK ? LeftButton :
@@ -685,13 +736,14 @@ namespace MetalBone
 
 					RECT rect;
 					::GetWindowRect(hwnd,&rect);
+                    mapWindowCoorToChild(cw, &xpos, &ypos);
 					MMouseEvent me(xpos, ypos,
 						rect.left + xtr->lastMouseX,
-						rect.top  + xtr->lastMouseY, btn);
+						rect.top  + xtr->lastMouseY, wparam);
 					me.ignore();
 					do {
 						cw->mouseDClickEvent(&me);
-						me.offsetPos(cw->x,cw->y);
+						me.offsetPos(cw->l_x,cw->l_y);
 						cw = cw->m_parent;
 					} while (cw && !me.isAccepted() &&
 						cw->testAttributes(WA_NoMousePropagation));
@@ -713,6 +765,7 @@ namespace MetalBone
 				window->m_windowExtras->bTrackingMouse = true;
 
 				xtr->currWidgetUnderMouse = 0;
+                if(xtr->mouseGrabber) xtr->mouseGrabber->releaseMouse();
 				::SendMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(-1,-1));
 
 				window->m_windowExtras->bTrackingMouse = false;
@@ -722,6 +775,7 @@ namespace MetalBone
 			if(window->m_windowExtras->bTrackingMouse)
 			{
 				xtr->currWidgetUnderMouse = 0;
+                if(xtr->mouseGrabber) xtr->mouseGrabber->releaseMouse();
 				::SendMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(-1,-1));
 				window->m_windowExtras->bTrackingMouse = false;
 			}
@@ -746,7 +800,7 @@ namespace MetalBone
 			} else if(wparam == SIZE_MAXIMIZED)
 				window->m_windowState = WindowMaximized;
 
-			if(window->width == LOWORD(lparam) && window->height == HIWORD(lparam))
+			if(window->l_width == LOWORD(lparam) && window->l_height == HIWORD(lparam))
 				return 0;
 			window->resize(LOWORD(lparam), HIWORD(lparam));
 			break;
@@ -755,21 +809,21 @@ namespace MetalBone
 				DWORD winStyle    = 0;
 				DWORD winExStyle  = 0;
 				// We don't set parent of layered window.
-				MRect wndRect(0,0,window->width,window->height);
+				MRect wndRect(0,0,window->l_width,window->l_height);
 				generateStyleFlags(window->m_windowFlags,&winStyle,&winExStyle);
 				::AdjustWindowRectEx(&wndRect,winStyle,false,winExStyle);
-				long dx = wndRect.width() - window->width;
-				long dy = wndRect.height()- window->height;
+				long dx = wndRect.width() - window->l_width;
+				long dy = wndRect.height()- window->l_height;
 
 				MINMAXINFO* info  = (MINMAXINFO*)lparam;
-				info->ptMaxSize.x = window->maxWidth;
-				info->ptMaxSize.y = window->maxHeight;
-				long sum = window->maxWidth + dx;
-				info->ptMaxTrackSize.x = sum > 0 ? sum : window->maxWidth;
-				sum = window->maxHeight + dy;
-				info->ptMaxTrackSize.y = sum > 0 ? sum : window->maxHeight;
-				info->ptMinTrackSize.x = window->minWidth  + dx;
-				info->ptMinTrackSize.y = window->minHeight + dy;
+				info->ptMaxSize.x = window->l_maxWidth;
+				info->ptMaxSize.y = window->l_maxHeight;
+				long sum = window->l_maxWidth + dx;
+				info->ptMaxTrackSize.x = sum > 0 ? sum : window->l_maxWidth;
+				sum = window->l_maxHeight + dy;
+				info->ptMaxTrackSize.y = sum > 0 ? sum : window->l_maxHeight;
+				info->ptMinTrackSize.x = window->l_minWidth  + dx;
+				info->ptMinTrackSize.y = window->l_minHeight + dy;
 				break;
 			}
 		case WM_SHOWWINDOW:

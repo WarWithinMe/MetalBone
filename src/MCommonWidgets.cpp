@@ -21,15 +21,24 @@ namespace MetalBone
 		repaint();
 	}
 
+    void MButton::mousePressEvent(MMouseEvent* e)
+    {
+        e->accept();
+    }
+
 	void MButton::mouseReleaseEvent(MMouseEvent* e)
 	{
-		e->accept();
-		clicked.Emit();
-		setChecked(!b_isChecked);
+        if(e->getX() >= 0 && e->getX() <= width() &&
+           e->getY() >= 0 && e->getY() <= height())
+        {
+            e->accept();
+            clicked.Emit();
+            setChecked(!b_isChecked);
+        }
 	}
 
 	unsigned int MButton::getWidgetPseudo(bool markAsLast, unsigned int initP)
-		{ return MWidget::getWidgetPseudo(markAsLast, b_isChecked ? CSS::PC_Checked : 0); }
+		{ return MWidget::getWidgetPseudo(markAsLast, b_isChecked ? CSS::PC_Checked : initP); }
 	void MButton::doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT)
 		{ mApp->getStyleSheet()->draw(this,widgetRectInRT,clipRectInRT,s_text); }
 
@@ -59,7 +68,7 @@ namespace MetalBone
         int rh = rule.getGeometry(CSS::RenderRule::RRG_Height);
         if(rw == -1) rw = 16;
         if(rh == -1) rh = 16;
-        int rx = size().width() - rw;
+        int rx = width() - rw;
         int ry = tabHeight - rh;
 
         leftButton.setParent(this);
@@ -168,12 +177,12 @@ namespace MetalBone
         }
     }
 
-    void MTabBar::onLeftButton()
+    void MTabBar::onRightButton()
     {
         slideToIndex(shownEndIndex + 1);
     }
 
-    void MTabBar::onRightButton()
+    void MTabBar::onLeftButton()
     {
         std::map<int, TabData>::reverse_iterator tit    = tabs.rbegin();
         std::map<int, TabData>::reverse_iterator titEnd = tabs.rend();
@@ -185,7 +194,7 @@ namespace MetalBone
             if(currentIndex < shownStartIndex)
             {
                 width += tit->second.width;
-                if(width > leftButton.pos().x)
+                if(width > leftButton.x())
                 {
                     break;
                 }
@@ -263,7 +272,7 @@ namespace MetalBone
                     shownStartIndex = currentIndex;
             } else
             {
-                if(tabRight < leftButton.pos().x)
+                if(tabRight < leftButton.x())
                     shownEndIndex = currentIndex;
                 else
                     break;
@@ -275,18 +284,19 @@ namespace MetalBone
         }
 
         if(shownStartIndex > 0)
-            rightButton.show();
-        else
-            rightButton.hide();
-        if(shownEndIndex < tabs.size() - 1)
             leftButton.show();
         else
             leftButton.hide();
+        if(shownEndIndex < tabs.size() - 1)
+            rightButton.show();
+        else
+            rightButton.hide();
         repaint();
     }
 
     void MTabBar::mousePressEvent(MMouseEvent* e)
     {
+        e->accept();
         int clickX = e->getX();
 
         std::map<int, TabData>::iterator tit    = tabs.begin();
@@ -331,7 +341,7 @@ namespace MetalBone
         while(tit != titEnd)
         {
             right += tit->second.width;
-            if(right > leftButton.pos().x)
+            if(right > leftButton.x())
             {
                 groupIndex = index;
                 right = 0;
@@ -383,5 +393,365 @@ namespace MetalBone
             ++tit;
             ++index;
         }
+    }
+
+    MScrollBar::MScrollBar(Orientation or):
+    thumbQuerier(L"MScrollBar",L"Thumb"),
+        e_orientation(or),
+        n_min(0), n_max(0), n_value(0),
+        n_pageStep(10), n_singleStep(1),
+        n_trackStartPos(0), n_trackEndPos(0),
+        n_thumbStartPos(0), n_thumbEndPos(0),
+        n_marginBefore(0), n_marginAfter(0),
+        n_mousePos(-1),
+        b_tracking(true), b_thumbHover(false)
+    {
+        setObjectName(L"MScrollBar");
+        setAttributes(WA_TrackMouseMove);
+
+        subButton.setObjectName(L"SubButton");
+        addButton.setObjectName(L"AddButton");
+
+        subButton.setParent(this);
+        addButton.setParent(this);
+
+        subButton.clicked.Connect(this, &MScrollBar::onSubButton);
+        addButton.clicked.Connect(this, &MScrollBar::onAddButton);
+
+        showButtons(true);
+    }
+
+    void MScrollBar::ensurePolished()
+    {
+        MWidget::ensurePolished();
+
+        subButton.ensurePolished();
+        addButton.ensurePolished();
+
+        CSS::RenderRule rule = mApp->getStyleSheet()->getRenderRule(this, 
+            e_orientation == Vertical ? CSS::PC_Vertical : CSS::PC_Horizontal);
+        MRect margin = rule.getContentMargin();
+        if(e_orientation == Vertical)
+        {
+            n_marginBefore = margin.top;
+            n_marginAfter  = margin.bottom;
+        } else
+        {
+            n_marginBefore = margin.left;
+            n_marginAfter  = margin.right;
+        }
+    };
+
+    void MScrollBar::showButtons(bool s)
+    { 
+        if(addButton.isHidden() != s)
+            return;
+
+        int sliderSize = 0;
+        if(s)
+        {
+            addButton.show();
+            subButton.show();
+
+            if(e_orientation == Vertical)
+            {
+                if(subButton.y() == 0)
+                {
+                    n_trackStartPos = subButton.height();
+                    n_trackEndPos   = addButton.y();
+                } else
+                {
+                    n_trackStartPos = 0;
+                    n_trackEndPos   = subButton.y();
+                }
+
+                sliderSize = height() - subButton.height() - addButton.height();
+            } else
+            {
+                if(subButton.x() == 0)
+                {
+                    n_trackStartPos = subButton.width();
+                    n_trackEndPos   = addButton.x();
+                } else
+                {
+                    n_trackStartPos = 0;
+                    n_trackEndPos   = subButton.x();
+                }
+
+                sliderSize = width() - subButton.width() - addButton.width();
+            }
+        } else
+        {
+            addButton.hide();
+            subButton.hide();
+            n_trackStartPos = 0;
+
+            sliderSize = e_orientation == Vertical ? height() : width();
+            n_trackEndPos = sliderSize;
+        }
+
+        n_thumbEndPos = n_thumbStartPos + calcThumbSize(sliderSize);
+    }
+
+    void MScrollBar::resizeEvent(MResizeEvent* e)
+    {
+        MSize newSize = e->getNewSize();
+        MSize oldSize = e->getOldSize();
+        int   xDelta  = newSize.getWidth() - oldSize.getWidth();
+        int   yDelta  = newSize.getHeight() - oldSize.getHeight();
+
+        if(e_orientation == Vertical)
+        {
+            int contentX      = n_marginBefore;
+            int contentY      = subButton.y();
+            int contentWidth  = newSize.getWidth() - n_marginBefore - n_marginAfter;
+            int contentHeight = subButton.height();
+
+            // Mac-style SubButton
+            if(subButton.y() != 0)
+                contentY += yDelta;
+            subButton.setGeometry(contentX, contentY, contentWidth, contentHeight);
+
+            contentY = addButton.y() + yDelta;
+            contentHeight = addButton.height();
+            addButton.setGeometry(contentX, contentY, contentWidth, contentHeight);
+
+            n_trackEndPos += yDelta;
+        } else
+        {
+            int contentX      = subButton.x();
+            int contentY      = n_marginBefore;
+            int contentWidth  = subButton.width();
+            int contentHeight = newSize.getHeight() - n_marginBefore - n_marginAfter;
+
+            if(subButton.x() != 0)
+                contentX += xDelta;
+            subButton.setGeometry(contentX, contentY, contentWidth, contentHeight);
+
+            contentX     = addButton.x() + xDelta;
+            contentWidth = subButton.width();
+
+            addButton.setGeometry(contentX, contentY, contentWidth, contentHeight);
+
+            n_trackEndPos += xDelta;
+        }
+
+        n_thumbEndPos = n_thumbStartPos + calcThumbSize(n_trackEndPos - n_trackStartPos);
+    }
+
+    void MScrollBar::setSingleStep(int s)
+    {
+        if(n_singleStep == s) return;
+
+        n_singleStep = s;
+        n_thumbEndPos = n_thumbStartPos + calcThumbSize(n_trackEndPos - n_trackStartPos);
+
+        if(e_orientation == Vertical)
+            repaint(0,n_trackStartPos,width(),n_trackEndPos - n_trackStartPos);
+        else
+            repaint(n_trackStartPos,0,n_trackEndPos - n_trackStartPos,height());
+    }
+
+    int MScrollBar::calcThumbSize(int sliderSize)
+    {
+        int range = maximum() - minimum();
+        int neededSize = range / singleStep();
+        return sliderSize - neededSize;
+    }
+
+    void MScrollBar::onSubButton() { setValue(n_value - n_singleStep); }
+    void MScrollBar::onAddButton() { setValue(n_value + n_singleStep); }
+
+    void MScrollBar::setRange(int min, int max)
+    {
+        if(n_min != min || n_max != max)
+        {
+            n_min = min;
+            n_max = max;
+            if(n_value < min)
+            {
+                n_value = min;
+                valueChanged(min);
+            }else if(n_value > max)
+            {
+                n_value = max;
+                valueChanged(max);
+            }
+
+            n_thumbStartPos = n_value / n_singleStep;
+            n_thumbEndPos   = n_thumbStartPos + calcThumbSize(n_trackEndPos - n_trackStartPos);
+
+            if(e_orientation == Vertical)
+                repaint(0,n_trackStartPos,width(),n_trackEndPos - n_trackStartPos);
+            else
+                repaint(n_trackStartPos,0,n_trackEndPos - n_trackStartPos,height());
+        }
+    }
+
+    void MScrollBar::setValue(int value, bool emitSignal)
+    {
+        if(n_value == value) return;
+
+        if(value < n_min) value = n_min;
+        else if(value > n_max) value = n_max;
+
+        if(n_value == value) return;
+        n_value = value;
+
+        int oldThumbStart = n_thumbStartPos;
+        n_thumbStartPos = n_value / n_singleStep;
+        n_thumbEndPos   += (n_thumbStartPos - oldThumbStart);
+
+        if(emitSignal) valueChanged(n_value);
+
+        if(e_orientation == Vertical)
+            repaint(0,n_trackStartPos,width(),n_trackEndPos - n_trackStartPos);
+        else
+            repaint(n_trackStartPos,0,n_trackEndPos - n_trackStartPos,height());
+    }
+
+    void MScrollBar::leaveEvent()
+    {
+        if(n_mousePos == -1 && b_thumbHover == true)
+        {
+            b_thumbHover = false;
+            if(e_orientation == Vertical)
+                repaint(0,n_trackStartPos,width(),n_trackEndPos - n_trackStartPos);
+            else
+                repaint(n_trackStartPos,0,n_trackEndPos - n_trackStartPos,height());
+        }
+    }
+
+    void MScrollBar::mousePressEvent(MMouseEvent* e)
+    {
+        e->accept();
+        int pos = e_orientation == Vertical ? e->getY() : e->getX();
+
+        if(pos >= n_thumbStartPos && pos <= n_thumbEndPos)
+        {
+            n_mousePos = pos;
+
+            if(e_orientation == Vertical)
+                repaint(0,n_trackStartPos,width(),n_trackEndPos - n_trackStartPos);
+            else
+                repaint(n_trackStartPos,0,n_trackEndPos - n_trackStartPos,height());
+        } else if(pos < n_thumbStartPos)
+        {
+            setValue(n_value - n_pageStep);
+            n_mousePos = -1;
+        } else
+        {
+            setValue(n_value + n_pageStep);
+            n_mousePos = -1;
+        }
+    }
+
+    void MScrollBar::mouseMoveEvent(MMouseEvent* e)
+    {
+        e->accept();
+
+        if(n_mousePos == -1)
+        {
+            if(e_orientation == Vertical)
+            {
+                bool oldHover = b_thumbHover;
+
+                if(e->getX() >= n_marginBefore &&
+                    e->getX() <= width() - n_marginAfter &&
+                    e->getY() >= n_thumbStartPos &&
+                    e->getY() <= n_thumbEndPos)
+                { b_thumbHover = true; }
+                else { b_thumbHover = false; }
+
+                if(oldHover != b_thumbHover)
+                    repaint(0,n_trackStartPos,width(),n_trackEndPos - n_trackStartPos);
+            } else
+            {
+                bool oldHover = b_thumbHover;
+
+                if(e->getY() >= n_marginBefore &&
+                    e->getY() <= height() - n_marginAfter &&
+                    e->getX() >= n_thumbStartPos &&
+                    e->getX() <= n_thumbEndPos)
+                { b_thumbHover = true; }
+                else { b_thumbHover = false; }
+
+                if(oldHover != b_thumbHover)
+                    repaint(n_trackStartPos,0,n_trackEndPos - n_trackStartPos,height());
+            }
+        } else
+        {
+            int newPos = (e_orientation == Vertical) ? e->getY() : e->getX();
+            int delta  = newPos - n_mousePos;
+
+            if(delta == 0) return;
+            n_mousePos = newPos;
+
+            if(n_thumbStartPos + delta < n_trackStartPos || n_thumbEndPos + delta > n_trackEndPos)
+                return;
+
+            n_thumbStartPos += delta;
+            n_thumbEndPos   += delta;
+
+            int oldValue = n_value;
+            n_value = n_thumbStartPos / n_singleStep;
+            if(n_value != oldValue && b_tracking)
+                valueChanged(n_value);
+
+            if(e_orientation == Vertical)
+                repaint(0,n_trackStartPos,width(),n_trackEndPos - n_trackStartPos);
+            else
+                repaint(n_trackStartPos,0,n_trackEndPos - n_trackStartPos,height());
+        }
+    }
+
+    void MScrollBar::mouseReleaseEvent(MMouseEvent* e)
+    {
+        if(n_mousePos != -1)
+        {
+            n_mousePos = -1;
+            e->accept();
+            if(!b_tracking) valueChanged(n_value);
+
+            if(e_orientation == Vertical)
+                repaint(0,n_trackStartPos,width(),n_trackEndPos - n_trackStartPos);
+            else
+                repaint(n_trackStartPos,0,n_trackEndPos - n_trackStartPos,height());
+        }
+    }
+
+    unsigned int MScrollBar::getWidgetPseudo(bool markAsLast, unsigned int initPseudo)
+    {
+        unsigned int defaults = MWidget::getWidgetPseudo(markAsLast,initPseudo);
+        defaults |= (e_orientation == Vertical ? CSS::PC_Vertical : CSS::PC_Horizontal);
+        return defaults;
+    }
+
+    void MScrollBar::doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT)
+    {
+        mApp->getStyleSheet()->draw(this,widgetRectInRT,clipRectInRT);
+
+        unsigned int pesudo = n_mousePos == -1 ? 0 : CSS::PC_Pressed;
+        if(b_thumbHover) pesudo |= CSS::PC_Hover;
+        pesudo |= e_orientation == Vertical ? CSS::PC_Vertical : CSS::PC_Horizontal;
+
+        CSS::RenderRule rule = mApp->getStyleSheet()->getRenderRule(&thumbQuerier, pesudo);
+        MRect thumbRectInRT = widgetRectInRT;
+        if(e_orientation == Vertical)
+        {
+            thumbRectInRT.left   += n_marginBefore;
+            thumbRectInRT.right  -= n_marginAfter;
+            thumbRectInRT.bottom = thumbRectInRT.top + n_thumbEndPos;
+            thumbRectInRT.top    += n_thumbStartPos;
+        } else
+        {
+            thumbRectInRT.top    += n_marginBefore;
+            thumbRectInRT.bottom -= n_marginAfter;
+            thumbRectInRT.right  =  thumbRectInRT.left + n_thumbEndPos;
+            thumbRectInRT.left   += n_thumbStartPos;
+        }
+
+        MD2DPaintContext context(this);
+        rule.draw(context, thumbRectInRT, clipRectInRT);
     }
 }

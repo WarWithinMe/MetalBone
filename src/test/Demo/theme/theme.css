@@ -113,3 +113,43 @@
 #TabBar #RightButton : hover{
 	background: url(theme\TabLRElements.png) no-repeat 45 0 15 57;
 }
+
+#MScrollBar{
+	border-image: url(theme\Track.png) 7 7 9 7 stretch;
+	x: 452;
+	y: 91;
+	width: 15;
+	height: 190;
+}
+
+#MScrollBar #Thumb{
+	border-image: url(theme\Thumb.png) 7 7 9 7 repeat;
+}
+
+#MScrollBar #Thumb :hover:vertical{
+	border-image: url(theme\ThumbHover.png) 7 7 9 7 repeat;
+}
+
+#MScrollBar #Thumb :pressed:vertical{
+	border-image: url(theme\ThumbHover.png) 7 7 9 7 repeat;
+}
+
+#MScrollBar:horizontal{
+	border-image: url(theme\TrackHor.png) 7 9 7 7 stretch;
+	x: 100;
+	y: 200;
+	width: 190;
+	height: 15;
+}
+
+#MScrollBar #Thumb:horizontal{
+	border-image: url(theme\ThumbHor.png) 7 9 7 7 repeat;
+}
+
+#MScrollBar #Thumb :hover:horizontal{
+	border-image: url(theme\ThumbHoverHor.png) 7 9 7 7 repeat;
+}
+
+#MScrollBar #Thumb :pressed:horizontal{
+	border-image: url(theme\ThumbHoverHor.png) 7 9 7 7 repeat;
+}

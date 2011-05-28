@@ -45,25 +45,29 @@ namespace MetalBone
     enum MouseButton
     {
         NoButton     = 0,
-        LeftButton   = 1,
-        RightButton  = 2,
-        MiddleButton = 4
+        LeftButton   = MK_LBUTTON,
+        RightButton  = MK_RBUTTON,
+        MiddleButton = MK_MBUTTON,
+        ControlKey   = MK_CONTROL,
+        ShiftKey     = MK_SHIFT,
+        XButton1     = MK_XBUTTON1,
+        XButton2     = MK_XBUTTON2
     };
     class METALBONE_EXPORT MMouseEvent : public MEvent
     {
         public:
-            inline MMouseEvent(int, int, int, int, MouseButton);
+            inline MMouseEvent(int, int, int, int, unsigned int mouseButton);
 
-            inline MouseButton button() const;
-            inline int getX()           const;
-            inline int getY()           const;
-            inline int getGlobalX()     const;
-            inline int getGlobalY()     const;
-            inline void offsetPos(int,int);
+            inline unsigned int button()           const;
+            inline int          getX()             const;
+            inline int          getY()             const;
+            inline int          getGlobalX()       const;
+            inline int          getGlobalY()       const;
+            inline void         offsetPos(int,int);
 
         private:
             int ix,iy,igx,igy;
-            MouseButton btn;
+            unsigned int btn;
     };
     
     enum KeyboardModifier
@@ -123,13 +127,13 @@ namespace MetalBone
     inline MSize MResizeEvent::getNewSize() const
         { return newSize; }
 
-    inline MMouseEvent::MMouseEvent(int x, int y, int gx, int gy,MouseButton b):
+    inline MMouseEvent::MMouseEvent(int x, int y, int gx, int gy,unsigned int b):
         ix(x),iy(y),igx(gx),igy(gy),btn(b){}
-    inline int MMouseEvent::getX()           const { return ix;  }
-    inline int MMouseEvent::getY()           const { return iy;  }
-    inline int MMouseEvent::getGlobalX()     const { return igx; }
-    inline int MMouseEvent::getGlobalY()     const { return igy; }
-    inline MouseButton MMouseEvent::button() const { return btn; }
+    inline int MMouseEvent::getX()            const { return ix;  }
+    inline int MMouseEvent::getY()            const { return iy;  }
+    inline int MMouseEvent::getGlobalX()      const { return igx; }
+    inline int MMouseEvent::getGlobalY()      const { return igy; }
+    inline unsigned int MMouseEvent::button() const { return btn; }
     inline void MMouseEvent::offsetPos(int x,int y)
         { ix += x; iy += y; }
 

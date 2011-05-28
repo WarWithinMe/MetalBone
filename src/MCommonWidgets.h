@@ -7,6 +7,7 @@
 // MButton
 // MLabel
 // MTabBar
+// MScrollBar
 
 namespace MetalBone
 {
@@ -31,6 +32,7 @@ namespace MetalBone
             virtual unsigned int getWidgetPseudo(bool markAsLast = false, unsigned int initP = 0);
 
         protected:
+            virtual void mousePressEvent(MMouseEvent*);
             virtual void mouseReleaseEvent(MMouseEvent*);
             virtual void doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT);
 
@@ -113,6 +115,99 @@ namespace MetalBone
             void onRightButton();
     };
 
+    class MScrollBar : public MWidget
+    {
+        public:
+            enum Orientation
+            {
+                Vertical,
+                Horizontal
+            };
+
+            MScrollBar(Orientation or = Vertical);
+            ~MScrollBar(){}
+
+            inline bool hasTracking() const;
+            inline int  maximum()     const;
+            inline int  minimum()     const;
+            inline int  pageStep()    const;
+            inline int  singleStep()  const;
+            inline int  value()       const;
+
+            inline Orientation orientation() const;
+
+            // When tracking is true, valueChanged will emit whenever
+            // the user moves the mouse. Otherwise, valueChanged will emit
+            // when the user release the mouse.
+            inline void setTracking(bool);
+            inline void setPageStep(int);
+
+            void setRange(int min, int max);
+            void showButtons(bool);
+            void setSingleStep(int);
+            void setValue(int value, bool emitSignal = true);
+
+            Signal1<int> valueChanged;
+
+            void ensurePolished();
+
+        protected:
+            void mousePressEvent(MMouseEvent*);
+            void mouseMoveEvent(MMouseEvent*);
+            void mouseReleaseEvent(MMouseEvent*);
+            void resizeEvent(MResizeEvent*);
+            void doStyleSheetDraw(const MRect&, const MRect&);
+            void leaveEvent();
+            unsigned int getWidgetPseudo(bool markAsLast = false, unsigned int initPseudo = 0);
+
+        private:
+            class SliderButton : public MWidget
+            {
+                public:
+                    Signal0<> clicked;
+                    virtual unsigned int getWidgetPseudo(bool markAsLast = false, unsigned int initP = 0)
+                    {
+                        unsigned int direction = ((MScrollBar*)parent())->orientation() == Vertical ? 
+                            CSS::PC_Vertical : CSS::PC_Horizontal;
+                        return MWidget::getWidgetPseudo(markAsLast, direction);
+                    }
+            };
+            CSS::RenderRuleQuerier thumbQuerier;
+            SliderButton addButton;
+            SliderButton subButton;
+            Orientation e_orientation;
+            int  n_min;
+            int  n_max;
+            int  n_value;
+            int  n_pageStep;
+            int  n_singleStep;
+            int  n_mousePos;
+
+            int  n_trackStartPos;
+            int  n_trackEndPos;
+            int  n_thumbStartPos;
+            int  n_thumbEndPos;
+            int  n_marginBefore;
+            int  n_marginAfter;
+
+            bool b_tracking;
+            bool b_thumbHover;
+
+            void onAddButton();
+            void onSubButton();
+            int  calcThumbSize(int sliderSize);
+    };
+
+    inline bool MScrollBar::hasTracking() const { return b_tracking; }
+    inline int  MScrollBar::maximum()     const { return n_max; }
+    inline int  MScrollBar::minimum()     const { return n_min; }
+    inline int  MScrollBar::pageStep()    const { return n_pageStep; }
+    inline int  MScrollBar::singleStep()  const { return n_singleStep; }
+    inline int  MScrollBar::value()       const { return n_value; }
+    inline void MScrollBar::setTracking(bool t) { b_tracking = t; }
+    inline void MScrollBar::setPageStep(int p)  { n_pageStep = p; }
+    inline MScrollBar::Orientation MScrollBar::orientation() const
+        { return e_orientation; }
 
     inline MButton::MButton(MWidget* parent):MWidget(parent),b_checkable(false),b_isChecked(false){}
     inline bool MButton::isCheckbale() const { return b_checkable; }

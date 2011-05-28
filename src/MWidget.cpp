@@ -30,10 +30,10 @@ namespace MetalBone
 	MWidget::MWidget(MWidget* parent)
 		: m_parent(parent),
 		m_windowExtras(0),
-		x(200),y(200),
-		width(640),height(480),
-		minWidth(0),minHeight(0),
-		maxWidth(LONG_MAX),maxHeight(LONG_MAX),
+		l_x(0),l_y(0),
+		l_width(640),l_height(480),
+		l_minWidth(0),l_minHeight(0),
+		l_maxWidth(LONG_MAX),l_maxHeight(LONG_MAX),
 		m_attributes(WA_AutoBG | WA_NonChildOverlap),
 		m_windowFlags(WF_Widget),
 		m_windowState(WindowNoState),
@@ -59,11 +59,11 @@ namespace MetalBone
                 (ignoreMouse && child->testAttributes(WA_MouseThrough)))
 				continue;
 
-			if(px >= child->x && py >= child->y &&
-				px <= child->x + child->width && py <= child->y + child->height)
+			if(px >= child->l_x && py >= child->l_y &&
+				px <= child->l_x + child->l_width && py <= child->l_y + child->l_height)
 			{
-				px -= child->x;
-				py -= child->y;
+				px -= child->l_x;
+				py -= child->l_y;
 				result = child->findWidget(px,py,ignoreMouse);
 				break;
 			}
@@ -308,7 +308,7 @@ namespace MetalBone
 			m_parent = 0;
 		}
 
-		MRect rect(0,0,width,height);
+		MRect rect(0,0,l_width,l_height);
 		generateStyleFlags(m_windowFlags,&winStyle,&winExStyle);
 		if(!isLayered)
 			::AdjustWindowRectEx(&rect,winStyle,false,winExStyle);
@@ -317,7 +317,7 @@ namespace MetalBone
 			gMWidgetClassName,
 			m_windowExtras->m_windowTitle.c_str(),
 			winStyle,
-			x,y, // Remark: we should offset a bit, due to the border frame.
+			l_x,l_y, // Remark: we should offset a bit, due to the border frame.
 			rect.width(), rect.height(),
 			parentHandle,NULL,
 			mApp->getAppHandle(), NULL);
@@ -375,7 +375,7 @@ namespace MetalBone
 				m_windowExtras = 0;
 			}
 		} else {
-			m_parent->repaint(x,y,width,height); // Update the region of this widget inside the old parent.
+			m_parent->repaint(l_x,l_y,l_width,l_height); // Update the region of this widget inside the old parent.
 			m_parent->m_children.remove(this);
 		}
 
@@ -427,31 +427,31 @@ namespace MetalBone
 
 	void MWidget::setMinimumSize(long w, long h)
 	{
-		if(w > maxWidth)  w = maxWidth;
-		else if(w < 0)    w = 0;
-		if(h > maxHeight) h = maxHeight;
-		else if(h < 0)    h = 0;
+		if(w > l_maxWidth)  w = l_maxWidth;
+		else if(w < 0)      w = 0;
+		if(h > l_maxHeight) h = l_maxHeight;
+		else if(h < 0)      h = 0;
 
-		minWidth  = w;
-		minHeight = h;
+		l_minWidth  = w;
+		l_minHeight = h;
 
-		w = width  < minWidth  ? minWidth  : width;
-		h = height < minHeight ? minHeight : height;
+		w = l_width  < l_minWidth  ? l_minWidth  : l_width;
+		h = l_height < l_minHeight ? l_minHeight : l_height;
 		resize(w,h);
 	}
 
 	void MWidget::setMaximumSize(long w, long h)
 	{
-		if(w < minWidth)  w = minWidth;
-		else if(w < 0)    w = LONG_MAX;
-		if(h < minHeight) h = minHeight;
-		else if(h < 0)    h = LONG_MAX;
+		if(w < l_minWidth)  w = l_minWidth;
+		else if(w < 0)      w = LONG_MAX;
+		if(h < l_minHeight) h = l_minHeight;
+		else if(h < 0)      h = LONG_MAX;
 
-		maxWidth  = w;
-		maxHeight = h;
+		l_maxWidth  = w;
+		l_maxHeight = h;
 
-		w = width  > maxWidth  ? maxWidth  : width;
-		h = height > maxHeight ? maxHeight : height;
+		w = l_width  > l_maxWidth  ? l_maxWidth  : l_width;
+		h = l_height > l_maxHeight ? l_maxHeight : l_height;
 		resize(w,h);
 	}
 
@@ -599,9 +599,20 @@ namespace MetalBone
 				m_windowExtras->bTrackingMouse = false;
 			}
 		} else {
-			m_parent->repaint(x,y,width,height);
+			m_parent->repaint(l_x,l_y,l_width,l_height);
 		}
 	}
+
+    void MWidget::grabMouse()
+    { 
+        if(m_topLevelParent->m_windowExtras) 
+            m_topLevelParent->m_windowExtras->grabMouse(this); 
+    }
+    void MWidget::releaseMouse()
+    { 
+        if(m_topLevelParent->m_windowExtras) 
+            m_topLevelParent->m_windowExtras->releaseMouse(); 
+    }
 
 	void MWidget::raise()
 	{
@@ -646,26 +657,26 @@ namespace MetalBone
 	void MWidget::setGeometry(long vx, long vy, long vwidth, long vheight)
 	{
 		// Ensure the size is in a valid range.
-		if     (vwidth  < minWidth ) { vwidth  = minWidth;  }
-		else if(vwidth  > maxWidth ) { vwidth  = maxWidth;  }
-		if     (vheight < minHeight) { vheight = minHeight; } 
-		else if(vheight > maxHeight) { vheight = maxHeight; }
+		if     (vwidth  < l_minWidth ) { vwidth  = l_minWidth;  }
+		else if(vwidth  > l_maxWidth ) { vwidth  = l_maxWidth;  }
+		if     (vheight < l_minHeight) { vheight = l_minHeight; } 
+		else if(vheight > l_maxHeight) { vheight = l_maxHeight; }
 
-		bool sizeChanged = (vwidth != width || vheight != height);
-		bool posChanged  = (vx != x || vy != y);
+		bool sizeChanged = (vwidth != l_width || vheight != l_height);
+		bool posChanged  = (vx != l_x || vy != l_y);
 
 		if(sizeChanged)
 		{
-			MResizeEvent ev(width,height,vwidth,vheight);
-			width  = vwidth;
-			height = vheight;
+			MResizeEvent ev(l_width,l_height,vwidth,vheight);
+			l_width  = vwidth;
+			l_height = vheight;
 
 			resizeEvent(&ev);
 			if(!ev.isAccepted())
 			{
 				sizeChanged = false;
-				width  = ev.getOldSize().width();
-				height = ev.getOldSize().height();
+				l_width  = ev.getOldSize().width();
+				l_height = ev.getOldSize().height();
 			}
 		}
 
@@ -674,15 +685,15 @@ namespace MetalBone
 
 		if(!isHidden() && m_parent != 0) {
 			// If is a child widget, we need to update the old region within the parent.
-			m_parent->repaint(x,y,width,height);
+			m_parent->repaint(l_x,l_y,l_width,l_height);
 		}
 
-		x = vx;
-		y = vy;
+		l_x = vx;
+		l_y = vy;
 
 		if(m_windowExtras != 0)
 		{
-			MRect rect(0, 0, width, height);
+			MRect rect(0, 0, l_width, l_height);
 
 			if(m_windowFlags & WF_AllowTransparency)
 			{
@@ -698,7 +709,7 @@ namespace MetalBone
 				// Moving a normal window will repaint it automatically.
 			}
 
-			::MoveWindow(m_windowExtras->m_wndHandle, x, y, rect.width(), rect.height(), true);
+			::MoveWindow(m_windowExtras->m_wndHandle, l_x, l_y, rect.width(), rect.height(), true);
 
             if(m_windowExtras->m_pcData)
                 m_windowExtras->m_pcData->resize(vwidth,vheight);
@@ -731,7 +742,7 @@ namespace MetalBone
 
 		int right  = ax + aw;
 		int bottom = ay + ah;
-		if(ax >= (int)width || ay >= (int)height || right <= 0 || bottom <= 0)
+		if(ax >= (int)l_width || ay >= (int)l_height || right <= 0 || bottom <= 0)
 			return;
 
 		// If the widget needs to draw itself, we marks it invisible at this time,
@@ -748,8 +759,8 @@ namespace MetalBone
 			parent = parent->m_parent;
 		}
 
-        right  = min(right, (int)width);
-        bottom = min(bottom,(int)height);
+        right  = min(right, (int)l_width);
+        bottom = min(bottom,(int)l_height);
 		m_topLevelParent->m_windowExtras->addToRepaintMap(this, ax, ay, right, bottom);
 
 		// Tells Windows that we need to update, we don't care the clip region.
@@ -778,7 +789,7 @@ namespace MetalBone
 
 		bool layeredWindow    = (m_windowFlags & WF_AllowTransparency) != 0;
 		bool fullWindowUpdate = false;
-		MRect windowUpdateRect(width,height,0,0);
+		MRect windowUpdateRect(l_width,l_height,0,0);
 
         MD2DPaintContext context(this);
         ID2D1RenderTarget* rt = context.getRenderTarget();
@@ -802,12 +813,12 @@ namespace MetalBone
 
 				passiveUpdateWidgets[this].addRect(uRect);
 				if(layeredWindow && uRect.left == 0 &&
-					uRect.right == width && uRect.top == 0 && uRect.bottom == height)
+					uRect.right == l_width && uRect.top == 0 && uRect.bottom == l_height)
 				{
 					windowUpdateRect.left   = 0;
-					windowUpdateRect.right  = width;
+					windowUpdateRect.right  = l_width;
 					windowUpdateRect.top    = 0;
-					windowUpdateRect.bottom = height;
+					windowUpdateRect.bottom = l_height;
 					fullWindowUpdate = true;
 					rt->Clear();
 				}
@@ -829,22 +840,22 @@ namespace MetalBone
 			// above uTarget, we need to update those things too.
 			while(pp != 0)
 			{
-				uRect.offset(pc->x,pc->y);
-				uTargetUR.offset(pc->x,pc->y);
+				uRect.offset(pc->l_x,pc->l_y);
+				uTargetUR.offset(pc->l_x,pc->l_y);
 				DrawRegionHash::iterator tpwIter    = tempPassiveWidgets.begin();
 				DrawRegionHash::iterator tpwIterEnd = tempPassiveWidgets.end();
 				for(; tpwIterEnd != tpwIter; ++tpwIter)
-					tpwIter->second.offset(pc->x,pc->y);
+					tpwIter->second.offset(pc->l_x,pc->l_y);
 
-				if(uRect.right  <= 0)              { outsideOfParent = true; break; }
-				if(uRect.bottom <= 0)              { outsideOfParent = true; break; }
-				if(uRect.left   > (int)pp->width ) { outsideOfParent = true; break; }
-				if(uRect.top    > (int)pp->height) { outsideOfParent = true; break; } 
+				if(uRect.right  <= 0)                { outsideOfParent = true; break; }
+				if(uRect.bottom <= 0)                { outsideOfParent = true; break; }
+				if(uRect.left   > (int)pp->l_width ) { outsideOfParent = true; break; }
+				if(uRect.top    > (int)pp->l_height) { outsideOfParent = true; break; } 
 				// Clip to parent.
-				if(uRect.right  > (int)pp->width ) { uRect.right  = pp->width;  }
-				if(uRect.bottom > (int)pp->height) { uRect.bottom = pp->height; }
-				if(uRect.left   < 0)               { uRect.left   = 0;          }
-				if(uRect.top    < 0)               { uRect.top    = 0;          }
+				if(uRect.right  > (int)pp->l_width ) { uRect.right  = pp->l_width;  }
+				if(uRect.bottom > (int)pp->l_height) { uRect.bottom = pp->l_height; }
+				if(uRect.left   < 0)                 { uRect.left   = 0;          }
+				if(uRect.top    < 0)                 { uRect.top    = 0;          }
 
 				// If the parent specifies that its children may overlap each
 				// other. We have to test if the current draw region intersects
@@ -860,7 +871,7 @@ namespace MetalBone
 						MWidget* cw = *(chIter++);
 						if(cw->isHidden() || cw->testAttributes(WA_DontShowOnScreen)) continue;
 
-						MRect childRect(cw->x, cw->y, cw->x + cw->width, cw->y + cw->height);
+						MRect childRect(cw->l_x, cw->l_y, cw->l_x + cw->l_width, cw->l_y + cw->l_height);
 						MRegion childR(childRect);
 						if(cw->isOpaqueDrawing())
 						{
@@ -928,17 +939,17 @@ namespace MetalBone
 
 			while(pp != 0 && !isPcOpaque)
 			{
-				OffsetRect(&urForNonOpaque,pc->x,pc->y);
+				OffsetRect(&urForNonOpaque,pc->l_x,pc->l_y);
 				DrawRegionHash::iterator tpwIter    = tempPassiveWidgets.begin();
 				DrawRegionHash::iterator tpwIterEnd = tempPassiveWidgets.end();
 				for(; tpwIterEnd != tpwIter; ++tpwIter)
-					tpwIter->second.offset(pc->x,pc->y);
+					tpwIter->second.offset(pc->l_x,pc->l_y);
 
 				// Clip to parent.
-				if(urForNonOpaque.right  > (int)pp->width ) { urForNonOpaque.right  = pp->width;  }
-				if(urForNonOpaque.bottom > (int)pp->height) { urForNonOpaque.bottom = pp->height; }
-				if(urForNonOpaque.left   < 0)               { urForNonOpaque.left   = 0;          }
-				if(urForNonOpaque.top    < 0)               { urForNonOpaque.top    = 0;          }
+				if(urForNonOpaque.right  > (int)pp->l_width ) { urForNonOpaque.right  = pp->l_width;  }
+				if(urForNonOpaque.bottom > (int)pp->l_height) { urForNonOpaque.bottom = pp->l_height; }
+				if(urForNonOpaque.left   < 0)                 { urForNonOpaque.left   = 0;            }
+				if(urForNonOpaque.top    < 0)                 { urForNonOpaque.top    = 0;            }
 
 				MWidgetList::reverse_iterator chrIter    = pp->m_children.rbegin();
 				MWidgetList::reverse_iterator chrIterEnd = pp->m_children.rend();
@@ -949,7 +960,7 @@ namespace MetalBone
 					MWidget* cw = *(chrIter++);
 					if(cw->isHidden() || cw->testAttributes(WA_DontShowOnScreen)) continue;
 
-					MRect siblingRect(cw->x, cw->y, cw->x + cw->width, cw->y + cw->height);
+					MRect siblingRect(cw->l_x, cw->l_y, cw->l_x + cw->l_width, cw->l_y + cw->l_height);
 					MRegion siblingR(siblingRect);
 					siblingR.intersect(underneathUR);
 					if(!siblingR.isEmpty())
@@ -988,7 +999,7 @@ namespace MetalBone
 
 				BLENDFUNCTION blend = {AC_SRC_OVER,0,255,AC_SRC_ALPHA};
 				POINT sourcePos = {0, 0};
-				SIZE windowSize = {width, height};
+				SIZE windowSize = {l_width, l_height};
 
 				UPDATELAYEREDWINDOWINFO info = {};
 				info.cbSize   = sizeof(UPDATELAYEREDWINDOWINFO);
@@ -1032,7 +1043,7 @@ namespace MetalBone
 
 					rt->PushAxisAlignedClip(clipRect, D2D1_ANTIALIAS_MODE_ALIASED);
 					MRect widgetRect(xOffsetInWnd,yOffsetInWnd,
-						xOffsetInWnd+width, yOffsetInWnd+height);
+						xOffsetInWnd+l_width, yOffsetInWnd+l_height);
 					doStyleSheetDraw(widgetRect,clipRect);
 					rt->PopAxisAlignedClip();
 
@@ -1060,10 +1071,10 @@ namespace MetalBone
 				++chIter;
 				if(child->isHidden()) continue;
 
-				childRectInWnd.left   = xOffsetInWnd + child->x;
-				childRectInWnd.top    = yOffsetInWnd + child->y;
-				childRectInWnd.right  = childRectInWnd.left + child->width;
-				childRectInWnd.bottom = childRectInWnd.top + child->height;
+				childRectInWnd.left   = xOffsetInWnd + child->l_x;
+				childRectInWnd.top    = yOffsetInWnd + child->l_y;
+				childRectInWnd.right  = childRectInWnd.left + child->l_width;
+				childRectInWnd.bottom = childRectInWnd.top  + child->l_height;
 
 				MRegion childRegion(childRectInWnd);
 				childRegion.intersect(updateRegion);
@@ -1084,9 +1095,9 @@ namespace MetalBone
 				++chIter;
 				if(child->isHidden()) continue;
 				if(tlpWE->passiveUpdateWidgets.find(child) != tlpWE->passiveUpdateWidgets.end())
-					child->draw(xOffsetInWnd+child->x,yOffsetInWnd+child->y,true);
+					child->draw(xOffsetInWnd+child->l_x,yOffsetInWnd+child->l_y,true);
 				else if(tlpWE->childUpdatedHash.find(child) != tlpWE->childUpdatedHash.end())
-					child->draw(xOffsetInWnd+child->x,yOffsetInWnd+child->y,false);
+					child->draw(xOffsetInWnd+child->l_x,yOffsetInWnd+child->l_y,false);
 			}
 		}
 	}

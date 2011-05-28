@@ -50,6 +50,12 @@ namespace Demo {
 		resizer.ensurePolished();
 		resizer.show();
 
+        scrollBar.setParent(this);
+        scrollBar.showButtons(false);
+        scrollBar.ensurePolished();
+        scrollBar.setRange(0,100);
+        scrollBar.show();
+
 		closeButton.clicked.Connect(this, &SAMainWindow::closeBtnClicked);
 		redxButton.clicked.Connect(this, &SAMainWindow::closeBtnClicked);
 
@@ -86,6 +92,9 @@ namespace Demo {
 		statusLabel.setGeometry(slPos.x, slPos.y + yDelta, slSize.width() + xDelta, slSize.height());
 		tabBar.resize(tabBar.size().enlarge(xDelta,0));
 		titleLabel.resize(titleLabel.size().enlarge(xDelta,0));
+
+        scrollBar.setGeometry(scrollBar.x() + xDelta, scrollBar.y(),
+            scrollBar.width(), int(0.618 * contentWidget.height()));
 
 		// TODO: Resize content widget. ( take scroll bar into account )
 	}
