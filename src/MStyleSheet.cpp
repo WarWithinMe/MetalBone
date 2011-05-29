@@ -2465,9 +2465,8 @@ namespace MetalBone
 		querierStyleRuleCache.clear();
 		querierRenderRuleCache.clear();
 
-		appStyleSheet = new StyleSheet();
-		MCSSParser parser(css);
-		parser.parse(appStyleSheet);
+		MCSSParser parser;
+		appStyleSheet = parser.parse(css);
 	}
 
 	void MSSSPrivate::setWidgetSS(MWidget* w, const wstring& css)
@@ -2482,10 +2481,8 @@ namespace MetalBone
 
 		if(!css.empty())
 		{
-			StyleSheet* ss = new StyleSheet();
-			MCSSParser parser(css);
-			parser.parse(ss);
-			widgetSSCache.insert(WidgetSSCache::value_type(w,ss));
+			MCSSParser parser;
+			widgetSSCache.insert(WidgetSSCache::value_type(w,parser.parse(css)));
 		}
 
 		// Remove every child widgets' cache, so that they can recalc the StyleRules

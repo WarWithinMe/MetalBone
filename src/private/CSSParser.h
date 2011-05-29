@@ -96,6 +96,7 @@ namespace MetalBone
             const Selector*  matchedSelector;
             const StyleRule* styleRule;
         };
+
         struct StyleSheet
         {
             typedef std::tr1::unordered_multimap<std::wstring, StyleRule*> StyleRuleElementMap;
@@ -133,8 +134,22 @@ namespace MetalBone
             inline          CssValue(const CssValue&);
             inline explicit CssValue(Type t = Unknown);
 
-            inline MColor getColor() const;
             inline const CssValue& operator=(const CssValue&);
+
+            inline void setType(Type);
+
+            inline void setInt(int);
+            inline void setUInt(unsigned int);
+            inline void setColor(unsigned int);
+            inline void setString(std::wstring*);
+            inline void setIdentifier(ValueType);
+
+            inline int                 getInt()          const;
+            inline unsigned int        getUInt()         const;
+            inline MColor              getColor()        const;
+            inline const std::wstring& getString()       const;
+            inline ValueType           getIdentifier()   const;
+            inline bool                isType(ValueType) const;
         };
 
         typedef std::vector<CssValue> CssValueArray;
@@ -145,8 +160,9 @@ namespace MetalBone
         // 4. Declaration   - prop1: value1; | prop2: value2;
         struct Declaration
         {
+            Declaration(PropertyType p):property(p){}
             ~Declaration();
-            void addValue(const std::wstring& css, int index, int length);
+            int addValue(const std::wstring& css, int index, int length);
 
             PropertyType  property;
             CssValueArray values;
@@ -180,6 +196,7 @@ namespace MetalBone
 
         struct StyleRule
         {
+            inline StyleRule(unsigned int order):order(order){}
             ~StyleRule();
             std::vector<Selector*>    selectors;
             std::vector<Declaration*> declarations;
@@ -189,34 +206,37 @@ namespace MetalBone
         class MCSSParser
         {
             public:
-                MCSSParser(const std::wstring& c);
-                void parse(StyleSheet*);
+                MCSSParser(){}
+                StyleSheet* parse(const std::wstring& css);
 
             private:
                 const std::wstring* css;
-                const int           cssLength;
-                int                 pos;
-                bool                noSelector;
+                int cssLength;
+                int pos;
 
-                void skipWhiteSpace();
+                inline void skipWhiteSpace();
                 void skipComment();
+                void skipComment2();
                 bool parseSelector(StyleRule*);
                 void parseDeclaration(StyleRule*);
 
                 MB_DISABLE_COPY(MCSSParser);
         };
 
-        struct CSSValuePair { const wchar_t* name; unsigned int value; };
-
         inline CssValue::CssValue(const CssValue& rhs):type(rhs.type),data(rhs.data){}
-        inline CssValue::CssValue(Type t):type(t)
-            { data.vint = 0; }
-        inline const CssValue& CssValue::operator=(const CssValue& rhs)
-            { type = rhs.type; data = rhs.data; return *this; }
-        inline MColor CssValue::getColor() const
-            { M_ASSERT(type == Color); return MColor(data.vuint); }
-
-        inline unsigned int Selector::pseudo() const
-            { return basicSelectors.at(basicSelectors.size() - 1)->pseudo; }
+        inline CssValue::CssValue(Type t):type(t) { data.vint = 0; }
+        inline const CssValue&     CssValue::operator=(const CssValue& rhs) { type = rhs.type; data = rhs.data; return *this; }
+        inline MColor              CssValue::getColor()      const { return MColor(data.vuint); }
+        inline int                 CssValue::getInt()        const { return data.vint; }
+        inline unsigned int        CssValue::getUInt()       const { return data.vuint; }
+        inline const std::wstring& CssValue::getString()     const { return *data.vstring; }
+        inline ValueType           CssValue::getIdentifier() const { return data.videntifier; }
+        inline void CssValue::setType(Type t)            { type             = t; }
+        inline void CssValue::setInt(int v)              { data.vint        = v; }
+        inline void CssValue::setUInt(unsigned int v)    { data.vuint       = v; }
+        inline void CssValue::setColor(unsigned int v)   { data.vuint       = v; }
+        inline void CssValue::setString(std::wstring* v) { data.vstring     = v; }
+        inline void CssValue::setIdentifier(ValueType v) { data.videntifier = v; }
+        inline unsigned int Selector::pseudo() const { return basicSelectors.at(basicSelectors.size() - 1)->pseudo; }
     } // namespace CSS
 }

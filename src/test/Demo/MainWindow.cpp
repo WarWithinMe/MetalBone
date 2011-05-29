@@ -1,4 +1,4 @@
-#include "MainWindow.h"
+ï»¿#include "MainWindow.h"
 #include "MApplication.h"
 #include "MStyleSheet.h"
 
@@ -50,6 +50,8 @@ namespace Demo {
 		resizer.ensurePolished();
 		resizer.show();
 
+        statusLabel.setToolTip(L"è¿™æ˜¯MetalBone Demo(à¹‘ï¿«Ü«ï¿©)");
+
         scrollBar.setParent(this);
         scrollBar.showButtons(false);
         scrollBar.ensurePolished();
@@ -60,18 +62,18 @@ namespace Demo {
 		redxButton.clicked.Connect(this, &SAMainWindow::closeBtnClicked);
 
 		titleLabel.setText(L"MetalBone Demo");
-		statusLabel.setText(L"ÕâÊÇMetalBone Demo.");
+		statusLabel.setText(L"è¿™æ˜¯MetalBone Demo.");
 
 		setAttributes(WA_DeleteOnClose);
 
-        tabBar.addTab(L"³£¹æÉèÖÃ",L"theme\\icon1.png");
-        tabBar.addTab(L"ÉèÖÃ2",L"theme\\icon2.png");
-        tabBar.addTab(L"ÓÃ»§",L"theme\\icon3.png");
-        tabBar.addTab(L"³£¹æÉèÖÃ2",L"theme\\icon4.png");
-        tabBar.addTab(L"³£¹æÉèÖÃ3",L"theme\\icon5.png");
+        tabBar.addTab(L"å¸¸è§„è®¾ç½®",L"theme\\icon1.png");
+        tabBar.addTab(L"è®¾ç½®2",L"theme\\icon2.png");
+        tabBar.addTab(L"ç”¨æˆ·",L"theme\\icon3.png");
+        tabBar.addTab(L"å¸¸è§„è®¾ç½®2",L"theme\\icon4.png");
+        tabBar.addTab(L"å¸¸è§„è®¾ç½®3",L"theme\\icon5.png");
         tabBar.addTab(L"zh",L"theme\\icon6.png");
-        tabBar.addTab(L"ºÜ³¤ºÜ³¤µÄÉèÖÃÃû×Ö",L"theme\\icon7.png");
-        tabBar.addTab(L"¹ØÓÚ²å¼ş",L"theme\\icon8.png");
+        tabBar.addTab(L"å¾ˆé•¿å¾ˆé•¿çš„è®¾ç½®åå­—",L"theme\\icon7.png");
+        tabBar.addTab(L"å…³äºæ’ä»¶",L"theme\\icon8.png");
 	}
 
 	void SAMainWindow::resizeEvent(MResizeEvent* ev)

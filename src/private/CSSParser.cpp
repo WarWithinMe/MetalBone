@@ -7,6 +7,7 @@ namespace MetalBone
 {
 	namespace CSS
 	{
+        struct CSSValuePair { const wchar_t* name; unsigned int value; };
 		static const CSSValuePair pseudos[knownPseudoCount] = {
 			{ L"active",      PC_Active     },
 			{ L"checked",     PC_Checked    },
@@ -148,7 +149,8 @@ namespace MetalBone
 }
 
 using namespace MetalBone::CSS;
-const CSSValuePair* findCSSValue(const std::wstring& p, const CSSValuePair values[], int valueCount)
+using namespace std;
+const CSSValuePair* findCSSValue(const wstring& p, const CSSValuePair values[], int valueCount)
 {
 	const CSSValuePair* crItem = 0;
 	int left = 0;
@@ -227,118 +229,146 @@ Declaration::~Declaration()
 		// Because the String are intended to share among CssValues.
 		switch(values.at(i).type)
 		{
-		case CssValue::Uri:
-		case CssValue::String:
-			delete values.at(i).data.vstring;
-		default: break;
+		    case CssValue::Uri:
+		    case CssValue::String:
+			    delete values.at(i).data.vstring;
+		    default: break;
 		}
 	}
 }
 
-MCSSParser::MCSSParser(const std::wstring& c):
-css(&c),cssLength(c.size()),
-	pos(cssLength - 1),noSelector(false)
+inline void MCSSParser::skipWhiteSpace()
 {
-	// Test if Declaration block contains Selector
-	while(pos > 0) {
-		if(iswspace(c.at(pos)))
-			--pos;
-		else if(c.at(pos) == L'/' && c.at(pos - 1) == L'*') {
-			pos -= 2;
-			while(pos > 0) {
-				if(c.at(pos) == L'*' && c.at(pos-1) == L'/') {
-					pos -= 2;
-					break;
-				}
-				--pos;
-			}
-		}else {
-			noSelector = (c.at(pos) != L'}');
-			break;
-		}
-	}
-}
-
-void MCSSParser::skipWhiteSpace()
-{
-	while(pos < cssLength) {
-		if(iswspace(css->at(pos)))
-			++pos;
-		else { break; }
-	}
+    while(pos < cssLength && iswspace(css->at(pos)))
+        ++pos;
 }
 
 // if meet "/*", call this function to make pos behind "*/"
 void MCSSParser::skipComment()
 {
-	pos += 2;
-	int cssLengthMinus = cssLength - 1;
-	while(pos < cssLengthMinus) {
-		if(css->at(pos) == L'*' && css->at(pos + 1) == L'/') {
-			pos += 2;
-			break;
-		}
-		++pos;
-	}
+    int lengthMinus = cssLength - 1;
+    while(pos < lengthMinus)
+    {
+        if(css->at(pos) == L'*' && css->at(pos + 1) == L'/')
+        {
+            pos += 2;
+            break;
+        }
+        ++pos;
+    }
+    skipWhiteSpace();
 }
 
-void MCSSParser::parse(StyleSheet* ss)
+void MCSSParser::skipComment2()
 {
-	pos = 0;
-	std::wstring css_copy;
-	if(noSelector)
-	{
-		css_copy.append(L"*{");
-		css_copy.append(*css);
-		css_copy.append(1,L'}');
-		css = &css_copy;
-	}
+    int lengthMinus = cssLength - 1;
+    while(pos < lengthMinus && css->at(pos) == L'/')
+    {
+        ++pos;
+        if(css->at(pos) != L'*') continue;
 
-	int order = 0;
+        ++pos;
+        while(pos < lengthMinus)
+        {
+            if(css->at(pos) == L'*' &&
+                css->at(pos + 1) == L'/')
+            { pos+=2; break; }
+        }
+    }
+    skipWhiteSpace();
+}
+
+StyleSheet* MCSSParser::parse(const wstring& sourceCSS)
+{
+    wstring css_copy;
+    pos = sourceCSS.size() - 1;
+    css = &sourceCSS;
+    // Test if Declaration block contains Selector
+    while(pos > 0) {
+        if(iswspace(sourceCSS.at(pos))) { --pos; continue;}
+
+        if(sourceCSS.at(pos) == L'/' && sourceCSS.at(pos - 1) == L'*')
+        {
+            pos -= 2;
+            while(pos > 0)
+            {
+                if(sourceCSS.at(pos) == L'*' && sourceCSS.at(pos-1) == L'/')
+                { pos -= 2; break; }
+                --pos;
+            }
+            continue;
+        }
+
+        if(sourceCSS.at(pos) != L'}')
+        {
+            css_copy.append(L"*{");
+            css_copy.append(sourceCSS);
+            css_copy.append(1, L'}');
+            css = &css_copy;
+        }
+        break;
+    }
+
+    StyleSheet* ss = new StyleSheet();
+	int order      = pos = 0;
+    cssLength      = css->size();
+
 	while(pos < cssLength)
 	{
-		StyleRule* newStyleRule = new StyleRule();
-		newStyleRule->order = order;
+		StyleRule* newStyleRule = new StyleRule(order);
+
 		// If we successfully parsed Selector, we then parse Declaration.
 		// If we failed to parse Declaration, the Declaration must be empty,
 		// so that we can delete the created StyleRule.
 		if(parseSelector(newStyleRule))
 			parseDeclaration(newStyleRule);
 
-		if(newStyleRule->declarations.empty()) {
+		if(newStyleRule->declarations.empty()) 
+        {
 			delete newStyleRule;
-		} else {
-			const std::vector<Selector*>& sels = newStyleRule->selectors;
-			for(unsigned int i = 0; i < sels.size(); ++i)
-			{
-				const Selector* sel = sels.at(i);
-				const BasicSelector* bs = sel->basicSelectors.at(sel->basicSelectors.size() - 1);
-				if(!bs->id.empty()) {
-					ss->srIdMap.insert(StyleSheet::StyleRuleIdMap::value_type(bs->id,newStyleRule));
-				} else if(!bs->elementName.empty())
-					ss->srElementMap.insert(StyleSheet::StyleRuleElementMap::value_type(bs->elementName,newStyleRule));
-				else
-					ss->universal.push_back(newStyleRule);
-			}
-
-			ss->styleRules.push_back(newStyleRule);
+            continue;
 		}
 
+		const vector<Selector*>& sels = newStyleRule->selectors;
+		for(size_t i = 0; i < sels.size(); ++i)
+		{
+			const Selector* sel     = sels.at(i);
+			const BasicSelector* bs = sel->basicSelectors.at(sel->basicSelectors.size() - 1);
+
+			if(!bs->id.empty()) {
+				ss->srIdMap.insert(StyleSheet::StyleRuleIdMap::value_type(bs->id, newStyleRule));
+                continue;
+			}
+
+            if(bs->elementName.empty()) {
+				ss->universal.push_back(newStyleRule);
+                continue;
+            }
+
+			ss->srElementMap.insert(StyleSheet::
+                StyleRuleElementMap::value_type(bs->elementName,newStyleRule));
+		}
+
+		ss->styleRules.push_back(newStyleRule);
 		++order;
 	}
+
+    return ss;
 }
 
 bool MCSSParser::parseSelector(StyleRule* sr)
 {
 	skipWhiteSpace();
 
-	int crSelectorStartIndex = pos;
-	std::wstring commentBuffer;
-	int cssLengthMinus = cssLength - 1;
+	int     crSelectorStartIndex = pos;
+	int     cssLengthMinus       = cssLength - 1;
+	wstring commentBuffer;
 	wchar_t byte;
+
 	while(pos < cssLengthMinus)
 	{
 		byte = css->at(pos);
+
 		if(byte == L'{') // Declaration Block
 		{
 			int posBeforeEndingSpace = pos;
@@ -349,37 +379,42 @@ bool MCSSParser::parseSelector(StyleRule* sr)
 			{
 				commentBuffer.append(*css,crSelectorStartIndex,posBeforeEndingSpace - crSelectorStartIndex);
 				sel = new Selector(&commentBuffer);
-			}else
+			} else
 				sel = new Selector(css,crSelectorStartIndex,posBeforeEndingSpace - crSelectorStartIndex);
 			sr->selectors.push_back(sel);
 			break;
 
-		}else if(byte == L',')
+		}
+
+        if(byte == L'/' && css->at(pos + 1) == L'*')
+        {
+            commentBuffer.append(*css, crSelectorStartIndex, pos-crSelectorStartIndex);
+            skipComment();
+            if(commentBuffer.size() == 0)
+                skipWhiteSpace();
+            crSelectorStartIndex = pos;
+            continue;
+        }
+
+        if(byte == L',')
 		{
 			int posBeforeEndingSpace = pos;
 			while(iswspace(css->at(posBeforeEndingSpace - 1)))
 				--posBeforeEndingSpace;
+
 			Selector* sel;
 			if(commentBuffer.size() > 0)
 			{
 				commentBuffer.append(*css,crSelectorStartIndex,posBeforeEndingSpace - crSelectorStartIndex);
 				sel = new Selector(&commentBuffer);
 				commentBuffer.clear();
-			}else
+			} else
 				sel = new Selector(css,crSelectorStartIndex,posBeforeEndingSpace - crSelectorStartIndex);
 			sr->selectors.push_back(sel);
 
 			++pos;
 			skipWhiteSpace();
 			crSelectorStartIndex = pos;
-		}else if(byte == L'/' && css->at(pos + 1) == L'*')
-		{
-			commentBuffer.append(*css,crSelectorStartIndex,pos-crSelectorStartIndex);
-			skipComment();
-			if(commentBuffer.size() == 0)
-				skipWhiteSpace();
-			crSelectorStartIndex = pos;
-			continue;
 		}
 		++pos;
 	}
@@ -387,150 +422,42 @@ bool MCSSParser::parseSelector(StyleRule* sr)
 	return (pos < cssLength);
 }
 
-void MCSSParser::parseDeclaration(StyleRule* sr)
+Selector::Selector(const wstring* css, int index, int length)
 {
-	++pos; // skip '{'
-	skipWhiteSpace();
-	int index = pos;
-	std::wstring commentBuffer;
-	while(pos < cssLength)
-	{
-		// property
-		wchar_t byte = css->at(pos);
-		if(byte == L'}')
-			break;
-		else if(byte == L';')
-		{
-			++pos;
-			index = pos;
-		}else if(byte == L'/' && css->at(pos + 1) == L'*') // Skip Comment
-		{
-			commentBuffer.append(*css,index,pos - index);
-			skipComment();
-			index = pos;
-		}else if(byte != L':')
-			++pos;
-		else
-		{
-			int posBeforeEndingSpace = pos;
-			while(iswspace(css->at(posBeforeEndingSpace - 1)))
-				--posBeforeEndingSpace;
-
-			const CSSValuePair* crItem = 0;
-			if(commentBuffer.size() != 0)
-			{
-				commentBuffer.append(*css,index, posBeforeEndingSpace - index);
-				crItem = findCSSValue(commentBuffer,properties,knownPropertyCount);
-				commentBuffer.clear();
-			}else
-			{
-				std::wstring propName(*css,index,posBeforeEndingSpace - index);
-				crItem = findCSSValue(propName,properties,knownPropertyCount);
-			}
-
-			if(crItem)
-			{
-				Declaration* d = new Declaration();
-				d->property = static_cast<PropertyType>(crItem->value);
-
-				++pos;
-				skipWhiteSpace();
-
-				// value
-				int valueStartIndex = pos;
-				while(pos < cssLength)
-				{
-					byte = css->at(pos);
-					if(byte == L';' || byte == L'}')
-					{
-						posBeforeEndingSpace = pos;
-						while(iswspace(css->at(posBeforeEndingSpace - 1)))
-							--posBeforeEndingSpace;
-
-						if(commentBuffer.size() != 0)
-						{
-							commentBuffer.append(*css,valueStartIndex,posBeforeEndingSpace - valueStartIndex);
-							d->addValue(commentBuffer,0,commentBuffer.length());
-							commentBuffer.clear();
-						}else
-							d->addValue(*css,valueStartIndex,posBeforeEndingSpace - valueStartIndex);
-
-						break;
-					}else if(byte == L'/' && css->at(pos + 1) == L'*')
-					{
-						commentBuffer.append(*css,valueStartIndex,pos - valueStartIndex);
-						skipComment();
-						valueStartIndex = pos;
-					}else
-						++pos;
-				}
-				// If we don't have valid values for the declaration.
-				// We delete the declaration.
-				if(d->values.empty())
-					delete d;
-				else
-					sr->declarations.push_back(d);
-
-			} else {
-				while(pos < cssLength) // Unknown Property, Skip to Next.
-				{
-					++pos;
-					byte = css->at(pos);
-					if(byte == L'}' || byte == L';')
-						break;
-				}
-			}
-
-			if(byte == L'}')
-				break;
-			else if(byte == L';')
-			{
-				++pos;
-				skipWhiteSpace();
-				index = pos;
-			}
-		}
-	}
-	++pos; // skip '}'
-}
-
-Selector::Selector(const std::wstring* css, int index, int length)
-{
-	if(length == -1)
-		length = css->size();
-
-	length += index;
-
-	if(index == length)
+    if(length == -1) { length = css->size(); }
+	if(length ==  0)
 	{
 		BasicSelector* sel = new BasicSelector();
 		sel->relationToNext = BasicSelector::NoRelation;
 		basicSelectors.push_back(sel);
 	}
 
+    length += index;
+
 	while(index < length)
 	{
 		BasicSelector* sel = new BasicSelector();
 		basicSelectors.push_back(sel);
-		bool newBS = false;
-		std::wstring pseudo;
-		std::wstring* buffer = &(sel->elementName);
+
+		wstring  pseudo;
+		wstring* buffer = &(sel->elementName);
+		bool     newBS  = false;
+
 		while(index < length)
 		{
 			wchar_t byte = css->at(index);
 			if(iswspace(byte))
 			{
-				while((++index) < length) {
-					if(css->at(index) == L':')
-						{ --index; break; }
-					else if(!iswspace(css->at(index)))
-						{ newBS = true; --index; break; }
+				while((++index) < length)
+                {
+					if(css->at(index) == L':')    { --index; break; }
+					if(!iswspace(css->at(index))) { newBS = true; --index; break; }
 				}
-			}else if(byte == L'>')
+			} else if(byte == L'>')
 			{
 				newBS = true;
 				sel->relationToNext = BasicSelector::MatchNextIfParent;
-			}else
+			} else
 			{
 				if(newBS)
 				{
@@ -539,19 +466,20 @@ Selector::Selector(const std::wstring* css, int index, int length)
 					break;
 				}
 
-				if(byte == L'#')
+				if(byte == L'#') {
 					buffer = &(sel->id);// And skip '#';
-				else if(byte == L':')
+                } else if(byte == L':')
 				{
 					if(!pseudo.empty())
 						sel->addPseudoAndClearInput(pseudo);
 
 					buffer = &pseudo; // And Skip ':';
-					while((++index) < length) {
+					while((++index) < length)
+                    {
 						if(!iswspace(css->at(index)))
-						{ --index; break; }
+                            { --index; break; }
 					}
-				}else if(byte != L'*') // Don't add (*)
+				} else if(byte != L'*') // Don't add (*)
 					buffer->append(1,byte);
 			}
 			++index;
@@ -574,12 +502,13 @@ Selector::Selector(const std::wstring* css, int index, int length)
 
 void BasicSelector::addPseudoAndClearInput(std::wstring& p)
 {
-	const CSSValuePair* crItem = findCSSValue(p,pseudos,knownPseudoCount);
+	const CSSValuePair* crItem = findCSSValue(p, pseudos, knownPseudoCount);
+    p.clear();
+
 	if(crItem) {
 		pseudo |= crItem->value;
 		++pseudoCount;
 	}
-	p.clear();
 }
 
 // Background:      { Brush/Image frame-count Repeat Clip Alignment pos-x pos-y width height }*;
@@ -600,158 +529,261 @@ void BasicSelector::addPseudoAndClearInput(std::wstring& p)
 
 // Margin:          Length{1,4}
 // Brush:           Color | Gradient
-// Gradient:
+// Gradient:        linear-gradient(left|right top|bottom, color position,...)
 // Repeat:          repeat | repeat-x | repeat-y | no-repeat
 // Clip/Origin:     padding | border | content | margin
 // Image:           url(filename)
 // Alignment:       (left | top | right | bottom | center){0,2}
 // LineStyle:       dashed | dot-dash | dot-dot-dash | dotted | solid | wave
 // Length:          Number // do not support unit and the default unit is px
-void Declaration::addValue(const std::wstring& css, int index, int length)
+
+void MCSSParser::parseDeclaration(StyleRule* sr)
 {
-	std::wstring buffer;
-	CssValue value;
-	int maxIndex = index + length - 1;
-	int bufferLength = 0;
-	while(index <= maxIndex)
-	{
-		wchar_t byte = css.at(index);
-		if(iswspace(byte) || index == maxIndex)
-		{
-			if(index == maxIndex) {
-				++index;
-				++bufferLength;
-			}
+    ++pos; // skip '{'
+    skipWhiteSpace();
+    skipComment2();
 
-			buffer.assign(css,index - bufferLength,bufferLength);
+    int selectorStartIndex = pos;
+    int selectorEndIndex   = 0;
 
-			if(!buffer.empty())
-			{
-				if(buffer.at(buffer.size() - 1) == L'x' && buffer.at(buffer.size() - 2) == L'p') // Length
-				{
-					value.type = CssValue::Length;
-					buffer.erase(buffer.size() - 2, 2);
-					value.data.vint = _wtoi(buffer.c_str());
-					values.push_back(value);
-				} else if(iswdigit(buffer.at(0)) || buffer.at(0) == L'-') // Number
-				{
-					value.type = CssValue::Number;
-					value.data.vint = _wtoi(buffer.c_str());
-					values.push_back(value);
-				} else // Identifier or String
-				{
-					const CSSValuePair* crItem = findCSSValue(buffer,knownValues,KnownValueCount - 1);
-					if(crItem != 0)
-					{
-						if(crItem->value == Value_Transparent)
-						{
-							value.type = CssValue::Color;
-							value.data.vuint = 0;
-						} else {
-							value.type = CssValue::Identifier;
-							value.data.videntifier = static_cast<ValueType>(crItem->value);
-						}
-					} else // Treat it as string
-					{
-						value.type = CssValue::String;
-						value.data.vstring = new std::wstring(buffer);
-					}
-					values.push_back(value);
-				}
+    while(pos < cssLength)
+    {
+        // property
+        wchar_t byte = css->at(pos);
+        if(byte == L'/' || iswspace(byte))
+        {
+            selectorEndIndex = pos - 1;
+            while(pos < cssLength)
+            {
+                byte = css->at(pos);
+                if(byte == L':') break;
+                ++pos;
+            }
+        }
 
-				buffer.clear();
-				bufferLength = 0;
-			}
-		} else if(byte == L'#') // Hex Color
-		{
-			++index;
-			byte = css.at(index);
-			std::wstringstream s;
-			s << L"0x";
-			while(index <= maxIndex)
-			{
-				if(iswalpha(byte) || iswdigit(byte))
-				{
-					s << byte;
-					++index;
-					byte = css.at(index);
-				}else
-					break;
-			}
-			unsigned int hexCol;
-			s >> std::hex >> hexCol;
-			value.type = CssValue::Color;
-			value.data.vuint = hexCol > 0xFFFFFF ? hexCol : (hexCol | 0xFF000000);
-			values.push_back(value);
+        if(byte == L':')
+        {
+            const CSSValuePair* crItem = 0;
+            size_t end = selectorEndIndex == 0 ? pos : selectorEndIndex + 1;
+            wstring propName(*css, selectorStartIndex, end - selectorStartIndex);
+            selectorEndIndex = 0;
+            crItem = findCSSValue(propName, properties, knownPropertyCount);
 
-		} else if(byte == L'u' && css.at(index + 1) == L'r' &&
-			css.at(index + 2) == L'l' && css.at(index + 3) == L'(') // url()
-		{
-			index += 4;
-			value.type = CssValue::Uri;
-			int startIndex = index;
-			while(true)
-			{
-				if(css.at(index) == L')')
-					break;
-				++index;
-			}
-			value.data.vstring = new std::wstring(css,startIndex,index - startIndex);
-			values.push_back(value);
-			++index;
-		} else if(byte == L'r' && css.at(index + 1) == L'g' &&
-			css.at(index + 2) == L'b' &&
-			(css.at(index + 3) == L'(' ||
-			(css.at(index + 3) == L'a' && css.at(index + 4) == L'(')))
-		{
-			index += (css.at(index + 3) == L'(') ? 4 : 5;
+            ++pos;
 
-			value.type = CssValue::Color;
-			value.data.vuint = 0xFF000000;
-			int shift = 16;
-			while(true)
-			{
-				byte = css.at(index);
-				if(byte == ',') {
-					unsigned int c = _wtoi(buffer.c_str());
-					value.data.vuint |= (c << shift);
-					shift -= 8;
-					buffer.clear();
-				} else if(byte == ')')
-					break;
-				else if(!iswspace(byte))
-					buffer.append(1,byte);
-			}
+            if(crItem == 0)
+            {
+                while(pos < cssLength) // Unknown Property, Skip to Next.
+                {
+                    byte = css->at(pos);
+                    if(byte == L';')
+                    {
+                        ++pos;
+                        skipWhiteSpace();
+                        skipComment2();
+                        selectorStartIndex = pos;
+                    } else if(byte == L'}')
+                        break;
+                    ++pos;
+                }
+            } else
+            {
+                skipWhiteSpace();
+                skipComment2();
+                Declaration* d = new Declaration((PropertyType)crItem->value);
+                pos = d->addValue(*css, pos, cssLength);
 
-			if(shift == -8) {// alpha
-				float f;
-				std::wstringstream stream;
-				stream << buffer;
-				stream >> f;
-				unsigned int opacity = (int)(f * 255) << 24;
-				value.data.vuint |= opacity;
-			} else {// blue
-				value.data.vuint |= _wtoi(buffer.c_str());
-			}
+                // If we don't have valid values for the declaration.
+                // We delete the declaration.
+                if(d->values.empty()) { delete d; }
+                else { sr->declarations.push_back(d); }
 
-			values.push_back(value);
-			buffer.clear();
-		} else if(byte == '"')
-		{
-			++index;
-			value.type = CssValue::String;
-			int startIndex = index;
-			while(true)
-			{
-				if(css.at(index) == L'"')
-					break;
-				++index;
-			}
-			value.data.vstring = new std::wstring(css,startIndex,index);
-			values.push_back(value);
-			++index;
-		} else { ++bufferLength; }
+                if(pos < cssLength && css->at(pos) == L';')
+                {
+                    ++pos;
+                    skipWhiteSpace();
+                    skipComment2();
+                    selectorStartIndex = pos;
+                }
+                if(pos < cssLength && css->at(pos) == L'}')
+                    break;
+            }
+        } else if(byte == L'}')
+            break;
 
-		++index;
-	}
+        ++pos;
+    }
+
+    ++pos; // skip '}'
+}
+
+// Comment cannot be in the middle of a expression list.
+// e.g. *{ aaa: /*comments*/ aaa bbb ccc; } is legal
+// but  *{ aaa: bbb /*comments*/ ccc ddd; } is not legal
+int Declaration::addValue(const wstring& css, int index, int length)
+{
+    int  valueStartIndex  = index;
+    int  valueEndIndex    = 0;
+    bool isString         = false;
+    bool atEnd            = false;
+    while(index < length)
+    {
+        wchar_t byte = css.at(index);
+        if(byte == L';' || byte == L'}')
+        {
+            valueEndIndex = index - 1;
+            atEnd = true;
+        } else if(byte == L'"')
+        {
+            if(isString) {
+                valueEndIndex = index - 1;
+                ++index;
+                while(index < length && iswspace(css.at(index)))
+                    ++index;
+            }
+            isString = !isString;
+        } else if(!isString && iswspace(byte))
+        {
+            valueEndIndex = index - 1;
+            ++index;
+            while(index < length && iswspace(css.at(index)))
+                ++index;
+        } else if(byte == L'(') // Functions
+        { 
+            wstring funcName(css, valueStartIndex, index - valueStartIndex);
+            if(funcName == L"url")
+            {
+                ++index;
+                int startIndex = index;
+                while(index < length && css.at(index) != L')')
+                    ++index;
+
+                CssValue value;
+                value.setString(new wstring(css, startIndex, index - startIndex));
+                value.setType(CssValue::Uri);
+                values.push_back(value);
+            } else if(funcName == L"rgba" || funcName == L"rgb")
+            {
+                wstring buffer;
+                unsigned int color = 0xFF000000;
+                int shift = 16;
+                while(index < length)
+                {
+                    byte = css.at(index);
+                    if(byte == L',')
+                    {
+                        unsigned int c = _wtoi(buffer.c_str());
+                        color |= c << shift;
+                        shift -= 8;
+                        buffer.clear();
+                    } else if(byte == L')') {
+                        break;
+                    } else if(!iswspace(byte)) {
+                        buffer.append(1, byte);
+                    }
+                    ++index;
+                }
+
+                if(shift == -8) // alpha
+                {
+                    float f;
+                    wstringstream stream;
+                    stream << buffer;
+                    stream >> f;
+                    unsigned int opacity = (int)(f * 255) << 24;
+                    color |= opacity;
+                } else { // blue
+                    color |= _wtoi(buffer.c_str());
+                }
+
+                CssValue value;
+                value.setUInt(color);
+                value.setType(CssValue::Color);
+                values.push_back(value);
+            } else
+            {
+                // Unknow function
+                while(index < length && css.at(index) != L')')
+                    ++index;
+            }
+
+            ++index;
+            while(index < length && iswspace(css.at(index)))
+                ++index;
+            valueEndIndex   = 0;
+            valueStartIndex = index;
+            continue;
+        }
+
+        if(valueEndIndex != 0 && valueStartIndex <= valueEndIndex)
+        {
+            wchar_t begin = css.at(valueStartIndex);
+            CssValue value;
+            // Find a single value.
+            if(begin == L'#')
+            {
+                // Hex Color
+                ++valueStartIndex;
+                wstring hexColor(css, valueStartIndex, valueEndIndex - valueStartIndex + 1);
+                wstringstream hexStream;
+                hexStream << L"0x" << hexColor;
+                unsigned int h;
+                hexStream >> std::hex >> h;
+
+                value.setType(CssValue::Color);
+                value.setUInt((h > 0xFFFFFF ? h : (h | 0xFF000000)));
+            } else if(iswdigit(begin) || begin == L'-')
+            {
+                // Number, Length
+                if(valueEndIndex - valueStartIndex > 1 &&
+                   css.at(valueEndIndex) == L'x' &&
+                   css.at(valueEndIndex - 1) == L'p')
+                {
+                    wstring length(css, valueStartIndex, valueEndIndex - 1 - valueStartIndex);
+                    value.setType(CssValue::Length);
+                    value.setInt(_wtoi(length.c_str()));
+                } else
+                {
+                    wstring length(css, valueStartIndex, valueEndIndex - valueStartIndex + 1);
+                    value.setType(CssValue::Number);
+                    value.setInt(_wtoi(length.c_str()));
+                }
+            } else if(begin == L'"')
+            {
+                // String
+                value.setType(CssValue::String);
+                value.setString(new wstring(css, valueStartIndex + 1, valueEndIndex - valueStartIndex));
+            } else
+            {
+                // Indentifier, Color, String
+                wstring buffer(css, valueStartIndex, valueEndIndex - valueStartIndex + 1);
+                const CSSValuePair* crItem = findCSSValue(buffer, knownValues, KnownValueCount - 1);
+                if(crItem != 0)
+                {
+                    if(crItem->value == Value_Transparent)
+                    {
+                        value.setType(CssValue::Color);
+                        value.setColor(0);
+                    } else {
+                        value.setType(CssValue::Identifier);
+                        value.setIdentifier(static_cast<ValueType>(crItem->value));
+                    }
+                } else
+                {
+                    value.setType(CssValue::String);
+                    value.setString(new wstring(buffer));
+                }
+            }
+
+            values.push_back(value);
+
+            if(atEnd) break;
+
+            valueEndIndex   = 0;
+            valueStartIndex = index;
+            continue;
+        }
+        ++index;
+    }
+    return index;
 }

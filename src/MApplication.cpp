@@ -416,21 +416,22 @@ namespace MetalBone
 
 				MWidget* lastWidget = xtr->widgetUnderMouse;
 				MWidget* currWidget = xtr->currWidgetUnderMouse;
-				if(lastWidget != currWidget)
-				{
-					if(lastWidget != 0)
-					{
-						lastWidget->leaveEvent();
-						lastWidget->setWidgetState(MWS_Pressed | MWS_UnderMouse, false);
-						lastWidget->updateSSAppearance();
+				if(lastWidget != 0)
+                {
+                    if(lastWidget != currWidget)
+                    {
+                        lastWidget->leaveEvent();
+                        lastWidget->setWidgetState(MWS_Pressed | MWS_UnderMouse, false);
+                        lastWidget->updateSSAppearance();
 
-						MToolTip* tip = lastWidget->getToolTip();
-						if(tip) tip->hide();
-					} else {
-						// The mouse moves into the window, we set it to the default.
-						gArrowCursor.show(true);
-					}
-				}
+                        MToolTip* tip = lastWidget->getToolTip();
+                        if(tip) tip->hide();
+                    }
+                } else
+                {
+                    // The mouse moves into the window, we set it to the default.
+                    gArrowCursor.show(true);
+                }
 
 				if(currWidget != 0) {
 
@@ -463,7 +464,7 @@ namespace MetalBone
                         {
                             currWidget->leaveEvent();
                             currWidget->setWidgetState(MWS_UnderMouse | MWS_Pressed, false);
-                            MToolTip* tip = lastWidget->getToolTip();
+                            MToolTip* tip = currWidget->getToolTip();
                             if(tip) tip->hide();
                         }
                     }
@@ -663,12 +664,14 @@ namespace MetalBone
 						cw->mousePressEvent(&me);
 						me.offsetPos(cw->l_x,cw->l_y);
 
-                        if(me.isAccepted()) break;
+                        if(me.isAccepted())
+                        {
+                            cw->grabMouse();
+                            break;
+                        }
 						cw = cw->m_parent;
 
 					} while (cw && cw->testAttributes(WA_NoMousePropagation));
-
-                    cw->grabMouse();
 				}
 				MToolTip::hideAll();
 			}
@@ -752,9 +755,10 @@ namespace MetalBone
 			break;
 
 		case WM_ACTIVATEAPP:
-			if(wparam == FALSE)
+		case WM_MOUSELEAVE:
+			if(msg == WM_MOUSELEAVE || wparam == FALSE)
 			{
-				if(window->m_windowExtras->bTrackingMouse = true)
+				if(window->m_windowExtras->bTrackingMouse)
 				{
 					TRACKMOUSEEVENT tme = {0};
 					tme.cbSize      = sizeof(TRACKMOUSEEVENT);
@@ -764,19 +768,12 @@ namespace MetalBone
 				}
 				window->m_windowExtras->bTrackingMouse = true;
 
+                xtr->lastMouseX = -1;
+                xtr->lastMouseY = -1;
 				xtr->currWidgetUnderMouse = 0;
                 if(xtr->mouseGrabber) xtr->mouseGrabber->releaseMouse();
 				::SendMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(-1,-1));
 
-				window->m_windowExtras->bTrackingMouse = false;
-			}
-			break;
-		case WM_MOUSELEAVE:
-			if(window->m_windowExtras->bTrackingMouse)
-			{
-				xtr->currWidgetUnderMouse = 0;
-                if(xtr->mouseGrabber) xtr->mouseGrabber->releaseMouse();
-				::SendMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(-1,-1));
 				window->m_windowExtras->bTrackingMouse = false;
 			}
 			break;

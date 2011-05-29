@@ -117,7 +117,7 @@ namespace MetalBone
                 MWidget* w = 0, HidePolicy hp = WhenMoveOut);
             ~MToolTip();
 
-            inline void setHidePolicy(HidePolicy);
+            inline void       setHidePolicy(HidePolicy);
             inline HidePolicy hidePolicy() const;
 
             // If the toolTip is shown when you are setting the data for it,
@@ -130,8 +130,8 @@ namespace MetalBone
             // If you set the delegate to w, whenever the tooltip shows up, it won't
             // show up, instead, it calls MWidget::show() for the w.
             inline MWidget* setDelegate(MWidget* w);
-            inline HICON setExtra(const std::wstring& title, HICON icon = NULL);
-            inline HICON setExtra(const std::wstring& title, Icon);
+            inline HICON    setExtra(const std::wstring& title, HICON icon = NULL);
+            inline HICON    setExtra(const std::wstring& title, Icon);
 
             inline const std::wstring& getTitle()  const;
             inline const std::wstring& getText()   const;
