@@ -8,6 +8,7 @@
 
 namespace MetalBone
 {
+    struct LinearGradientData;
     namespace CSS
     {
         // Do not change the enum value's order. Because the algorithm rely on the order.
@@ -119,13 +120,14 @@ namespace MetalBone
         struct CssValue
         {
             // Color store inside CssValue is ARGB format. (The same as MColor)
-            enum  Type { Unknown, Number, Length, Identifier, Uri, Color, String };
+            enum  Type { Unknown, Number, Length, Identifier, Uri, Color, String, LiearGradient };
             union Variant
             {
                 int           vint;
                 unsigned int  vuint;
                 std::wstring* vstring;
                 ValueType     videntifier;
+                LinearGradientData* vlinearGradient;
             };
 
             Type    type;
@@ -143,13 +145,17 @@ namespace MetalBone
             inline void setColor(unsigned int);
             inline void setString(std::wstring*);
             inline void setIdentifier(ValueType);
+            inline void setLinearGradient(LinearGradientData*);
 
-            inline int                 getInt()          const;
-            inline unsigned int        getUInt()         const;
-            inline MColor              getColor()        const;
-            inline const std::wstring& getString()       const;
-            inline ValueType           getIdentifier()   const;
-            inline bool                isType(ValueType) const;
+            inline int                 getInt()                const;
+            inline unsigned int        getUInt()               const;
+            inline MColor              getColor()              const;
+            inline const std::wstring& getString()             const;
+            inline ValueType           getIdentifier()         const;
+            inline LinearGradientData* getLinearGradientData() const;
+            inline bool                isType(ValueType)       const;
+
+            friend struct Declaration;
         };
 
         typedef std::vector<CssValue> CssValueArray;
@@ -231,12 +237,14 @@ namespace MetalBone
         inline unsigned int        CssValue::getUInt()       const { return data.vuint; }
         inline const std::wstring& CssValue::getString()     const { return *data.vstring; }
         inline ValueType           CssValue::getIdentifier() const { return data.videntifier; }
+        inline LinearGradientData* CssValue::getLinearGradientData() const { return data.vlinearGradient; }
         inline void CssValue::setType(Type t)            { type             = t; }
         inline void CssValue::setInt(int v)              { data.vint        = v; }
         inline void CssValue::setUInt(unsigned int v)    { data.vuint       = v; }
         inline void CssValue::setColor(unsigned int v)   { data.vuint       = v; }
         inline void CssValue::setString(std::wstring* v) { data.vstring     = v; }
         inline void CssValue::setIdentifier(ValueType v) { data.videntifier = v; }
+        inline void CssValue::setLinearGradient(LinearGradientData* v) { data.vlinearGradient = v; }
         inline unsigned int Selector::pseudo() const { return basicSelectors.at(basicSelectors.size() - 1)->pseudo; }
     } // namespace CSS
 }

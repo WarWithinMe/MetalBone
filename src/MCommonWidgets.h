@@ -11,7 +11,7 @@
 
 namespace MetalBone
 {
-    class MButton : public MWidget
+    class METALBONE_EXPORT MButton : public MWidget
     {
         public:
             inline MButton(MWidget* parent = 0);
@@ -42,7 +42,7 @@ namespace MetalBone
             bool         b_isChecked;
     };
 
-    class MLabel : public MWidget
+    class METALBONE_EXPORT MLabel : public MWidget
     {
         public:
             void setText(const std::wstring& t)
@@ -58,7 +58,7 @@ namespace MetalBone
             std::wstring text;
     };
 
-    class MTabBar : public MWidget
+    class METALBONE_EXPORT MTabBar : public MWidget
     {
         public:
             MTabBar();
@@ -115,7 +115,7 @@ namespace MetalBone
             void onRightButton();
     };
 
-    class MScrollBar : public MWidget
+    class METALBONE_EXPORT MScrollBar : public MWidget
     {
         public:
             enum Orientation
@@ -187,8 +187,7 @@ namespace MetalBone
             int  n_trackEndPos;
             int  n_thumbStartPos;
             int  n_thumbEndPos;
-            int  n_marginBefore;
-            int  n_marginAfter;
+            MRect margin;
 
             bool b_tracking;
             bool b_thumbHover;

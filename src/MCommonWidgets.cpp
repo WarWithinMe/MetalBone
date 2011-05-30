@@ -402,7 +402,6 @@ namespace MetalBone
         n_pageStep(10), n_singleStep(1),
         n_trackStartPos(0), n_trackEndPos(0),
         n_thumbStartPos(0), n_thumbEndPos(0),
-        n_marginBefore(0), n_marginAfter(0),
         n_mousePos(-1),
         b_tracking(true), b_thumbHover(false)
     {
@@ -428,26 +427,31 @@ namespace MetalBone
         subButton.ensurePolished();
         addButton.ensurePolished();
 
-        CSS::RenderRule rule = mApp->getStyleSheet()->getRenderRule(this, 
-            e_orientation == Vertical ? CSS::PC_Vertical : CSS::PC_Horizontal);
-        MRect margin = rule.getContentMargin();
         if(e_orientation == Vertical)
         {
-            n_marginBefore = margin.top;
-            n_marginAfter  = margin.bottom;
+            CSS::RenderRule rule = mApp->getStyleSheet()->getRenderRule(this, CSS::PC_Vertical);
+            int marginTop = margin.top;
+            int marginBottom = margin.bottom;
+            margin = rule.getContentMargin();
+
+            n_trackStartPos += margin.top - marginTop;
+            n_trackEndPos   -= margin.bottom - marginBottom;
         } else
         {
-            n_marginBefore = margin.left;
-            n_marginAfter  = margin.right;
+            CSS::RenderRule rule = mApp->getStyleSheet()->getRenderRule(this, CSS::PC_Horizontal);
+            int marginLeft = margin.left;
+            int marginRight = margin.right;
+            margin = rule.getContentMargin();
+
+            n_trackStartPos += margin.left - marginLeft;
+            n_trackEndPos   -= margin.right - marginRight;
         }
+        
     };
 
     void MScrollBar::showButtons(bool s)
     { 
-        if(addButton.isHidden() != s)
-            return;
-
-        int sliderSize = 0;
+        if(addButton.isHidden() != s) return;
         if(s)
         {
             addButton.show();
@@ -455,42 +459,42 @@ namespace MetalBone
 
             if(e_orientation == Vertical)
             {
-                if(subButton.y() == 0)
-                {
-                    n_trackStartPos = subButton.height();
-                    n_trackEndPos   = addButton.y();
-                } else
-                {
-                    n_trackStartPos = 0;
-                    n_trackEndPos   = subButton.y();
+                if(subButton.y() == 0) {
+                    n_trackStartPos = subButton.height() + margin.top;
+                    n_trackEndPos   = addButton.y() - margin.bottom;
+                } else {
+                    n_trackStartPos = margin.top;
+                    n_trackEndPos   = subButton.y() - margin.bottom;
                 }
 
-                sliderSize = height() - subButton.height() - addButton.height();
-            } else
-            {
+            } else {
                 if(subButton.x() == 0)
                 {
-                    n_trackStartPos = subButton.width();
-                    n_trackEndPos   = addButton.x();
+                    n_trackStartPos = subButton.width() + margin.left;
+                    n_trackEndPos   = addButton.x() - margin.right;
                 } else
                 {
-                    n_trackStartPos = 0;
-                    n_trackEndPos   = subButton.x();
+                    n_trackStartPos = margin.left;
+                    n_trackEndPos   = subButton.x() - margin.right;
                 }
-
-                sliderSize = width() - subButton.width() - addButton.width();
             }
         } else
         {
             addButton.hide();
             subButton.hide();
-            n_trackStartPos = 0;
 
-            sliderSize = e_orientation == Vertical ? height() : width();
-            n_trackEndPos = sliderSize;
+            if(e_orientation == Vertical)
+            {
+                n_trackStartPos = margin.top;
+                n_trackEndPos   = height() - margin.bottom;
+            } else
+            {
+                n_trackStartPos = margin.left;
+                n_trackEndPos   = width() - margin.right;
+            }
         }
 
-        n_thumbEndPos = n_thumbStartPos + calcThumbSize(sliderSize);
+        n_thumbEndPos = n_thumbStartPos + calcThumbSize(n_trackStartPos - n_trackEndPos);
     }
 
     void MScrollBar::resizeEvent(MResizeEvent* e)
@@ -502,36 +506,24 @@ namespace MetalBone
 
         if(e_orientation == Vertical)
         {
-            int contentX      = n_marginBefore;
-            int contentY      = subButton.y();
-            int contentWidth  = newSize.getWidth() - n_marginBefore - n_marginAfter;
-            int contentHeight = subButton.height();
-
+            int contentY = subButton.y();
             // Mac-style SubButton
-            if(subButton.y() != 0)
-                contentY += yDelta;
-            subButton.setGeometry(contentX, contentY, contentWidth, contentHeight);
+            if(subButton.y() != 0) contentY += yDelta;
+            subButton.setGeometry(0, contentY, newSize.getWidth(), subButton.height());
 
             contentY = addButton.y() + yDelta;
-            contentHeight = addButton.height();
-            addButton.setGeometry(contentX, contentY, contentWidth, contentHeight);
+            addButton.setGeometry(0, contentY, newSize.getWidth(), addButton.height());
 
             n_trackEndPos += yDelta;
         } else
         {
             int contentX      = subButton.x();
-            int contentY      = n_marginBefore;
-            int contentWidth  = subButton.width();
-            int contentHeight = newSize.getHeight() - n_marginBefore - n_marginAfter;
 
-            if(subButton.x() != 0)
-                contentX += xDelta;
-            subButton.setGeometry(contentX, contentY, contentWidth, contentHeight);
+            if(subButton.x() != 0) contentX += xDelta;
+            subButton.setGeometry(contentX, 0, subButton.width(), newSize.height());
 
-            contentX     = addButton.x() + xDelta;
-            contentWidth = subButton.width();
-
-            addButton.setGeometry(contentX, contentY, contentWidth, contentHeight);
+            contentX = addButton.x() + xDelta;
+            addButton.setGeometry(contentX, 0, addButton.width(), newSize.height());
 
             n_trackEndPos += xDelta;
         }
@@ -656,8 +648,8 @@ namespace MetalBone
             {
                 bool oldHover = b_thumbHover;
 
-                if(e->getX() >= n_marginBefore &&
-                    e->getX() <= width() - n_marginAfter &&
+                if(e->getX() >= margin.left &&
+                    e->getX() <= width() - margin.right &&
                     e->getY() >= n_thumbStartPos &&
                     e->getY() <= n_thumbEndPos)
                 { b_thumbHover = true; }
@@ -669,8 +661,8 @@ namespace MetalBone
             {
                 bool oldHover = b_thumbHover;
 
-                if(e->getY() >= n_marginBefore &&
-                    e->getY() <= height() - n_marginAfter &&
+                if(e->getY() >= margin.top &&
+                    e->getY() <= height() - margin.bottom &&
                     e->getX() >= n_thumbStartPos &&
                     e->getX() <= n_thumbEndPos)
                 { b_thumbHover = true; }
@@ -739,14 +731,14 @@ namespace MetalBone
         MRect thumbRectInRT = widgetRectInRT;
         if(e_orientation == Vertical)
         {
-            thumbRectInRT.left   += n_marginBefore;
-            thumbRectInRT.right  -= n_marginAfter;
+            thumbRectInRT.left   += margin.left;
+            thumbRectInRT.right  -= margin.right;
             thumbRectInRT.bottom = thumbRectInRT.top + n_thumbEndPos;
             thumbRectInRT.top    += n_thumbStartPos;
         } else
         {
-            thumbRectInRT.top    += n_marginBefore;
-            thumbRectInRT.bottom -= n_marginAfter;
+            thumbRectInRT.top    += margin.top;
+            thumbRectInRT.bottom -= margin.right;
             thumbRectInRT.right  =  thumbRectInRT.left + n_thumbEndPos;
             thumbRectInRT.left   += n_thumbStartPos;
         }

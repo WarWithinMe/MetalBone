@@ -58,6 +58,48 @@ namespace MetalBone
         return it->second;
     }
 
+    ID2D1LinearGradientBrush* D2DBrushHandle::getLinearGraidentBrush(const D2D1_RECT_F* drawingRect)
+    {
+        M_ASSERT(etype == LinearGradient);
+
+        ID2D1LinearGradientBrush* brush = *(ID2D1LinearGradientBrush**)pdata;
+
+        if(drawingRect == 0) return brush;
+
+        const LinearGradientData* data = 
+            MD2DPaintContext::resPool.linearDataMap[(ID2D1LinearGradientBrush**)pdata];
+
+        FLOAT width  = drawingRect->right - drawingRect->left;
+        FLOAT height = drawingRect->bottom - drawingRect->top;
+
+        D2D1_POINT_2F startPoint;
+        D2D1_POINT_2F endPoint;
+
+        if(data->isPercentagePos(LinearGradientData::StartX))
+            startPoint.x = width * data->getPosValue(LinearGradientData::StartX) / 100;
+        else
+            startPoint.x = (FLOAT)data->getPosValue(LinearGradientData::StartX);
+
+        if(data->isPercentagePos(LinearGradientData::StartY))
+            startPoint.y = height * data->getPosValue(LinearGradientData::StartY) / 100;
+        else
+            startPoint.y = (FLOAT)data->getPosValue(LinearGradientData::StartY);
+
+        if(data->isPercentagePos(LinearGradientData::EndX))
+            endPoint.x   = width * data->getPosValue(LinearGradientData::EndX) / 100;
+        else
+            endPoint.x   = (FLOAT)data->getPosValue(LinearGradientData::EndX);
+
+        if(data->isPercentagePos(LinearGradientData::EndY))
+            endPoint.y   = height * data->getPosValue(LinearGradientData::EndY) / 100;
+        else
+            endPoint.y   = (FLOAT)data->getPosValue(LinearGradientData::EndY);
+
+        brush->SetStartPoint(startPoint);
+        brush->SetEndPoint(endPoint);
+        return brush;
+    }
+
     unsigned int D2DImageHandle::frameCount() const
     {
         D2DResPool::FrameCountMap::iterator it =
@@ -85,6 +127,12 @@ namespace MetalBone
         {
             ID2D1BitmapBrush** bp = (ID2D1BitmapBrush**)b.pdata;
             biPortionCache.erase(bp);
+            SafeRelease(*bp);
+            *bp = 0;
+        } else if(b.type() == D2DBrushHandle::LinearGradient)
+        {
+            ID2D1LinearGradientBrush** bp = (ID2D1LinearGradientBrush**)b.pdata;
+            linearDataMap.erase(bp);
             SafeRelease(*bp);
             *bp = 0;
         }
@@ -121,6 +169,13 @@ namespace MetalBone
             biPortionCache[&brush].borders = rect;
         }
         return D2DBrushHandle(D2DBrushHandle::NinePatch,(ID2D1Brush**)&brush);
+    }
+
+    D2DBrushHandle D2DResPool::getBrush(const LinearGradientData* data)
+    {
+        ID2D1LinearGradientBrush*& brush = linearBrushCache[data];
+        if(brush == 0) linearDataMap[&brush] = data;
+        return D2DBrushHandle(D2DBrushHandle::LinearGradient, (ID2D1Brush**)&brush);
     }
 
     D2DImageHandle D2DResPool::getImage(const wstring& imagePath)
@@ -248,6 +303,27 @@ namespace MetalBone
         return brush;
     }
 
+    ID2D1LinearGradientBrush* createD2DLinearGradientBrush(const LinearGradientData* data, ID2D1RenderTarget* rt)
+    {
+        D2D1_GRADIENT_STOP* d2dStops = new D2D1_GRADIENT_STOP[data->stopCount];
+        for(int i = 0; i < data->stopCount; ++i)
+        {
+            d2dStops[i].position = data->stops[i].pos;
+            d2dStops[i].color    = D2D1::ColorF(data->stops[i].argb & 0xFFFFFF,
+                FLOAT(data->stops[i].argb >> 24 & 0xFF) / 255);
+        }
+
+        ID2D1LinearGradientBrush* brush;
+        ID2D1GradientStopCollection* collection;
+        rt->CreateGradientStopCollection(d2dStops, data->stopCount, &collection);
+        rt->CreateLinearGradientBrush(D2D1_LINEAR_GRADIENT_BRUSH_PROPERTIES(),
+            D2D1::BrushProperties(),collection,&brush);
+
+        delete[] d2dStops;
+        SafeRelease(collection);
+        return brush;
+    }
+
     void D2DResPool::createBrush(const D2DBrushHandle* handle)
     {
         M_ASSERT(handle->type() != D2DBrushHandle::Unknown);
@@ -266,6 +342,11 @@ namespace MetalBone
         } else if(handle->type() == D2DBrushHandle::NinePatch)
         {
             create9PatchBrush(handle);
+        } else if(handle->type() == D2DBrushHandle::LinearGradient)
+        {
+            ID2D1LinearGradientBrush** brush = (ID2D1LinearGradientBrush**)handle->pdata;
+            const LinearGradientData* data = linearDataMap[brush];
+            *brush = createD2DLinearGradientBrush(data, workingRT);
         }
     }
 
@@ -402,6 +483,13 @@ namespace MetalBone
             SafeRelease(bmpIt->second);
             ++bmpIt;
         }
+        LinearBrushMap::iterator lbIt    = linearBrushCache.begin();
+        LinearBrushMap::iterator lbItEnd = linearBrushCache.end();
+        while(lbIt != lbItEnd)
+        {
+            SafeRelease(lbIt->second);
+            ++lbIt;
+        }
     }
 
     void D2DResPool::clearResources()
@@ -443,6 +531,15 @@ namespace MetalBone
             ++bmpIt;
         }
         frameCountMap.clear();
+
+        LinearBrushMap::iterator lbIt    = linearBrushCache.begin();
+        LinearBrushMap::iterator lbItEnd = linearBrushCache.end();
+        while(lbIt != lbItEnd)
+        {
+            SafeRelease(lbIt->second);
+            linearBrushCache[lbIt->first] = 0;
+            ++lbIt;
+        }
     }
 
     void MD2DPaintContextData::createRenderTarget()

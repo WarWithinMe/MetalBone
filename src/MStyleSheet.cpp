@@ -640,6 +640,12 @@ namespace MetalBone
 			clip.right  = (FLOAT) min(contentRect.right ,cr.right);
 			clip.bottom = (FLOAT) min(contentRect.bottom,cr.bottom);
 
+            if(bgro->brush.type() == D2DBrushHandle::LinearGradient)
+            {
+                D2D1_RECT_F cr = contentRect;
+                bgro->brush.getLinearGraidentBrush(&cr);
+            }
+
 			if(testNoValue(bgro,Value_Border) || borderRO == 0)
 				workingRT->FillRectangle(clip,brush);
 			else
@@ -1068,6 +1074,16 @@ namespace MetalBone
 	bool isBrushValueOpaque(const CssValue& value)
 	{
 		if(value.type == CssValue::Color) return true;
+        if(value.type == CssValue::LiearGradient)
+        {
+            LinearGradientData* data = value.getLinearGradientData();
+            for(int i = 0; i < data->stopCount; ++i)
+            {
+                if(data->stops[i].argb < 0xFF000000)
+                    return false;
+            }
+            return true;
+        }
 
 		M_ASSERT_X(value.type == CssValue::Uri,
 			"The brush value must be neither Color or Uri(for now)","isBrushValueOpaque()");
@@ -1161,15 +1177,18 @@ namespace MetalBone
 	{
 		const CssValue& brushValue = values.at(0);
 		BackgroundRenderObject* newObject = new BackgroundRenderObject();
-		if(brushValue.type == CssValue::Uri)
-			newObject->brush = MD2DPaintContext::createBrush(*brushValue.data.vstring);
-		else
-			newObject->brush = MD2DPaintContext::createBrush(MColor(brushValue.data.vuint));
+		if(brushValue.type == CssValue::Uri) {
+			newObject->brush = MD2DPaintContext::createBrush(brushValue.getString());
+        } else if(brushValue.type == CssValue::LiearGradient) {
+            newObject->brush = MD2DPaintContext::createBrush(brushValue.getLinearGradientData());
+        } else{
+			newObject->brush = MD2DPaintContext::createBrush(brushValue.getColor());
+        }
 
 		size_t index = 1;
 		if(values.size() > 1 && values.at(1).type == CssValue::Number)
 		{
-			int frameCount = values.at(1).data.vint;
+			int frameCount = values.at(1).getInt();
 			if(frameCount > 1) newObject->frameCount = frameCount;
 			++index;
 		}
@@ -1179,24 +1198,24 @@ namespace MetalBone
 		{
 			const CssValue& v = values.at(index);
 			if(v.type == CssValue::Identifier) {
-				isPropAlignX = setBGROProperty(newObject, v.data.videntifier, isPropAlignX);
+				isPropAlignX = setBGROProperty(newObject, v.getIdentifier(), isPropAlignX);
 			} else {
 				mWarning(v.type != CssValue::Length && v.type != CssValue::Number,
 					L"The rest of background css value should be of type 'length' or 'number'");
 
-				newObject->x = v.data.vuint;
+				newObject->x = v.getUInt();
 
 				if(++index >= values.size()) { break; }
 				if(values.at(index).type == CssValue::Identifier) { continue; }
-				newObject->y = values.at(index).data.vuint;
+				newObject->y = values.at(index).getUInt();
 
 				if(++index >= values.size()) { break; }
 				if(values.at(index).type == CssValue::Identifier) { continue; }
-				newObject->userWidth = values.at(index).data.vuint;
+				newObject->userWidth = values.at(index).getUInt();
 
 				if(++index >= values.size()) { break; }
 				if(values.at(index).type == CssValue::Identifier) { continue; }
-				newObject->userHeight = values.at(index).data.vuint;
+				newObject->userHeight = values.at(index).getUInt();
 			}
 			++index;
 		}
@@ -1212,7 +1231,6 @@ namespace MetalBone
 			return;
 
 		borderImageRO = new BorderImageRenderObject();
-        wstring* path = values.at(0).data.vstring;
 
 		int endIndex = values.size() - 1;
 		// Repeat or Stretch
@@ -1220,14 +1238,14 @@ namespace MetalBone
 		{
 			if(values.at(endIndex-1).type == CssValue::Identifier) {
 
-				if(values.at(endIndex).data.vuint != Value_Stretch)
+				if(values.at(endIndex).getIdentifier() != Value_Stretch)
 					borderImageRO->values |= Value_RepeatY;
-				if(values.at(endIndex-1).data.vuint != Value_Stretch)
+				if(values.at(endIndex-1).getIdentifier() != Value_Stretch)
 					borderImageRO->values |= Value_RepeatX;
 
 				endIndex -= 2;
 			} else {
-				if(values.at(endIndex).data.vuint != Value_Stretch)
+				if(values.at(endIndex).getIdentifier() != Value_Stretch)
 					borderImageRO->values = Value_Repeat;
 				--endIndex;
 			}
@@ -1236,19 +1254,19 @@ namespace MetalBone
         RectU borderWidth;
 		// Border
 		if(endIndex == 4) {
-			borderWidth.top    = values.at(1).data.vuint;
-			borderWidth.right  = values.at(2).data.vuint;
-			borderWidth.bottom = values.at(3).data.vuint;
-			borderWidth.left   = values.at(4).data.vuint;
+			borderWidth.top    = values.at(1).getUInt();
+			borderWidth.right  = values.at(2).getUInt();
+			borderWidth.bottom = values.at(3).getUInt();
+			borderWidth.left   = values.at(4).getUInt();
 		} else if(endIndex == 2) {
-			borderWidth.bottom = borderWidth.top  = values.at(1).data.vuint;
-			borderWidth.right  = borderWidth.left = values.at(2).data.vuint;
+			borderWidth.bottom = borderWidth.top  = values.at(1).getUInt();
+			borderWidth.right  = borderWidth.left = values.at(2).getUInt();
 		} else {
 			borderWidth.left   = borderWidth.right =
-			borderWidth.bottom = borderWidth.top   = values.at(1).data.vuint;
+			borderWidth.bottom = borderWidth.top   = values.at(1).getUInt();
 		}
 
-        borderImageRO->brush = MD2DPaintContext::create9PatchBrush(*path,borderWidth);
+        borderImageRO->brush = MD2DPaintContext::create9PatchBrush(values.at(0).getString(),borderWidth);
 	}
 
 	// ********** Set the SimpleBorderRO
@@ -1257,6 +1275,7 @@ namespace MetalBone
 	{
 		SimpleBorderRenderObject* obj = reinterpret_cast<SimpleBorderRenderObject*>(borderRO);
 		CssValue colorValue(CssValue::Color);
+        LinearGradientData* lgData = 0;
 		while(iter != iterEnd)
 		{
 			vector<CssValue>& values = iter->second->values;
@@ -1265,24 +1284,37 @@ namespace MetalBone
 				for(unsigned int i = 0; i < values.size(); ++i) {
 					CssValue& v = values.at(i);
 					switch(v.type) {
-					case CssValue::Identifier: obj->style = v.data.videntifier; break;
-					case CssValue::Color:      colorValue = v;                  break;
+					case CssValue::Identifier: obj->style = v.getIdentifier(); break;
+					case CssValue::Color:      colorValue = v;                 break;
 					case CssValue::Length:
-					case CssValue::Number:     obj->width = v.data.vuint;       break;
+					case CssValue::Number:     obj->width = v.getUInt();       break;
+                    case CssValue::LiearGradient: lgData  = v.getLinearGradientData(); break;
 					}
 				}
 				break;
-			case PT_BorderWidth:  obj->width = values.at(0).data.vuint;       break;
-			case PT_BorderStyles: obj->style = values.at(0).data.videntifier; break;
-			case PT_BorderColor:  colorValue = values.at(0);                  break;
+			case PT_BorderWidth:  obj->width = values.at(0).getUInt();       break;
+			case PT_BorderStyles: obj->style = values.at(0).getIdentifier(); break;
+			case PT_BorderColor:  
+                if(values.at(0).type == CssValue::LiearGradient)
+                    lgData = values.at(0).getLinearGradientData();
+                else
+                    colorValue = values.at(0);
+                break;
 			}
 
 			++iter;
 		}
 
-		MColor color(colorValue.data.vuint);
-        obj->isColorTransparent = color.isTransparent();
-		obj->brush = MD2DPaintContext::createBrush(color);
+        if(lgData == 0)
+        {
+            MColor color(colorValue.getColor());
+            obj->isColorTransparent = color.isTransparent();
+            obj->brush = MD2DPaintContext::createBrush(color);
+        } else
+        {
+            obj->isColorTransparent = false;
+            obj->brush = MD2DPaintContext::createBrush(lgData);
+        }
 	}
 
 	// ********** Create the ComplexBorderRO
@@ -1291,16 +1323,16 @@ namespace MetalBone
 	{
 		int size = (endValueIndex == -1 ? values.size() : endValueIndex + 1) - startValueIndex;
 		if(size == 4) {
-			intArray[0] = values.at(startValueIndex    ).data.vuint;
-			intArray[1] = values.at(startValueIndex + 1).data.vuint;
-			intArray[2] = values.at(startValueIndex + 2).data.vuint;
-			intArray[3] = values.at(startValueIndex + 3).data.vuint;
+			intArray[0] = values.at(startValueIndex    ).getUInt();
+			intArray[1] = values.at(startValueIndex + 1).getUInt();
+			intArray[2] = values.at(startValueIndex + 2).getUInt();
+			intArray[3] = values.at(startValueIndex + 3).getUInt();
 		} else if(size == 2) {
-			intArray[0] = intArray[2] = values.at(startValueIndex    ).data.vuint;
-			intArray[1] = intArray[3] = values.at(startValueIndex + 1).data.vuint;
+			intArray[0] = intArray[2] = values.at(startValueIndex    ).getUInt();
+			intArray[1] = intArray[3] = values.at(startValueIndex + 1).getUInt();
 		} else {
 			intArray[0] = intArray[1] =
-			intArray[2] = intArray[3] = values.at(startValueIndex).data.vuint;
+			intArray[2] = intArray[3] = values.at(startValueIndex).getUInt();
 		}
 	}
 	void setRectUValue(RectU& rect, vector<CssValue>& values,
@@ -1308,16 +1340,16 @@ namespace MetalBone
 	{
 		int size = (endValueIndex == -1 ? values.size() : endValueIndex + 1) - startValueIndex;
 		if(size == 4) {
-			rect.top    = values.at(startValueIndex    ).data.vuint;
-			rect.right  = values.at(startValueIndex + 1).data.vuint;
-			rect.bottom = values.at(startValueIndex + 2).data.vuint;
-			rect.left   = values.at(startValueIndex + 3).data.vuint;
+			rect.top    = values.at(startValueIndex    ).getUInt();
+			rect.right  = values.at(startValueIndex + 1).getUInt();
+			rect.bottom = values.at(startValueIndex + 2).getUInt();
+			rect.left   = values.at(startValueIndex + 3).getUInt();
 		} else if(size == 2) {
-			rect.top    = rect.bottom = values.at(startValueIndex    ).data.vuint;
-			rect.right  = rect.left   = values.at(startValueIndex + 1).data.vuint;
+			rect.top    = rect.bottom = values.at(startValueIndex    ).getUInt();
+			rect.right  = rect.left   = values.at(startValueIndex + 1).getUInt();
 		} else {
 			rect.top    = rect.bottom =
-			rect.right  = rect.left   = values.at(startValueIndex).data.vuint;
+			rect.right  = rect.left   = values.at(startValueIndex).getUInt();
 		}
 	}
 	void setRectUValue(RectU& rect, int border, unsigned int value)
@@ -1358,16 +1390,16 @@ namespace MetalBone
                             {
                                 int size = index - rangeStartIndex;
                                 if(size  == 4) {
-                                    colors[0]  = MColor(values.at(rangeStartIndex  ).data.vuint);
-                                    colors[1]  = MColor(values.at(rangeStartIndex+1).data.vuint);
-                                    colors[2]  = MColor(values.at(rangeStartIndex+2).data.vuint);
-                                    colors[3]  = MColor(values.at(rangeStartIndex+3).data.vuint);
+                                    colors[0]  = MColor(values.at(rangeStartIndex  ).getUInt());
+                                    colors[1]  = MColor(values.at(rangeStartIndex+1).getUInt());
+                                    colors[2]  = MColor(values.at(rangeStartIndex+2).getUInt());
+                                    colors[3]  = MColor(values.at(rangeStartIndex+3).getUInt());
                                 } else if(size == 2) {
-                                    colors[0]  = colors[2]  = MColor(values.at(rangeStartIndex  ).data.vuint);
-                                    colors[1]  = colors[3]  = MColor(values.at(rangeStartIndex+1).data.vuint);
+                                    colors[0]  = colors[2]  = MColor(values.at(rangeStartIndex  ).getUInt());
+                                    colors[1]  = colors[3]  = MColor(values.at(rangeStartIndex+1).getUInt());
                                 } else {
                                     colors[0]  = colors[2]  =
-                                    colors[1]  = colors[3]  = MColor(values.at(rangeStartIndex).data.vuint);
+                                    colors[1]  = colors[3]  = MColor(values.at(rangeStartIndex).getUInt());
                                 }
                             }
 								break;
@@ -1389,16 +1421,16 @@ namespace MetalBone
 			case PT_BorderColor:
                 {
                     if(values.size() == 4) {
-                        colors[0]  = MColor(values.at(0).data.vuint);
-                        colors[1]  = MColor(values.at(1).data.vuint);
-                        colors[2]  = MColor(values.at(2).data.vuint);
-                        colors[3]  = MColor(values.at(3).data.vuint);
+                        colors[0]  = MColor(values.at(0).getUInt());
+                        colors[1]  = MColor(values.at(1).getUInt());
+                        colors[2]  = MColor(values.at(2).getUInt());
+                        colors[3]  = MColor(values.at(3).getUInt());
                     } else if(values.size() == 2) {
-                        colors[0]  = colors[2]  = MColor(values.at(0).data.vuint);
-                        colors[1]  = colors[3]  = MColor(values.at(1).data.vuint);
+                        colors[0]  = colors[2]  = MColor(values.at(0).getUInt());
+                        colors[1]  = colors[3]  = MColor(values.at(1).getUInt());
                     } else {
                         colors[0]  = colors[2]  =
-                        colors[1]  = colors[3]  = MColor(values.at(0).data.vuint);
+                        colors[1]  = colors[3]  = MColor(values.at(0).getUInt());
                     }
                 }
                 break;
@@ -1411,17 +1443,17 @@ namespace MetalBone
 					for(unsigned int i = 0; i < values.size(); ++i)
 					{
 						if(values.at(i).type == CssValue::Color) {
-							colors[index]  = MColor(values.at(0).data.vuint);
+							colors[index]  = MColor(values.at(0).getUInt());
 
 						} else if(values.at(i).type == CssValue::Identifier)
 						{
-							ValueType vi = values.at(0).data.videntifier;
+							ValueType vi = values.at(0).getIdentifier();
 							if(index == 0)      obj->styles.top    = vi;
 							else if(index == 1) obj->styles.right  = vi;
 							else if(index == 2) obj->styles.bottom = vi;
 							else obj->styles.left = vi;
 						} else
-							setRectUValue(obj->widths,index,values.at(i).data.vuint);
+							setRectUValue(obj->widths,index,values.at(i).getUInt());
 					}
 				}
 				break;
@@ -1429,25 +1461,25 @@ namespace MetalBone
 			case PT_BorderRightColor:
 			case PT_BorderBottomColor:
 			case PT_BorderLeftColor: 
-				colors[declIter->first - PT_BorderTopColor]  = MColor(values.at(0).data.vuint);
+				colors[declIter->first - PT_BorderTopColor]  = MColor(values.at(0).getUInt());
 				break;
 			case PT_BorderTopWidth:
 			case PT_BorderRightWidth:
 			case PT_BorderBottomWidth:
 			case PT_BorderLeftWidth:
-				setRectUValue(obj->widths, declIter->first - PT_BorderTopWidth, values.at(0).data.vuint);
+				setRectUValue(obj->widths, declIter->first - PT_BorderTopWidth, values.at(0).getUInt());
 				break;
 			case PT_BorderTopStyle:
 			case PT_BorderRightStyle:
 			case PT_BorderBottomStyle:
 			case PT_BorderLeftStyle:
-				setRectUValue(obj->styles, declIter->first - PT_BorderTopStyle, values.at(0).data.videntifier);
+				setRectUValue(obj->styles, declIter->first - PT_BorderTopStyle, values.at(0).getIdentifier());
 				break;
 			case PT_BorderTopLeftRadius:
 			case PT_BorderTopRightRadius:
 			case PT_BorderBottomLeftRadius:
 			case PT_BorderBottomRightRadius:
-				obj->radiuses[declIter->first - PT_BorderTopLeftRadius] = values.at(0).data.vuint;
+				obj->radiuses[declIter->first - PT_BorderTopLeftRadius] = values.at(0).getUInt();
 				break;
 			}
 			++declIter;
@@ -1484,7 +1516,7 @@ namespace MetalBone
 		{
 			CssValueArray& values = declIter->second->values;
 			if(values.at(0).type == CssValue::Identifier &&
-				values.at(0).data.videntifier == Value_None)
+				values.at(0).getIdentifier() == Value_None)
 			{
 				do {
 					++declIter;
@@ -1513,14 +1545,14 @@ namespace MetalBone
 		}
 		while(declIter->first < PT_BackgroundPosition)
 		{
-			batchSetBGROProps(backgroundROs, declIter->second->values.at(0).data.videntifier);
+			batchSetBGROProps(backgroundROs, declIter->second->values.at(0).getIdentifier());
 			if(++declIter == declIterEnd) goto END;
 		}
 		if(declIter->first == PT_BackgroundPosition)
 		{
 			vector<CssValue>& values = declIter->second->values;
-			int propx = values.at(0).data.vint;
-			int propy = values.size() == 1 ? propx : values.at(1).data.vint;
+			int propx = values.at(0).getInt();
+			int propy = values.size() == 1 ? propx : values.at(1).getInt();
 
 			vector<BackgroundRenderObject*>::iterator it    = backgroundROs.begin();
 			vector<BackgroundRenderObject*>::iterator itEnd = backgroundROs.end();
@@ -1534,8 +1566,8 @@ namespace MetalBone
 		if(declIter->first == PT_BackgroundSize)
 		{
 			vector<CssValue>& values = declIter->second->values;
-			int propw = values.at(0).data.vuint;
-			int proph = values.size() == 1 ? propw : values.at(1).data.vuint;
+			int propw = values.at(0).getUInt();
+			int proph = values.size() == 1 ? propw : values.at(1).getUInt();
 
 			vector<BackgroundRenderObject*>::iterator it    = backgroundROs.begin();
 			vector<BackgroundRenderObject*>::iterator itEnd = backgroundROs.end();
@@ -1549,9 +1581,9 @@ namespace MetalBone
 		if(declIter->first == PT_BackgroundAlignment)
 		{
 			vector<CssValue>& values = declIter->second->values;
-			batchSetBGROProps(backgroundROs,values.at(0).data.videntifier);
+			batchSetBGROProps(backgroundROs,values.at(0).getIdentifier());
 			if(values.size() == 2)
-				batchSetBGROProps(backgroundROs,values.at(1).data.videntifier,true);
+				batchSetBGROProps(backgroundROs,values.at(1).getIdentifier(),true);
 
 			if(++declIter == declIterEnd) goto END;
 		}
@@ -1572,7 +1604,7 @@ namespace MetalBone
 		if(declIter->first == PT_Border)
 		{
 			CssValue& v = declIter->second->values.at(0);
-			if(v.type == CssValue::Identifier  && v.data.vuint == Value_None)
+			if(v.type == CssValue::Identifier  && v.getUInt() == Value_None)
 			{ // User specifies no border. Skip everything related to border.
 				do {
 					if(++declIter == declIterEnd) goto END;
@@ -1585,26 +1617,29 @@ namespace MetalBone
 			bt = testBorderObjectType(declIter,declIterEnd);
 
 			MSSSPrivate::DeclMap::iterator declIter2 = declIter;
+            MSSSPrivate::DeclMap::iterator tempDeclIter = declIter2;
+            ++tempDeclIter;
+
 			if(bt == BT_Simple)
 			{
-				while(declIter2 != declIterEnd && declIter2->first <= PT_BorderStyles)
-					++declIter2;
+                while(tempDeclIter != declIterEnd && tempDeclIter->first <= PT_BorderStyles)
+                    { declIter2 = tempDeclIter; ++tempDeclIter; }
 				borderRO = new SimpleBorderRenderObject();
 				setSimpleBorderRO(declIter,declIter2);
 
 			} else if(bt == BT_Radius)
 			{
-				while(declIter2 != declIterEnd && declIter2->first <= PT_BorderStyles)
-					++declIter2;
+                while(tempDeclIter != declIterEnd && tempDeclIter->first <= PT_BorderRadius)
+                    { declIter2 = tempDeclIter; ++tempDeclIter; }
 				RadiusBorderRenderObject* obj = new RadiusBorderRenderObject();
-				obj->radius = declIter->second->values.at(0).data.vuint;
+				obj->radius = declIter2->second->values.at(0).getUInt();
 				borderRO = obj;
 				setSimpleBorderRO(declIter,declIter2);
 
 			} else
 			{
-				while(declIter2 != declIterEnd && declIter2->first <= PT_BorderRadius)
-					++declIter2;
+                while(tempDeclIter != declIterEnd && tempDeclIter->first <= PT_BorderRadius)
+                    { declIter2 = tempDeclIter; ++tempDeclIter; }
 				borderRO = new ComplexBorderRenderObject();
 				setComplexBorderRO(declIter, declIter2);
 			}
@@ -1617,7 +1652,7 @@ namespace MetalBone
 		{
 			vector<CssValue>& values = declIter->second->values;
 			if(values.at(0).type != CssValue::Identifier ||
-				values.at(0).data.videntifier != Value_None)
+				values.at(0).getIdentifier() != Value_None)
 			{
 				switch(declIter->first)
 				{
@@ -1633,7 +1668,7 @@ namespace MetalBone
 						if(margin == 0)
 							margin = new RectU();
 						setRectUValue(*margin, declIter->first - PT_MarginTop,
-							values.at(0).data.vuint);
+							values.at(0).getUInt());
 						break;
 					case PT_Padding:
 						if(padding == 0)
@@ -1647,7 +1682,7 @@ namespace MetalBone
 						if(padding == 0)
 							padding = new RectU();
 						setRectUValue(*padding, declIter->first - PT_PaddingTop,
-							values.at(0).data.vuint);
+							values.at(0).getUInt());
 						break;
 				}
 			}
@@ -1661,9 +1696,9 @@ namespace MetalBone
 			do {
 				CssValueArray& values = declIter->second->values;
 				if(values.at(0).type != CssValue::Identifier ||
-					values.at(0).data.videntifier != Value_None)
+					values.at(0).getIdentifier() != Value_None)
 				{
-					int data = values.at(0).data.vint;
+					int data = values.at(0).getInt();
 					switch(declIter->first)
 					{
 
@@ -1690,20 +1725,20 @@ namespace MetalBone
 			switch(value.type)
 			{
 				case CssValue::Identifier:
-					if(value.data.videntifier < Value_Default || value.data.videntifier > Value_Blank)
+					if(value.getIdentifier() < Value_Default || value.getIdentifier() > Value_Blank)
 					{
 						delete cursor;
 						cursor = 0;
 					} else {
 						cursor->setType(static_cast<MCursor::CursorType>
-							(value.data.videntifier - Value_Default));
+							(value.getIdentifier() - Value_Default));
 					}
 					break;
 				case CssValue::Uri:
 					cursor->loadCursorFromFile(*value.data.vstring);
 					break;
 				case CssValue::Number:
-					cursor->loadCursorFromRes(MAKEINTRESOURCEW(value.data.vint));
+					cursor->loadCursorFromRes(MAKEINTRESOURCEW(value.getInt()));
 					break;
 				default:
 					delete cursor;
@@ -1734,13 +1769,13 @@ namespace MetalBone
 							if(v.type == CssValue::String)
 								fontFace = *v.data.vstring;
 							else if(v.type == CssValue::Identifier) {
-								if(v.data.videntifier == Value_Bold)
+								if(v.getIdentifier() == Value_Bold)
 									bold = true;
-								else if(v.data.videntifier == Value_Italic || 
-									v.data.videntifier == Value_Oblique)
+								else if(v.getIdentifier() == Value_Italic || 
+									v.getIdentifier() == Value_Oblique)
 									italic = true;
 							} else {
-								size = v.data.vuint;
+								size = v.getUInt();
 								pixelSize = v.type == CssValue::Length;
 							}
 						}
@@ -1748,14 +1783,14 @@ namespace MetalBone
 					}
 					break;
 				case PT_FontSize:
-					size = value.data.vuint;
+					size = value.getUInt();
 					// If the value is 12px, the CssValue is Length.
 					// If the value is 16, the CssValue is Number.
 					// We don't support unit 'pt'.
 					pixelSize = (value.type == CssValue::Length);
 					break;
-				case PT_FontStyle: italic = (value.data.videntifier != Value_Normal); break;
-				case PT_FontWeight:  bold = (value.data.videntifier == Value_Bold);   break;
+				case PT_FontStyle: italic = (value.getIdentifier() != Value_Normal); break;
+				case PT_FontWeight:  bold = (value.getIdentifier() == Value_Bold);   break;
 				}
 				++declIter;
 			}
@@ -1775,52 +1810,52 @@ namespace MetalBone
 					case PT_TextShadow:
 						if(values.size() < 2)
 							break;
-						textRO->shadowOffsetX = (char)values.at(0).data.vint;
-						textRO->shadowOffsetY = (char)values.at(1).data.vint;
+						textRO->shadowOffsetX = (char)values.at(0).getInt();
+						textRO->shadowOffsetY = (char)values.at(1).getInt();
 						for(size_t i = 2; i < values.size(); ++i)
 						{
 							if(values.at(i).type == CssValue::Color)
 								textRO->shadowColor = values.at(i).getColor();
 							else
-								textRO->shadowBlur = (char)values.at(i).data.vuint;
+								textRO->shadowBlur = (char)values.at(i).getUInt();
 						}
 						break;
 					case PT_TextOutline:
-						textRO->outlineWidth = (char)values.at(0).data.vuint;
+						textRO->outlineWidth = (char)values.at(0).getUInt();
 						textRO->outlineColor = values.at(values.size() - 1).getColor();
 						if(values.size() >= 3)
-							textRO->outlineBlur = (char)values.at(1).data.vuint;
+							textRO->outlineBlur = (char)values.at(1).getUInt();
 						break;
 					case PT_TextAlignment:
 						if(values.size()>1)
 						{
-							switch(values.at(1).data.videntifier) {
+							switch(values.at(1).getIdentifier()) {
 								case Value_Top:    textRO->values |= Value_Top;     break;
 								case Value_Center: textRO->values |= Value_VCenter; break;
 								case Value_Bottom: textRO->values |= Value_Bottom;  break;
 							}
-							switch(values.at(0).data.videntifier) {
+							switch(values.at(0).getIdentifier()) {
 								case Value_Left:   textRO->values |= Value_Left;    break;
 								case Value_Center: textRO->values |= Value_HCenter; break;
 								case Value_Right:  textRO->values |= Value_Right;   break;
 							}
 						} else {
-							switch(values.at(0).data.videntifier) {
+							switch(values.at(0).getIdentifier()) {
 								case Value_Center:
 									textRO->values |= (Value_HCenter | Value_VCenter); break;
 								case Value_Left:
 								case Value_Right:
 								case Value_Top:
 								case Value_Bottom:
-									textRO->values |= values.at(0).data.videntifier;
+									textRO->values |= values.at(0).getIdentifier();
 							}
 						}
 						break;
 					case PT_TextOverflow:
 					case PT_TextDecoration:
-						textRO->values |= values.at(0).data.videntifier; break;
+						textRO->values |= values.at(0).getIdentifier(); break;
 					case PT_TextUnderlineStyle:
-						textRO->lineStyle = values.at(0).data.videntifier; break;
+						textRO->lineStyle = values.at(0).getIdentifier(); break;
 				}
 				++declIter;
 			}
@@ -2403,6 +2438,7 @@ namespace MetalBone
 		// but the user only defines pseudo "Checked" for the widget, so we end up with a
 		// RenderRule that is the same as the RenderRule for "Checked", in this case, we can
 		// share them.
+        bool shareWidthRealPseudo = false;
 		if(realPseudo != pseudo)
 		{
 			hasRRIter = prrMap->element.find(realPseudo);
@@ -2410,7 +2446,10 @@ namespace MetalBone
 			{
 				renderRule = hasRRIter->second;
 				return renderRule;
-			}
+			} else
+            {
+                shareWidthRealPseudo = true;
+            }
 		}
 
 		// Remove duplicate declarations (except background, because we support multi backgrounds)
@@ -2435,6 +2474,9 @@ namespace MetalBone
 		// == 5.Create RenderRule
 		renderRule.init();
         renderRule->init(declarations);
+
+        if(shareWidthRealPseudo) prrMap->element[realPseudo] = renderRule;
+
 		return renderRule;
 	}
 

@@ -1,5 +1,6 @@
 #include "CSSParser.h"
 #include "MStyleSheet.h"
+#include "MD2DPaintContext.h"
 #include <string>
 #include <sstream>
 
@@ -232,6 +233,10 @@ Declaration::~Declaration()
 		    case CssValue::Uri:
 		    case CssValue::String:
 			    delete values.at(i).data.vstring;
+                break;
+            case CssValue::LiearGradient:
+                delete values.at(i).data.vlinearGradient;
+                break;
 		    default: break;
 		}
 	}
@@ -273,6 +278,7 @@ void MCSSParser::skipComment2()
             if(css->at(pos) == L'*' &&
                 css->at(pos + 1) == L'/')
             { pos+=2; break; }
+            ++pos;
         }
     }
     skipWhiteSpace();
@@ -617,6 +623,119 @@ void MCSSParser::parseDeclaration(StyleRule* sr)
     ++pos; // skip '}'
 }
 
+static int simplySplitAndIngoreWS(const wstring& text, int index,
+    int length, wchar_t delemiter, wchar_t endByte, vector<wstring>& output)
+{
+    int tokenStartIndex = index;
+    int tokenEndIndex   = 0;
+
+    while(index < length)
+    {
+        wchar_t byte = text.at(index);
+        if(byte == delemiter || byte == endByte)
+        {
+            tokenEndIndex = index - 1;
+            while(iswspace(text.at(tokenEndIndex)) &&
+                tokenEndIndex >= tokenStartIndex)
+            { --tokenEndIndex; }
+            output.push_back(wstring(text,tokenStartIndex,tokenEndIndex - tokenStartIndex + 1));
+
+            if(byte == endByte) return index;
+
+            ++index;
+            while(iswspace(text.at(index)))
+                ++index;
+            tokenStartIndex = index;
+            tokenEndIndex   = 0;
+        }
+        ++index;
+    }
+
+    if(tokenStartIndex < length)
+        output.push_back(wstring(text,tokenStartIndex,index - tokenStartIndex + 1));
+
+    return index;
+}
+
+LinearGradientData* parseLinearGradient(const wstring& css, int& index, int length)
+{
+    while(iswspace(css.at(index)))
+        ++index;
+
+    int tokenStartIndex = index;
+    int tokenEndIndex   = 0;
+    vector<wstring> tokens;
+    index = simplySplitAndIngoreWS(css,index,length,L',',L')',tokens);
+
+    int checkingToken = 0;
+
+    if(*tokens.at(checkingToken).c_str() == L'#')
+        return 0; // No point defined.
+    if(*tokens.at(tokens.size()-1).c_str() != L'#')
+        return 0; // No color defined.
+    if(tokens.size() < 2)
+        return 0;
+
+    LinearGradientData* data = new LinearGradientData();
+
+    vector<wstring> coor;
+    const wstring& point = tokens.at(checkingToken);
+    simplySplitAndIngoreWS(point,0,point.size(),L' ',L'\0',coor);
+    if(coor.size() == 1) coor.push_back(wstring(L"0"));
+
+    checkingToken = 1;
+    if(*tokens.at(checkingToken).c_str() != L'#')
+    {
+        const wstring& endPoint = tokens.at(checkingToken);
+        simplySplitAndIngoreWS(endPoint,0,endPoint.size(),L' ',L'\0',coor);
+        checkingToken = 2;
+    }
+
+    for(int i = coor.size() - 1; i >=0; --i)
+    {
+        wstring& pos = coor.at(i);
+
+        if(iswdigit(pos.at(0)))
+        {
+            if(pos.at(pos.size()-1) == L'%')
+                data->setPosType((LinearGradientData::PosEnum)i, true);
+            data->pos[i] = _wtoi(pos.c_str());
+        } else if(pos == L"right" || pos == L"bottom")
+        {
+            data->pos[i] = 100;
+            data->setPosType((LinearGradientData::PosEnum)i, true);
+        }
+    }
+
+    vector<wstring> colors;
+    for(int i = checkingToken; i < tokens.size(); ++i)
+    {
+        vector<wstring> temp;
+        simplySplitAndIngoreWS(tokens.at(i),0,tokens.at(i).size(),L' ',L'\0',temp);
+        colors.push_back(temp.at(0));
+        if(temp.size() < 2)
+            colors.push_back(wstring(L"0%"));
+        else
+            colors.push_back(temp.at(1));
+    }
+
+    data->stopCount = colors.size() / 2;
+    data->stops = new LinearGradientData::GradientStop[data->stopCount];
+
+    for(int i = 0; i < data->stopCount; ++i)
+    {
+        wstringstream hexStream;
+        wstring color(colors.at(i*2),1,colors.at(i*2).size() - 1);
+        hexStream << L"0x" << color;
+        unsigned int h;
+        hexStream >> std::hex >> h;
+        data->stops[i].argb = (h > 0xFFFFFF ? h : (h | 0xFF000000));
+        data->stops[i].pos  = float(_wtoi(colors.at(i*2+1).c_str())) / 100;
+    }
+
+    return data;
+}
+
 // Comment cannot be in the middle of a expression list.
 // e.g. *{ aaa: /*comments*/ aaa bbb ccc; } is legal
 // but  *{ aaa: bbb /*comments*/ ccc ddd; } is not legal
@@ -667,6 +786,7 @@ int Declaration::addValue(const wstring& css, int index, int length)
                 wstring buffer;
                 unsigned int color = 0xFF000000;
                 int shift = 16;
+                ++index;
                 while(index < length)
                 {
                     byte = css.at(index);
@@ -700,6 +820,18 @@ int Declaration::addValue(const wstring& css, int index, int length)
                 value.setUInt(color);
                 value.setType(CssValue::Color);
                 values.push_back(value);
+            } else if(funcName == L"linear-gradient")
+            {
+                ++index;
+                LinearGradientData* lgd = parseLinearGradient(css, index, length);
+                if(lgd != 0)
+                {
+                    CssValue value;
+                    value.setLinearGradient(lgd);
+                    value.setType(CssValue::LiearGradient);
+                    values.push_back(value);
+                }
+                
             } else
             {
                 // Unknow function
@@ -783,6 +915,8 @@ int Declaration::addValue(const wstring& css, int index, int length)
             valueStartIndex = index;
             continue;
         }
+
+        if(atEnd) break;
         ++index;
     }
     return index;

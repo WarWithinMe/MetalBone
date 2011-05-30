@@ -14,14 +14,39 @@ using namespace std::tr1;
 
 namespace MetalBone
 {
-    ID2D1Bitmap*      createD2DBitmap     (const wstring& imagePath, ID2D1RenderTarget* renderTarget, unsigned int* frameCount = 0);
-    ID2D1BitmapBrush* createD2DBitmapBrush(const wstring& imagePath, ID2D1RenderTarget* renderTarget, unsigned int* frameCount = 0);
+    struct LinearGradientData
+    {
+        struct GradientStop { int argb; float pos; };
 
-    class D2DBrushHandle
+        enum PosEnum { StartX, StartY, EndX, EndY };
+
+        inline LinearGradientData():stops(0),stopCount(0),posType(0) { ZeroMemory(pos,sizeof(int)*4); }
+        inline ~LinearGradientData() { delete[] stops; }
+        inline bool isPercentagePos(PosEnum e) const { return (posType & (1 << e)) != 0; }
+        inline int  getPosValue(PosEnum e) const { return pos[e]; }
+        inline void setPosType(PosEnum e, bool isPercentage)
+        {
+            if(isPercentage) { posType |= (1 << e); }
+            else { posType &= ~(1 << e); }
+        }
+
+        GradientStop* stops;
+        int           stopCount;
+        int           pos[4];
+        char          posType;
+    };
+
+
+    METALBONE_EXPORT ID2D1Bitmap*      createD2DBitmap     (const wstring& imagePath, ID2D1RenderTarget*, unsigned int* frameCount = 0);
+    METALBONE_EXPORT ID2D1BitmapBrush* createD2DBitmapBrush(const wstring& imagePath, ID2D1RenderTarget*, unsigned int* frameCount = 0);
+    METALBONE_EXPORT ID2D1LinearGradientBrush* createD2DLinearGradientBrush(const LinearGradientData*, ID2D1RenderTarget*);
+    
+
+    class METALBONE_EXPORT D2DBrushHandle
     {
         public:
             enum Type { 
-                Unknown, Solid, Gradient, Bitmap, NinePatch
+                Unknown, Solid, LinearGradient, Bitmap, NinePatch
             };
             enum Portion {
                 TopCenter = 0,
@@ -40,6 +65,8 @@ namespace MetalBone
             inline ID2D1Brush* getBrush() const;
             ID2D1BitmapBrush*  getPortion(Portion) const;
 
+            ID2D1LinearGradientBrush* getLinearGraidentBrush(const D2D1_RECT_F* drawingRect);
+
             unsigned int frameCount() const;
 
             inline Type type() const { return etype; }
@@ -53,7 +80,7 @@ namespace MetalBone
         friend class MD2DPaintContextData;
     };
 
-    class D2DImageHandle
+    class METALBONE_EXPORT D2DImageHandle
     {
         public:
             inline D2DImageHandle():pdata(0){}
@@ -94,7 +121,7 @@ namespace MetalBone
         }
     };
 
-    struct PortionBrushes
+    struct METALBONE_EXPORT PortionBrushes
     {
         PortionBrushes () { memset(b,0,sizeof(ID2D1BitmapBrush*) * 5); }
         ~PortionBrushes() { releaseBrushes(); }
@@ -107,7 +134,7 @@ namespace MetalBone
         ID2D1BitmapBrush* b[5];
     };
 
-    class D2DResPool 
+    class METALBONE_EXPORT D2DResPool 
     {
         public:
             ~D2DResPool();
@@ -115,6 +142,7 @@ namespace MetalBone
             D2DBrushHandle getBrush(MColor);
             D2DBrushHandle getBrush(const wstring&);
             D2DBrushHandle getBrush(const wstring&, const RectU&);
+            D2DBrushHandle getBrush(const LinearGradientData*);
             D2DImageHandle getImage(const wstring&);
 
             void createBrush(const D2DBrushHandle*);
@@ -126,21 +154,29 @@ namespace MetalBone
             inline void setWorkingRT(ID2D1RenderTarget* rt) { workingRT = rt; }
 
         private:
-            typedef unordered_map<ID2D1SolidColorBrush**, MColor>     BrushColorMap;
-            typedef unordered_map<void**, wstring>                    BrushBmpPathMap;
-            typedef unordered_map<MColor, ID2D1SolidColorBrush*>      SolidBrushMap;
-            typedef unordered_map<wstring, ID2D1BitmapBrush*>         BitmapBrushMap;
-            typedef unordered_map<ID2D1BitmapBrush**, PortionBrushes> PortionBrushMap;
-            typedef unordered_map<wstring, ID2D1Bitmap*>              BitmapMap;
-            typedef unordered_map<void**, unsigned int>               FrameCountMap;
+            typedef unordered_map<ID2D1SolidColorBrush**   , MColor                   >  BrushColorMap;
+            typedef unordered_map<void**                   , wstring                  >  BrushBmpPathMap;
+            typedef unordered_map<ID2D1LinearGradientBrush**,const LinearGradientData*>  LinearGradientDataMap;
 
-            BrushColorMap   colorMap;
-            BrushBmpPathMap bitmapPathMap;
-            SolidBrushMap   solidBrushCache;
-            BitmapBrushMap  bitmapBrushCache;
-            PortionBrushMap biPortionCache;
-            BitmapMap       bitmapCache;
-            FrameCountMap   frameCountMap;
+            typedef unordered_map<MColor                   , ID2D1SolidColorBrush*    >  SolidBrushMap;
+            typedef unordered_map<wstring                  , ID2D1BitmapBrush*        >  BitmapBrushMap;
+            typedef unordered_map<ID2D1BitmapBrush**       , PortionBrushes           >  PortionBrushMap;
+            typedef unordered_map<wstring                  , ID2D1Bitmap*             >  BitmapMap;
+            typedef unordered_map<const LinearGradientData*, ID2D1LinearGradientBrush*>  LinearBrushMap;
+
+            typedef unordered_map<void**                   , unsigned int             >  FrameCountMap;
+
+            BrushColorMap         colorMap;
+            BrushBmpPathMap       bitmapPathMap;
+            LinearGradientDataMap linearDataMap;
+
+            SolidBrushMap         solidBrushCache;
+            BitmapBrushMap        bitmapBrushCache;
+            PortionBrushMap       biPortionCache;
+            BitmapMap             bitmapCache;
+            LinearBrushMap        linearBrushCache;
+
+            FrameCountMap         frameCountMap;
 
             ID2D1RenderTarget* workingRT;
 
@@ -153,17 +189,31 @@ namespace MetalBone
 
     class MWidget;
     class MD2DPaintContextData;
-    class MD2DPaintContext
+    class METALBONE_EXPORT MD2DPaintContext
     {
         public:
             inline explicit MD2DPaintContext(MWidget* w);
             inline explicit MD2DPaintContext(MD2DPaintContextData* d);
 
+            // The LinearGradientData object must remain valid until 
+            // calling removeResource() on the returned D2DBrushHandle, or until
+            // D2DResPool is destroyed.
+            inline static D2DBrushHandle createBrush(const LinearGradientData*);
             inline static D2DImageHandle createImage(const wstring& imagePath);
             inline static D2DBrushHandle createBrush(const wstring& imagePath);
             inline static D2DBrushHandle createBrush(MColor color);
             inline static D2DBrushHandle create9PatchBrush(const wstring& imagePath,const RectU& borderWidths);
 
+            // Calling removeResource() will free the resource. If there's another
+            // D2DXXXHandle needs that resource, the resource will be recreated
+            // automatically.
+            // There's one exception - LinearGradientBrush.
+            // Calling removeResource() on a linear-gradient brush will free the
+            // brush, but the brush can not be recreated any more. Any attempt to
+            // use the brush (D2DBrushHandle can refers to the same brush if they're
+            // created from the same LinearGradientData) will lead to undefined behaviour.
+            // After removing the linear-gradient brush, one can safely delete the
+            // corresponding LinearGradientData.
             inline static void removeResource(D2DBrushHandle& b);
             inline static void removeResource(D2DImageHandle& i);
 
@@ -222,6 +272,8 @@ namespace MetalBone
         { return resPool.getBrush(p); }
     inline D2DImageHandle MD2DPaintContext::createImage(const wstring& p)
         { return resPool.getImage(p); }
+    inline D2DBrushHandle MD2DPaintContext::createBrush(const LinearGradientData* p)
+        { return resPool.getBrush(p); }
     inline D2DBrushHandle MD2DPaintContext::create9PatchBrush(const wstring& p, const RectU& r)
         { return resPool.getBrush(p, r); }
     inline MD2DPaintContext::MD2DPaintContext(MWidget* w):data(w->windowWidget()->m_windowExtras->m_pcData){}
