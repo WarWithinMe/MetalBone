@@ -26,7 +26,9 @@ namespace MetalBone
         IDWriteFactory*     dwriteFactory;
         IWICImagingFactory* wicFactory;
 
+#ifndef MB_NO_GDIPLUS
         ULONG_PTR           gdiPlusToken;
+#endif
 
         static MApplication::WinProc customWndProc;
         static MApplicationData*     instance;

@@ -6,12 +6,14 @@
 #include "private/MApp_p.h"
 
 #include <windows.h>
-#include <gdiplus.h>
 #include <dwmapi.h>
 #include <d2d1.h>
 #include <dwrite.h>
 #include <wincodec.h>
 #include <fstream>
+#ifndef MB_NO_GDIPLUS 
+#include <gdiplus.h>
+#endif
 
 namespace MetalBone
 {
@@ -65,14 +67,19 @@ namespace MetalBone
 			CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&(mImpl->wicFactory)));
 		M_ASSERT_X(SUCCEEDED(hr), "Cannot create WIC Component. FATAL!", "MApplication()");
 
-		// GDI+
-		Gdiplus::GdiplusStartupInput input;
-		Gdiplus::GdiplusStartup(&mImpl->gdiPlusToken,&input,0);
+#ifndef MB_NO_GDIPLUS
+        // GDI+
+        Gdiplus::GdiplusStartupInput input;
+        Gdiplus::GdiplusStartup(&mImpl->gdiPlusToken,&input,0);
+#endif
+
 	}
 
 	MApplication::~MApplication()
 	{
-		Gdiplus::GdiplusShutdown(mImpl->gdiPlusToken);
+#ifndef MB_NO_GDIPLUS
+        Gdiplus::GdiplusShutdown(mImpl->gdiPlusToken);
+#endif
 		SafeRelease(mImpl->wicFactory);
 		SafeRelease(mImpl->d2d1Factory);
 		SafeRelease(mImpl->dwriteFactory);
@@ -756,26 +763,30 @@ namespace MetalBone
 
 		case WM_ACTIVATEAPP:
 		case WM_MOUSELEAVE:
-			if(msg == WM_MOUSELEAVE || wparam == FALSE)
-			{
-				if(window->m_windowExtras->bTrackingMouse)
-				{
-					TRACKMOUSEEVENT tme = {0};
-					tme.cbSize      = sizeof(TRACKMOUSEEVENT);
-					tme.dwFlags     = TME_HOVER | TME_LEAVE | TME_CANCEL;
-					tme.hwndTrack   = hwnd;
-					::TrackMouseEvent(&tme);
-				}
-				window->m_windowExtras->bTrackingMouse = true;
+            {
+                bool leaved = msg == WM_MOUSEMOVE ? true : wparam == FALSE;
+                if(leaved)
+                {
+                    if(window->m_windowExtras->bTrackingMouse)
+                    {
+                        TRACKMOUSEEVENT tme = {0};
+                        tme.cbSize      = sizeof(TRACKMOUSEEVENT);
+                        tme.dwFlags     = TME_HOVER | TME_LEAVE | TME_CANCEL;
+                        tme.hwndTrack   = hwnd;
+                        ::TrackMouseEvent(&tme);
+                    }
+                    window->m_windowExtras->bTrackingMouse = true;
 
-                xtr->lastMouseX = -1;
-                xtr->lastMouseY = -1;
-				xtr->currWidgetUnderMouse = 0;
-                if(xtr->mouseGrabber) xtr->mouseGrabber->releaseMouse();
-				::SendMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(-1,-1));
+                    xtr->lastMouseX = -1;
+                    xtr->lastMouseY = -1;
+                    xtr->currWidgetUnderMouse = 0;
+                    if(xtr->mouseGrabber) xtr->mouseGrabber->releaseMouse();
+                    ::SendMessage(hwnd, WM_MOUSEMOVE, 0, MAKELPARAM(-1,-1));
 
-				window->m_windowExtras->bTrackingMouse = false;
-			}
+                    window->m_windowExtras->bTrackingMouse = false;
+                }
+            }
+            RET_DEFPROC;
 			break;
 		case WM_CLOSE:
 			{

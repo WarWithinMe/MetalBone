@@ -11,11 +11,13 @@
 #include <algorithm>
 #include <wincodec.h>
 #include <stdlib.h>
-#include <gdiplus.h>
 #include <typeinfo>
 #include <sstream>
 #include <list>
 #include <map>
+#ifndef MB_NO_GDIPLUS
+#include <gdiplus.h>
+#endif
 
 namespace MetalBone
 {
@@ -796,7 +798,9 @@ namespace MetalBone
 		SafeRelease(textLayout);
 	}
 
+#ifndef MB_NO_GDIPLUS
 	using namespace Gdiplus;
+#endif
 	void RenderRuleData::drawGdiText(const D2D1_RECT_F& borderRect,
 		const MRect& clipRectInRT, const wstring& text)
 	{
@@ -833,6 +837,7 @@ namespace MetalBone
 		HFONT oldFont = (HFONT)::SelectObject(textDC,tro->font.getHandle());
 		::SetBkMode(textDC,TRANSPARENT);
 
+#ifndef MB_NO_GDIPLUS
 		// Draw the text
 		if(hasOutline) // If we need to draw the outline, we have to use GDI+.
 		{
@@ -894,6 +899,7 @@ namespace MetalBone
 			SolidBrush textBrush(tro->color.getARGB());
 			graphics.FillPath(&textBrush,&textPath);
 		} else
+#endif
 		{
 			unsigned int formatParam = tro->getGDITextFormat();
 			if(hasShadow)
