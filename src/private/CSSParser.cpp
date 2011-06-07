@@ -1,6 +1,6 @@
 #include "CSSParser.h"
 #include "MStyleSheet.h"
-#include "MD2DPaintContext.h"
+#include "MD2DUtils.h"
 #include <string>
 #include <sstream>
 
@@ -125,6 +125,7 @@ namespace MetalBone
 			{ L"ns-resize",    Value_SizeVer     },
 			{ L"nwse-resize",  Value_SizeFDiag   },
 			{ L"oblique",      Value_Oblique     },
+			{ L"opaque",       Value_Opaque      },
 			{ L"overline",     Value_Overline    },
 			{ L"padding",      Value_Padding     },
 			{ L"pointer",      Value_Hand        },
@@ -236,6 +237,9 @@ Declaration::~Declaration()
                 break;
             case CssValue::LiearGradient:
                 delete values.at(i).data.vlinearGradient;
+                break;
+            case CssValue::Rectangle:
+                delete values.at(i).data.vrect;
                 break;
 		    default: break;
 		}
@@ -708,7 +712,7 @@ LinearGradientData* parseLinearGradient(const wstring& css, int& index, int leng
     }
 
     vector<wstring> colors;
-    for(int i = checkingToken; i < tokens.size(); ++i)
+    for(size_t i = checkingToken; i < tokens.size(); ++i)
     {
         vector<wstring> temp;
         simplySplitAndIngoreWS(tokens.at(i),0,tokens.at(i).size(),L' ',L'\0',temp);
@@ -820,7 +824,28 @@ int Declaration::addValue(const wstring& css, int index, int length)
                 value.setUInt(color);
                 value.setType(CssValue::Color);
                 values.push_back(value);
-            } else if(funcName == L"linear-gradient")
+            } else if(funcName == L"rect")
+            {
+                int rect[4] = {}; // x y width height 
+                ++index;
+                rect[0] = _wtoi(css.c_str() + index);
+                int i = 1;
+                while(css.at(index) != L')')
+                {
+                    if(css.at(index) == L',')
+                    {
+                        ++index;
+                        rect[i] = _wtoi(css.c_str() + index);
+                        ++i;
+                    }
+                    ++index;
+                }
+                CssValue value;
+                value.setRect(MRect(rect[0],rect[1],rect[0] + rect[2], rect[1] + rect[3]));
+                value.setType(CssValue::Rectangle);
+                values.push_back(value);
+
+            }else if(funcName == L"linear-gradient")
             {
                 ++index;
                 LinearGradientData* lgd = parseLinearGradient(css, index, length);
@@ -839,7 +864,7 @@ int Declaration::addValue(const wstring& css, int index, int length)
                     ++index;
             }
 
-            ++index;
+            ++index; // Skip ')'
             while(index < length && iswspace(css.at(index)))
                 ++index;
             valueEndIndex   = 0;

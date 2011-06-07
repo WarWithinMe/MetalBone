@@ -71,7 +71,8 @@ namespace MetalBone
             
             Value_BitFlagsEnd,
 
-            Value_SingleLoop, 
+            Value_SingleLoop,
+            Value_Opaque,
             Value_NoRepeat,   Value_Stretch,     Value_Center,
 
             Value_Dashed,     Value_DotDash,     Value_DotDotDash,
@@ -87,7 +88,7 @@ namespace MetalBone
 
             Value_True,
 
-            KnownValueCount = 50
+            KnownValueCount = 51
         };
 
         struct Selector;
@@ -120,13 +121,22 @@ namespace MetalBone
         struct CssValue
         {
             // Color store inside CssValue is ARGB format. (The same as MColor)
-            enum  Type { Unknown, Number, Length, Identifier, Uri, Color, String, LiearGradient };
+            enum  Type {
+                Unknown,
+                Number, Length,
+                Color,
+                Identifier,
+                Uri, String,
+                LiearGradient,
+                Rectangle
+            };
             union Variant
             {
-                int           vint;
-                unsigned int  vuint;
-                std::wstring* vstring;
-                ValueType     videntifier;
+                int                 vint;
+                unsigned int        vuint;
+                ValueType           videntifier;
+                MRect*              vrect;
+                std::wstring*       vstring;
                 LinearGradientData* vlinearGradient;
             };
 
@@ -146,10 +156,12 @@ namespace MetalBone
             inline void setString(std::wstring*);
             inline void setIdentifier(ValueType);
             inline void setLinearGradient(LinearGradientData*);
+            inline void setRect(const MRect&);
 
             inline int                 getInt()                const;
             inline unsigned int        getUInt()               const;
             inline MColor              getColor()              const;
+            inline const MRect&        getRect()               const;
             inline const std::wstring& getString()             const;
             inline ValueType           getIdentifier()         const;
             inline LinearGradientData* getLinearGradientData() const;
@@ -237,6 +249,7 @@ namespace MetalBone
         inline unsigned int        CssValue::getUInt()       const { return data.vuint; }
         inline const std::wstring& CssValue::getString()     const { return *data.vstring; }
         inline ValueType           CssValue::getIdentifier() const { return data.videntifier; }
+        inline const MRect&        CssValue::getRect()       const { return *data.vrect; }
         inline LinearGradientData* CssValue::getLinearGradientData() const { return data.vlinearGradient; }
         inline void CssValue::setType(Type t)            { type             = t; }
         inline void CssValue::setInt(int v)              { data.vint        = v; }
@@ -244,6 +257,7 @@ namespace MetalBone
         inline void CssValue::setColor(unsigned int v)   { data.vuint       = v; }
         inline void CssValue::setString(std::wstring* v) { data.vstring     = v; }
         inline void CssValue::setIdentifier(ValueType v) { data.videntifier = v; }
+        inline void CssValue::setRect(const MRect& v)    { data.vrect = new MRect(v);}
         inline void CssValue::setLinearGradient(LinearGradientData* v) { data.vlinearGradient = v; }
         inline unsigned int Selector::pseudo() const { return basicSelectors.at(basicSelectors.size() - 1)->pseudo; }
     } // namespace CSS

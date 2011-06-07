@@ -81,9 +81,9 @@
     <ClInclude Include="..\..\3rd\XUnzip.h" />
     <ClInclude Include="..\..\MApplication.h" />
     <ClInclude Include="..\..\MBGlobal.h" />
-    <ClInclude Include="..\..\mb_switch.h" />
     <ClInclude Include="..\..\MCommonWidgets.h" />
     <ClInclude Include="..\..\MD2DPaintContext.h" />
+    <ClInclude Include="..\..\MD2DUtils.h" />
     <ClInclude Include="..\..\MEvent.h" />
     <ClInclude Include="..\..\MRegion.h" />
     <ClInclude Include="..\..\MResource.h" />
@@ -93,6 +93,7 @@
     <ClInclude Include="..\..\private\CSSParser.h" />
     <ClInclude Include="..\..\private\MApp_p.h" />
     <ClInclude Include="..\..\private\MD2DPaintContextData.h" />
+    <ClInclude Include="..\..\private\RenderRuleData.h" />
     <ClInclude Include="..\..\private\MWidget_p.h" />
     <ClInclude Include="MainWindow.h" />
   </ItemGroup>
@@ -101,12 +102,14 @@
     <ClCompile Include="..\..\MApplication.cpp" />
     <ClCompile Include="..\..\MBGlobal.cpp" />
     <ClCompile Include="..\..\MCommonWidgets.cpp" />
+    <ClCompile Include="..\..\MD2DPaintContext.cpp" />
+    <ClCompile Include="..\..\MD2DUtils.cpp" />
     <ClCompile Include="..\..\MRegion.cpp" />
     <ClCompile Include="..\..\MResource.cpp" />
     <ClCompile Include="..\..\MStyleSheet.cpp" />
     <ClCompile Include="..\..\MWidget.cpp" />
     <ClCompile Include="..\..\private\CSSParser.cpp" />
-    <ClCompile Include="..\..\private\MD2DPaintContextData.cpp" />
+    <ClCompile Include="..\..\private\RenderRule.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MainWindow.cpp" />
   </ItemGroup>

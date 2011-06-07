@@ -1,7 +1,7 @@
 #pragma once
 
 #include "MWidget.h"
-#include "MD2DPaintContext.h"
+#include "MD2DUtils.h"
 #include "MResource.h"
 
 // MButton
@@ -79,10 +79,11 @@ namespace MetalBone
         private:
             struct TabData
             {
-                std::wstring   text;
-                D2DImageHandle icon;
-                int            id;
-                int            width;
+                TabData():id(0),width(0){}
+                std::wstring    text;
+                MD2DImageHandle icon;
+                int             id;
+                int             width;
             };
 
             std::map<int, TabData> tabs;

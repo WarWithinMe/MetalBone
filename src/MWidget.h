@@ -8,7 +8,6 @@
 
 #include <string>
 #include <list>
-#include <d2d1.h>
 
 namespace MetalBone
 {

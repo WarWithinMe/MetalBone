@@ -1,5 +1,6 @@
 #include "MCommonWidgets.h"
 #include "MStyleSheet.h"
+#include "MD2DPaintContext.h"
 
 namespace MetalBone
 {
@@ -110,7 +111,7 @@ namespace MetalBone
         tabData.id   = id;
         tabData.text = tabText;
         if(!imagePath.empty())
-            tabData.icon = MD2DPaintContext::createImage(imagePath);
+            tabData.icon = MD2DImageHandle::create(imagePath);
 
         CSS::RenderRule rule = mApp->getStyleSheet()->getRenderRule(&tabQuerier);
         MSize size = rule.getStringSize(tabText);
@@ -168,11 +169,10 @@ namespace MetalBone
         if(tabs.find(id) != tabs.end())
         {
             TabData& tabData = tabs[id];
-            MD2DPaintContext::removeResource(tabData.icon);
             if(!imagePath.empty())
-                tabData.icon = MD2DPaintContext::createImage(imagePath);
+                tabData.icon = MD2DImageHandle::create(imagePath);
             else
-                tabData.icon = D2DImageHandle();
+                tabData.icon = MD2DImageHandle();
             repaint();
         }
     }
@@ -228,7 +228,7 @@ namespace MetalBone
     void MTabBar::slideToIndex(int index)
     {
         if(shownStartIndex == index)          return;
-        if(index >= tabs.size() || index < 0) return;
+        if(index >= (int)tabs.size() || index < 0) return;
 
         std::map<int, TabData>::iterator tit    = tabs.begin();
         std::map<int, TabData>::iterator titEnd = tabs.end();
@@ -287,7 +287,7 @@ namespace MetalBone
             leftButton.show();
         else
             leftButton.hide();
-        if(shownEndIndex < tabs.size() - 1)
+        if(shownEndIndex < (int)tabs.size() - 1)
             rightButton.show();
         else
             rightButton.hide();

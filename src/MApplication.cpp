@@ -1,18 +1,16 @@
 #include "MApplication.h"
 #include "MWidget.h"
 #include "MResource.h"
-#include "MRegion.h"
 #include "private/MWidget_p.h"
 #include "private/MApp_p.h"
 
-#include <windows.h>
-#include <dwmapi.h>
 #include <d2d1.h>
 #include <dwrite.h>
 #include <wincodec.h>
 #include <fstream>
+
 #ifndef MB_NO_GDIPLUS 
-#include <gdiplus.h>
+#  include <gdiplus.h>
 #endif
 
 namespace MetalBone
@@ -322,9 +320,7 @@ namespace MetalBone
 
 		case WM_NCHITTEST:
 			{
-				LRESULT result;
-				if(!::DwmDefWindowProc(hwnd,msg,wparam,lparam,&result))
-					result = ::DefWindowProcW(hwnd,msg,wparam,lparam);
+				LRESULT result = ::DefWindowProcW(hwnd,msg,wparam,lparam);
 				switch(result)
 				{
 				case HTTOP:

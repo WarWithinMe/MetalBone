@@ -1,6 +1,7 @@
 #pragma once
 
-/* ========== Switches ========== */
+/* ++++++++++ Switches ++++++++++ */
+
 // If defined, MetalBone is not exported.
 //#define METALBONE_LIBRARY
 //#define MB_DECL_EXPORT
@@ -11,17 +12,22 @@
 #  define MSVC
 #endif
 #define MB_NO_GDIPLUS
-/* ========== Switches ========== */
+#define MB_USE_D2D
 
-#pragma comment(lib, "windowscodecs.lib") // WIC
-#pragma comment(lib, "d2d1.lib")          // Direct2D
-#pragma comment(lib, "dwrite.lib")        // DirectWrite
-#pragma comment(lib, "dwmapi.lib")        // DWM
+/* ---------- Switches ---------- */
+
+
+#ifdef MB_USE_D2D
+#  pragma comment(lib, "windowscodecs.lib") // WIC
+#  pragma comment(lib, "d2d1.lib")          // Direct2D
+#  pragma comment(lib, "dwrite.lib")        // DirectWrite
+#endif
+
 #pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
-//#pragma comment(linker,"\"/manifestdependency:type='Win32' name='Microsoft.Windows.GdiPlus' version='1.1.6001.18000' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 #ifndef MB_NO_GDIPLUS
-#pragma comment(lib, "gdiplus.lib")       // Gdi+
+#  pragma comment(lib, "gdiplus.lib")       // Gdi+
+//#  pragma comment(linker,"\"/manifestdependency:type='Win32' name='Microsoft.Windows.GdiPlus' version='1.1.6001.18000' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #endif
 
 #include <windows.h>
@@ -94,6 +100,6 @@ inline void SafeRelease(Interface*& comObject) {
   using namespace MetalBone::ThirdParty::Gallant;
 #endif
 
-#define MB_DISABLE_COPY(TypeName) \
+#define MB_DISABLE_COPY(TypeName)          \
     TypeName(const TypeName&);             \
     const TypeName& operator=(const TypeName&)

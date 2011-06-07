@@ -1,281 +1,32 @@
 #pragma once
-
 #include "MBGlobal.h"
 #include "MUtils.h"
-#include "MWidget.h"
-#include "private/MWidget_p.h"
 
 #include <d2d1.h>
-#include <string>
-#include <unordered_map>
-
-using namespace std;
-using namespace std::tr1;
+#include <list>
 
 namespace MetalBone
 {
-    struct LinearGradientData
-    {
-        struct GradientStop { int argb; float pos; };
-
-        enum PosEnum { StartX, StartY, EndX, EndY };
-
-        inline LinearGradientData():stops(0),stopCount(0),posType(0) { ZeroMemory(pos,sizeof(int)*4); }
-        inline ~LinearGradientData() { delete[] stops; }
-        inline bool isPercentagePos(PosEnum e) const { return (posType & (1 << e)) != 0; }
-        inline int  getPosValue(PosEnum e) const { return pos[e]; }
-        inline void setPosType(PosEnum e, bool isPercentage)
-        {
-            if(isPercentage) { posType |= (1 << e); }
-            else { posType &= ~(1 << e); }
-        }
-
-        GradientStop* stops;
-        int           stopCount;
-        int           pos[4];
-        char          posType;
-    };
-
-
-    METALBONE_EXPORT ID2D1Bitmap*      createD2DBitmap     (const wstring& imagePath, ID2D1RenderTarget*, unsigned int* frameCount = 0);
-    METALBONE_EXPORT ID2D1BitmapBrush* createD2DBitmapBrush(const wstring& imagePath, ID2D1RenderTarget*, unsigned int* frameCount = 0);
-    METALBONE_EXPORT ID2D1LinearGradientBrush* createD2DLinearGradientBrush(const LinearGradientData*, ID2D1RenderTarget*);
-    
-
-    class METALBONE_EXPORT D2DBrushHandle
-    {
-        public:
-            enum Type { 
-                Unknown, Solid, LinearGradient, Bitmap, NinePatch
-            };
-            enum Portion {
-                TopCenter = 0,
-                CenterLeft   ,
-                Center       ,
-                CenterRight  ,
-                BottomCenter ,
-                Conner
-            };
-
-            inline D2DBrushHandle():etype(Unknown),pdata(0){}
-            inline D2DBrushHandle(const D2DBrushHandle& rhs):etype(rhs.etype),pdata(rhs.pdata){}
-            inline const D2DBrushHandle& operator=(const D2DBrushHandle& rhs) { etype = rhs.etype; pdata = rhs.pdata; return *this; }
-
-            inline operator ID2D1Brush*() const;
-            inline ID2D1Brush* getBrush() const;
-            ID2D1BitmapBrush*  getPortion(Portion) const;
-
-            ID2D1LinearGradientBrush* getLinearGraidentBrush(const D2D1_RECT_F* drawingRect);
-
-            unsigned int frameCount() const;
-
-            inline Type type() const { return etype; }
-
-        protected:
-            inline D2DBrushHandle(Type t, ID2D1Brush** p):etype(t),pdata(p){}
-            Type  etype;
-            ID2D1Brush** pdata;
-
-        friend class D2DResPool;
-        friend class MD2DPaintContextData;
-    };
-
-    class METALBONE_EXPORT D2DImageHandle
-    {
-        public:
-            inline D2DImageHandle():pdata(0){}
-            inline D2DImageHandle(const D2DImageHandle& rhs):pdata(rhs.pdata){}
-            inline const D2DImageHandle& operator=(const D2DImageHandle& rhs){ pdata = rhs.pdata; return *this; }
-
-            inline operator ID2D1Bitmap*() const;
-            inline ID2D1Bitmap* getImage() const;
-
-            unsigned int frameCount() const;
-
-        protected:
-            inline D2DImageHandle(ID2D1Bitmap** p):pdata(p){}
-            ID2D1Bitmap** pdata;
-
-        friend class D2DResPool;
-    };
-
-    struct RectU
-    {
-        unsigned int left;
-        unsigned int top;
-        unsigned int right;
-        unsigned int bottom;
-
-        RectU():left(0),top(0),right(0),bottom(0){}
-        RectU(unsigned int left,  unsigned int top, 
-            unsigned int right, unsigned int bottom) :
-            left(left),top(top),right(right),bottom(bottom){}
-
-        const RectU& operator=(const RectU& rhs)
-        {
-            left   = rhs.left;
-            right  = rhs.right;
-            top    = rhs.top;
-            bottom = rhs.bottom;
-            return *this;
-        }
-    };
-
-    struct METALBONE_EXPORT PortionBrushes
-    {
-        PortionBrushes () { memset(b,0,sizeof(ID2D1BitmapBrush*) * 5); }
-        ~PortionBrushes() { releaseBrushes(); }
-        inline void releaseBrushes()
-        {
-            for(int i = 0; i<5; ++i) SafeRelease(b[i]);
-            memset(b,0,sizeof(ID2D1BitmapBrush*) * 5);
-        }
-        RectU borders;
-        ID2D1BitmapBrush* b[5];
-    };
-
-    class METALBONE_EXPORT D2DResPool 
-    {
-        public:
-            ~D2DResPool();
-
-            D2DBrushHandle getBrush(MColor);
-            D2DBrushHandle getBrush(const wstring&);
-            D2DBrushHandle getBrush(const wstring&, const RectU&);
-            D2DBrushHandle getBrush(const LinearGradientData*);
-            D2DImageHandle getImage(const wstring&);
-
-            void createBrush(const D2DBrushHandle*);
-            void createImage(const D2DImageHandle*);
-            void clearResources();
-            void removeResource(D2DBrushHandle&);
-            void removeResource(D2DImageHandle&);
-
-            inline void setWorkingRT(ID2D1RenderTarget* rt) { workingRT = rt; }
-
-        private:
-            typedef unordered_map<ID2D1SolidColorBrush**   , MColor                   >  BrushColorMap;
-            typedef unordered_map<void**                   , wstring                  >  BrushBmpPathMap;
-            typedef unordered_map<ID2D1LinearGradientBrush**,const LinearGradientData*>  LinearGradientDataMap;
-
-            typedef unordered_map<MColor                   , ID2D1SolidColorBrush*    >  SolidBrushMap;
-            typedef unordered_map<wstring                  , ID2D1BitmapBrush*        >  BitmapBrushMap;
-            typedef unordered_map<ID2D1BitmapBrush**       , PortionBrushes           >  PortionBrushMap;
-            typedef unordered_map<wstring                  , ID2D1Bitmap*             >  BitmapMap;
-            typedef unordered_map<const LinearGradientData*, ID2D1LinearGradientBrush*>  LinearBrushMap;
-
-            typedef unordered_map<void**                   , unsigned int             >  FrameCountMap;
-
-            BrushColorMap         colorMap;
-            BrushBmpPathMap       bitmapPathMap;
-            LinearGradientDataMap linearDataMap;
-
-            SolidBrushMap         solidBrushCache;
-            BitmapBrushMap        bitmapBrushCache;
-            PortionBrushMap       biPortionCache;
-            BitmapMap             bitmapCache;
-            LinearBrushMap        linearBrushCache;
-
-            FrameCountMap         frameCountMap;
-
-            ID2D1RenderTarget* workingRT;
-
-            void create9PatchBrush(const D2DBrushHandle*);
-
-            friend class D2DBrushHandle;
-            friend class D2DImageHandle;
-            friend class MD2DPaintContextData;
-    };
-
     class MWidget;
     class MD2DPaintContextData;
+    class MD2DBrushHandle;
     class METALBONE_EXPORT MD2DPaintContext
     {
         public:
-            inline explicit MD2DPaintContext(MWidget* w);
-            inline explicit MD2DPaintContext(MD2DPaintContextData* d);
+            explicit MD2DPaintContext(MWidget* w);
+            explicit MD2DPaintContext(MD2DPaintContextData* d):data(d) { }
 
-            // The LinearGradientData object must remain valid until 
-            // calling removeResource() on the returned D2DBrushHandle, or until
-            // D2DResPool is destroyed.
-            inline static D2DBrushHandle createBrush(const LinearGradientData*);
-            inline static D2DImageHandle createImage(const wstring& imagePath);
-            inline static D2DBrushHandle createBrush(const wstring& imagePath);
-            inline static D2DBrushHandle createBrush(MColor color);
-            inline static D2DBrushHandle create9PatchBrush(const wstring& imagePath,const RectU& borderWidths);
+            void fill9PatchRect(MD2DBrushHandle& b, bool scaleX, bool scaleY,
+                const MRect& rect, const MRect* clipRect = 0);
 
-            // Calling removeResource() will free the resource. If there's another
-            // D2DXXXHandle needs that resource, the resource will be recreated
-            // automatically.
-            // There's one exception - LinearGradientBrush.
-            // Calling removeResource() on a linear-gradient brush will free the
-            // brush, but the brush can not be recreated any more. Any attempt to
-            // use the brush (D2DBrushHandle can refers to the same brush if they're
-            // created from the same LinearGradientData) will lead to undefined behaviour.
-            // After removing the linear-gradient brush, one can safely delete the
-            // corresponding LinearGradientData.
-            inline static void removeResource(D2DBrushHandle& b);
-            inline static void removeResource(D2DImageHandle& i);
-
+            static void discardResources();
+            // Whenever we do drawing in responds to WM_PAINT, getRenderTarget()
+            // will return the ID2D1RenderTarget of the window which needs to be
+            // redraw. In other time, it returns 0;
+            static ID2D1RenderTarget* getRecentRenderTarget();
             ID2D1RenderTarget* getRenderTarget();
 
-            void fill9PatchRect(const D2DBrushHandle& brush, const MRect& rect,
-                const MRect& clipRect, bool scaleX, bool scaleY);
-
         private:
-            static D2DResPool resPool;
             MD2DPaintContextData* data;
-
-            friend class D2DBrushHandle;
-            friend class D2DImageHandle;
-            friend class MD2DPaintContextData;
     };
-
-    inline D2DBrushHandle::operator ID2D1Brush*() const
-    {
-        M_ASSERT(etype != Unknown);
-        if(pdata == 0) return 0;
-        if(*(ID2D1Brush**)pdata == 0)
-            MD2DPaintContext::resPool.createBrush(this);
-        return *(ID2D1Brush**)pdata;
-    }
-    inline ID2D1Brush* D2DBrushHandle::getBrush() const
-    {
-        M_ASSERT(etype != Unknown);
-        if(pdata == 0) return 0;
-        if(*(ID2D1Brush**)pdata == 0)
-            MD2DPaintContext::resPool.createBrush(this);
-        return *(ID2D1Brush**)pdata;
-    }
-    inline D2DImageHandle::operator ID2D1Bitmap*() const
-    {
-        if(pdata == 0) return 0;
-        if(*(ID2D1Bitmap**)pdata == 0)
-            MD2DPaintContext::resPool.createImage(this);
-        return *(ID2D1Bitmap**)pdata;
-    }
-    inline ID2D1Bitmap* D2DImageHandle::getImage() const
-    {
-        if(pdata == 0) return 0;
-        if(*(ID2D1Bitmap**)pdata == 0)
-            MD2DPaintContext::resPool.createImage(this);
-        return *(ID2D1Bitmap**)pdata;
-    }
-
-    inline void MD2DPaintContext::removeResource(D2DBrushHandle& b)
-        { resPool.removeResource(b); }
-    inline void MD2DPaintContext::removeResource(D2DImageHandle& i)
-        { resPool.removeResource(i); }
-    inline D2DBrushHandle MD2DPaintContext::createBrush(MColor c)
-        { return resPool.getBrush(c); }
-    inline D2DBrushHandle MD2DPaintContext::createBrush(const wstring& p)
-        { return resPool.getBrush(p); }
-    inline D2DImageHandle MD2DPaintContext::createImage(const wstring& p)
-        { return resPool.getImage(p); }
-    inline D2DBrushHandle MD2DPaintContext::createBrush(const LinearGradientData* p)
-        { return resPool.getBrush(p); }
-    inline D2DBrushHandle MD2DPaintContext::create9PatchBrush(const wstring& p, const RectU& r)
-        { return resPool.getBrush(p, r); }
-    inline MD2DPaintContext::MD2DPaintContext(MWidget* w):data(w->windowWidget()->m_windowExtras->m_pcData){}
-    inline MD2DPaintContext::MD2DPaintContext(MD2DPaintContextData* d):data(d){}
 }

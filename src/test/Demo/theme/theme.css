@@ -1,40 +1,40 @@
 #SettingWindow {
-	border-image: url(theme\SA_BG.png) 90 20 51 28;
+	border-image: url(theme\Elements.png) rect(109,0,68,166) 90 20 51 28;
 	margin: 90 20 51 28;
 	width: 480;
 	height:435;
 }
 
 #SettingWindow #RedTrafficLight {
-	background: url(theme\SAElements.png) no-repeat 0 95 15 15;
+	background: url(theme\Elements.png) no-repeat rect(0,93,15,16);
 	width: 15;
-	height:15;
+	height:16;
 	x:454;
 	y:12;
 }
 
 #SettingWindow #RedTrafficLight : hover {
-	background: url(theme\SAElements.png) no-repeat 15 95 15 15;
+	background: url(theme\Elements.png) no-repeat rect(15,93,15,16);
 }
 
 #SettingWindow #RedTrafficLight : pressed {
-	background: url(theme\SAElements.png) no-repeat 30 95 15 15;
+	background: url(theme\Elements.png) no-repeat rect(30,93,15,16);
 }
 
 #SettingWindow #CloseButton {
-	background: url(theme\SAElements.png) no-repeat 0 0 79 30;
+	background: url(theme\Elements.png) no-repeat rect(0,0,79,31);
 	width:79;
-	height:30;
+	height:31;
 	x:376;
 	y:391;
 }
 
 #SettingWindow #CloseButton : hover {
-	background: url(theme\SAElements.png) no-repeat 0 32 79 30;
+	background: url(theme\Elements.png) no-repeat rect(0,31,79,31);
 }
 
 #SettingWindow #CloseButton : pressed {
-	background: url(theme\SAElements.png) no-repeat 0 64 79 30;
+	background: url(theme\Elements.png) no-repeat rect(0,62,79,31);
 }
 
 #SettingWindow #StatusLabel {
@@ -90,32 +90,32 @@
 
 #TabBar #Tab : checked{
 	border: none;
-	border-image: url(theme\SATabItemChecked.png) 2;
+	border-image: url(theme\Elements.png) rect(0,109,60,57) 2;
 	color: #a1e73b;
 }
 
 #TabBar #LeftButton{
 	width: 15;
 	height: 57;
-	background: url(theme\TabLRElements.png) no-repeat 0 0 15 57;
+	background: url(theme\Elements.png) no-repeat rect(79,0,15,57);
 }
 
 #TabBar #LeftButton : hover{
-	background: url(theme\TabLRElements.png) no-repeat 30 0 15 57;
+	background: url(theme\Elements.png) no-repeat rect(79,38,15,57);
 }
 
 #TabBar #RightButton{
 	width: 15;
 	height: 57;
-	background: url(theme\TabLRElements.png) no-repeat 15 0 15 57;
+	background: url(theme\Elements.png) no-repeat rect(94,0,15,57);
 }
 
 #TabBar #RightButton : hover{
-	background: url(theme\TabLRElements.png) no-repeat 45 0 15 57;
+	background: url(theme\Elements.png) no-repeat rect(94,38,15,57);
 }
 
 #MScrollBar{
-	border-image: url(theme\Track.jpg) 7 7 9 7 stretch;
+	border-image: url(theme\Elements.png) rect(60,109,15,44) stretch 7 7 9 7;
 	x: 452;
 	y: 91;
 	width: 15;
@@ -126,12 +126,22 @@
 #MScrollBar #Thumb{
 	border-radius: 7;
 	border: 1px solid #000000;
-	background: url(theme\ThumbBG.jpg) repeat-y border;
-	border-image: url(theme\ThumbLight.png) 8 1 8 10 repeat;
+	background: url(theme\ThumbBG.jpg) repeat-y border rect(0,0,15,23);
+	border-image: url(theme\Elements.png) rect(82,95,11,45) repeat 8 1 8 10;
 }
 
 #MScrollBar #Thumb :hover:vertical, #MScrollBar #Thumb :pressed:vertical{
-	background: url(theme\ThumbBG2.jpg) repeat-y border;
+	background: url(theme\ThumbBG.jpg) repeat-y border rect(15,0,15,23);
 	background: linear-gradient(left top,left bottom,#4Cff00fc 0%,#4C5400ff 100%) border;
-	border-image: url(theme\ThumbLight.png) 8 1 8 10 repeat;
+	border-image: url(theme\Elements.png) rect(82,95,11,45) repeat 8 1 8 10;
+}
+ToolTipWidget {
+	border-image: url(theme\Elements.png) rect(75,95,7,26) 4 3 5 3;
+	border: 4 3 5 3;
+	padding: 4 7;
+	color:#9b6a13;
+	font: 9 Î¢ÈíÑÅºÚ;
+	text-align: left center;
+	text-shadow: 0 1 #ffffff;
+	text-overflow: wrap;
 }

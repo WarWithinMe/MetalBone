@@ -4,7 +4,6 @@
 #include "MUtils.h"
 
 #include <windows.h>
-#include <d2d1.h>
 #include <set>
 #include <vector>
 #include <string>
@@ -42,7 +41,7 @@ namespace MetalBone
             AutoDetermine
         };
 
-        struct RenderRuleData;
+        class RenderRuleData;
         class METALBONE_EXPORT RenderRule
         {
             // RenderRule is not thread-safe and it haven't to be.
@@ -76,11 +75,11 @@ namespace MetalBone
                     const std::wstring& text = std::wstring(),
                     unsigned int frameIndex = 0);
 
-                inline bool operator==(const RenderRule&) const;
-                inline bool operator!=(const RenderRule&) const;
+                inline bool       isValid() const;
+                inline bool       operator==(const RenderRule&) const;
+                inline bool       operator!=(const RenderRule&) const;
                 const RenderRule& operator=(const RenderRule& other);
                 inline operator bool() const;
-                inline bool isValid() const;
 
                 // If TextRenderer is AutoDetermine, we use GDI to render text when the font size is
                 // no bigger than maxGdiFontPtSize.

@@ -2,7 +2,9 @@
 #include "MBGlobal.h"
 #include <windef.h>
 
-#include <d2d1helper.h>
+#ifdef MB_USE_D2D
+#  include <d2d1helper.h>
+#endif
 
 //MSize
 //MPoint
@@ -37,8 +39,10 @@ namespace MetalBone
             inline const MSize& operator=(const MSize&);
             inline const MSize& operator=(const SIZE&);
 
+#ifdef MB_USE_D2D
             inline operator D2D1_SIZE_U() const;
             inline operator D2D1_SIZE_F() const;
+#endif
     };
 
     class METALBONE_EXPORT MPoint : public POINT
@@ -60,8 +64,10 @@ namespace MetalBone
             inline const MPoint& operator=(const MPoint&);
             inline const MPoint& operator=(const POINT&);
 
+#ifdef MB_USE_D2D
             inline operator D2D1_POINT_2U() const;
             inline operator D2D1_POINT_2F() const;
+#endif
     };
 
     class METALBONE_EXPORT MRect : public RECT
@@ -92,8 +98,36 @@ namespace MetalBone
             inline BOOL intersect(const RECT& rc1, const RECT& rc2);
             inline BOOL unionRect(const RECT& rc1, const RECT& rc2);
 
+#ifdef MB_USE_D2D
             inline operator D2D1_RECT_U() const;
             inline operator D2D1_RECT_F() const;
+#endif
+    };
+
+    class METALBONE_EXPORT MRectU
+    {
+        public:
+            unsigned int left;
+            unsigned int top;
+            unsigned int right;
+            unsigned int bottom;
+
+            inline MRectU();
+            inline MRectU(unsigned int left, unsigned int top, 
+                unsigned int right, unsigned int bottom);
+            inline MRectU(const MRectU&);
+
+            inline bool operator==(const MRectU& rc);
+            inline bool operator!=(const MRectU& rc);
+            inline void operator= (const MRectU& rc);
+
+            inline unsigned int height() const;
+            inline unsigned int width()  const;
+
+#ifdef MB_USE_D2D
+            inline operator D2D1_RECT_U() const;
+            inline operator D2D1_RECT_F() const;
+#endif
     };
 
     class METALBONE_EXPORT MColor
@@ -124,8 +158,9 @@ namespace MetalBone
             inline const MColor& operator=(const MColor&);
             inline bool operator==(const MColor&) const;
 
+#ifdef MB_USE_D2D
             inline operator D2D1_COLOR_F() const;
-
+#endif
         private:
             unsigned int argb;
     };
@@ -216,6 +251,19 @@ namespace MetalBone
     inline BOOL MRect::unionRect(const RECT& rc1, const RECT& rc2)
         { return ::UnionRect(this,&rc1,&rc2); }
 
+    inline MRectU::MRectU() { left = top = right = bottom = 0; }
+    inline MRectU::MRectU(unsigned int l, unsigned int t, unsigned int r, unsigned int b)
+        { left = l; top = t; right = r; bottom = b; }
+    inline MRectU::MRectU(const MRectU& r)
+        { left = r.left; right = r.right; top = r.top; bottom = r.bottom; }
+    inline bool MRectU::operator==(const MRectU& rc)
+        { return memcmp(this,&rc,sizeof(MRectU)) == 0; }
+    inline bool MRectU::operator!=(const MRectU& rc)
+        { return memcmp(this,&rc,sizeof(MRectU)) != 0; }
+    inline void MRectU::operator= (const MRectU& rc)
+        { left = rc.left; right = rc.right; top = rc.top; bottom = rc.bottom; }
+    inline unsigned int MRectU::height() const { return bottom - top;  }
+    inline unsigned int MRectU::width()  const { return right  - left; }
 
     inline MColor MColor::fromCOLORREF(COLORREF color, BYTE alpha)
     {
@@ -255,13 +303,17 @@ namespace MetalBone
     inline unsigned int MColor::getRGB() const
         { return argb & 0xFFFFFF; }
 
+#ifdef MB_USE_D2D
     inline MSize:: operator D2D1_SIZE_U  () const { return D2D1::SizeU(cx,cy); }
     inline MSize:: operator D2D1_SIZE_F  () const { return D2D1::SizeF((FLOAT)cx, (FLOAT)cy); }
     inline MPoint::operator D2D1_POINT_2U() const { return D2D1::Point2U(x,y); }
     inline MPoint::operator D2D1_POINT_2F() const { return D2D1::Point2F((FLOAT)x,(FLOAT)y); }
     inline MRect:: operator D2D1_RECT_U  () const { return D2D1::RectU(left,top,right,bottom); }
     inline MRect:: operator D2D1_RECT_F  () const { return D2D1::RectF((FLOAT)left,(FLOAT)top,(FLOAT)right,(FLOAT)bottom); }
+    inline MRectU::operator D2D1_RECT_U  () const { return D2D1::RectU(left,top,right,bottom); }
+    inline MRectU::operator D2D1_RECT_F  () const { return D2D1::RectF((FLOAT)left,(FLOAT)top,(FLOAT)right,(FLOAT)bottom); }
     inline MColor::operator D2D1_COLOR_F () const { return D2D1::ColorF(argb & 0xFFFFFF, float(argb >> 24 & 0xFF) / 255); }
+#endif
 }
 
 template<>
