@@ -4,8 +4,8 @@
 #include "MWidget.h"
 #include "3rd/XUnzip.h"
 
-#include "MD2DPaintContext.h"
-#include "private/MD2DPaintContextData.h"
+#include "MGraphics.h"
+#include "private/MGraphicsData.h"
 
 #define MAX_TOOLTIP_WIDTH 350
 #define TRAY_ICON_MESSAGE (WM_USER+100)
@@ -230,16 +230,15 @@ namespace MetalBone
 		private:
 			bool isShown;
 			HWND winHandle;
-			ID2D1HwndRenderTarget* rt;
 			CSS::RenderRuleQuerier rrQuerier;
-            MD2DPaintContextData* contextData;
+            MGraphicsData*         graphicsData;
 
 			long width;
 			long height;
 	};
 
 	inline ToolTipWidget::ToolTipWidget():
-		isShown(false), winHandle(NULL), rt(0),
+		isShown(false), winHandle(NULL), 
 		rrQuerier(L"ToolTipWidget"), width(1), height(1)
 	{
 		winHandle = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOPMOST |
@@ -247,12 +246,12 @@ namespace MetalBone
 			gMWidgetClassName, L"", WS_POPUP,
 			0,0,1,1, NULL, NULL, mApp->getAppHandle(), NULL);
 
-        createRenderTarget();
-        contextData = new MD2DPaintContextData(rt);
+        graphicsData = MGraphicsData::create(winHandle,1,1);
+        graphicsData->setLayeredWindow(true);
 	}
 	inline ToolTipWidget::~ToolTipWidget()
 	{
-        delete contextData;
+        delete graphicsData;
 		::DestroyWindow(winHandle);
 	}
 	inline bool ToolTipWidget::hasRenderRule()
@@ -262,19 +261,6 @@ namespace MetalBone
 		::ShowWindow(winHandle, SW_HIDE);
 		isShown = false;
 	}
-
-    void ToolTipWidget::createRenderTarget()
-    {
-        SafeRelease(rt);
-        D2D1_RENDER_TARGET_PROPERTIES p = D2D1::RenderTargetProperties();
-        p.usage  = D2D1_RENDER_TARGET_USAGE_GDI_COMPATIBLE;
-        p.pixelFormat.format    = DXGI_FORMAT_B8G8R8A8_UNORM;
-        p.pixelFormat.alphaMode = D2D1_ALPHA_MODE_PREMULTIPLIED;
-        p.type   = mApp->isHardwareAccerated() ? 
-            D2D1_RENDER_TARGET_TYPE_HARDWARE : D2D1_RENDER_TARGET_TYPE_SOFTWARE;
-        mApp->getD2D1Factory()->CreateHwndRenderTarget(p,
-            D2D1::HwndRenderTargetProperties(winHandle,D2D1::SizeU(width,height)), &rt);
-    }
 
 	void ToolTipWidget::show(const std::wstring& tip, long x, long y)
 	{
@@ -297,43 +283,15 @@ namespace MetalBone
 		{
 			width  = size.cx;
 			height = size.cy;
-			rt->Resize(size);
+            graphicsData->resize(width,height);
 		}
 
-		ID2D1GdiInteropRenderTarget* gdiRT;
-		HDC dc;
 		MRect drawRect(0,0,width,height);
-
-        MD2DPaintContext context(contextData);
-        contextData->beginDraw();
-        rt->Clear();
-		rule.draw(context, drawRect, drawRect, tip);
-
-		rt->QueryInterface(&gdiRT);
-		gdiRT->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&dc);
-
-		BLENDFUNCTION blend = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
-		POINT sourcePos = {};
-		POINT destPos   = {x, y};
-		SIZE windowSize = {width, height};
-
-		UPDATELAYEREDWINDOWINFO info = {};
-		info.cbSize   = sizeof(UPDATELAYEREDWINDOWINFO);
-		info.dwFlags  = ULW_ALPHA;
-		info.hdcSrc   = dc;
-		info.pblend   = &blend;
-		info.psize    = &windowSize;
-		info.pptSrc   = &sourcePos;
-		info.pptDst   = &destPos;
-
-		::ShowWindow(winHandle, SW_NORMAL);
-		::UpdateLayeredWindowIndirect(winHandle, &info);
-		::SetWindowPos(winHandle, HWND_TOPMOST, x, y, width, height, sizeChanged ? 0 : SWP_NOSIZE);
-
-		gdiRT->ReleaseDC(0);
-		gdiRT->Release();
-        if(rt->EndDraw() == D2DERR_RECREATE_TARGET)
-            createRenderTarget();
+        MGraphics graphics(graphicsData);
+        graphicsData->beginDraw();
+        graphicsData->clear();
+		rule.draw(graphics, drawRect, drawRect, tip);
+        graphicsData->endDraw(MRect(0,0,width,height));
 	}
 
 	static ToolTipWidget* toolTipWidget = 0;

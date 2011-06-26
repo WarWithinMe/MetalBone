@@ -6,7 +6,7 @@ namespace MetalBone
 {
     struct MApplicationData
     {
-        inline MApplicationData(bool hwAccelerated);
+        inline MApplicationData();
         // Window procedure
         static LRESULT CALLBACK windowProc(HWND, UINT, WPARAM, LPARAM);
 
@@ -18,16 +18,13 @@ namespace MetalBone
 
         std::set<MWidget*>  topLevelWindows;
         bool                quitOnLastWindowClosed;
-        bool                hardwareAccelerated;
         HINSTANCE           appHandle;
         MStyleSheetStyle    ssstyle;
 
+#ifdef MB_USE_D2D
         ID2D1Factory*       d2d1Factory;
         IDWriteFactory*     dwriteFactory;
         IWICImagingFactory* wicFactory;
-
-#ifndef MB_NO_GDIPLUS
-        ULONG_PTR           gdiPlusToken;
 #endif
 
         static MApplication::WinProc customWndProc;
@@ -39,8 +36,7 @@ namespace MetalBone
     extern wchar_t gMWidgetClassName[];
     extern MCursor gArrowCursor;
 
-    inline MApplicationData::MApplicationData(bool hwAccelerated):
-        quitOnLastWindowClosed(true), hardwareAccelerated(hwAccelerated)
+    inline MApplicationData::MApplicationData():quitOnLastWindowClosed(true)
         { instance = this; }
     inline void MApplicationData::removeTLW(MWidget* w)
         { if(instance) instance->topLevelWindows.erase(w); }

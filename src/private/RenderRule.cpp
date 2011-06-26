@@ -1,16 +1,13 @@
 #include "MResource.h"
 #include "MWidget.h"
 #include "MApplication.h"
-#include "MD2DPaintContext.h"
+#include "MGraphics.h"
 #include "private/CSSParser.h"
 #include "private/RenderRuleData.h"
+#include "private/MGraphicsData.h"
 
 #include <dwrite.h>
 #include <algorithm>
-
-#ifndef MB_NO_GDIPLUS
-#  include <gdiplus.h>
-#endif
 
 namespace MetalBone
 {
@@ -18,15 +15,13 @@ namespace MetalBone
     namespace CSS
     {
         template<class T>
-        inline bool testValue(const T* t, ValueType value)
-        {
+        inline bool testValue(const T* t, ValueType value) {
             M_ASSERT(value < Value_BitFlagsEnd);
             return (t->values & value) != 0;
         }
         template<class T>
-        inline bool testNoValue(const T* t, ValueType value)
-        {
-            M_ASSERT(value < Value_BitFlagsEnd);;
+        inline bool testNoValue(const T* t, ValueType value) {
+            M_ASSERT(value < Value_BitFlagsEnd);
             return (t->values & value) == 0;
         }
 
@@ -51,6 +46,8 @@ namespace MetalBone
                 return false;
             return true;
         }
+
+#ifdef MB_USE_D2D
         ID2D1Geometry* ComplexBorderRenderObject::createGeometry(const D2D1_RECT_F& rect)
         {
             ID2D1GeometrySink* sink;
@@ -98,7 +95,7 @@ namespace MetalBone
         void ComplexBorderRenderObject::draw(ID2D1RenderTarget* rt,ID2D1Geometry* geo,const D2D1_RECT_F& rect)
         {
             if(uniform) {
-                rt->DrawGeometry(geo,brushes[0],(FLOAT)widths.left);
+                rt->DrawGeometry(geo,(ID2D1Brush*)brushes[0].getBrush(),(FLOAT)widths.left);
                 return;
             }
 
@@ -138,18 +135,18 @@ namespace MetalBone
                     }
                     sink->EndFigure(D2D1_FIGURE_END_OPEN);
                     sink->Close();
-                    rt->DrawGeometry(pathGeo,brushes[0],(FLOAT)widths.top);
+                    rt->DrawGeometry(pathGeo,(ID2D1Brush*)brushes[0].getBrush(),(FLOAT)widths.top);
                     SafeRelease(sink);
                     SafeRelease(pathGeo);
                 } else {
                     rt->DrawLine(D2D1::Point2F(rect.left,ft), D2D1::Point2F(rect.right,ft),
-                        brushes[0],(FLOAT)widths.top);
+                        (ID2D1Brush*)brushes[0].getBrush(),(FLOAT)widths.top);
                 }
             }
 
             if(widths.right > 0) {
                 rt->DrawLine(D2D1::Point2F(fr, ft + radiuses[1]), D2D1::Point2F(fr,fb - radiuses[2]),
-                    brushes[1],(FLOAT)widths.right);
+                    (ID2D1Brush*)brushes[1].getBrush(),(FLOAT)widths.right);
             }
 
             if(widths.bottom > 0)
@@ -182,20 +179,21 @@ namespace MetalBone
                     }
                     sink->EndFigure(D2D1_FIGURE_END_OPEN);
                     sink->Close();
-                    rt->DrawGeometry(pathGeo,brushes[2],(FLOAT)widths.bottom);
+                    rt->DrawGeometry(pathGeo,(ID2D1Brush*)brushes[2].getBrush(),(FLOAT)widths.bottom);
                     SafeRelease(sink);
                     SafeRelease(pathGeo);
                 } else {
                     rt->DrawLine(D2D1::Point2F(rect.right,fb), D2D1::Point2F(rect.left,fb),
-                        brushes[2],(FLOAT)widths.bottom);
+                        (ID2D1Brush*)brushes[2].getBrush(),(FLOAT)widths.bottom);
                 }
             }
 
             if(widths.left > 0) {
                 rt->DrawLine(D2D1::Point2F(fl, fb-radiuses[3]), D2D1::Point2F(fl,ft + radiuses[0]),
-                    brushes[3],(FLOAT)widths.left);
+                    (ID2D1Brush*)brushes[3].getBrush(),(FLOAT)widths.left);
             }
         }
+#endif
 
         unsigned int TextRenderObject::getGDITextFormat()
         {
@@ -224,6 +222,7 @@ namespace MetalBone
             return formatParam;
         }
 
+#ifdef MB_USE_D2D
         IDWriteTextFormat* TextRenderObject::createDWTextFormat()
         {
             IDWriteTextFormat* tf;
@@ -250,7 +249,7 @@ namespace MetalBone
 
             return tf;
         }
-
+#endif
     } // namespace CSS
 
 
@@ -258,7 +257,7 @@ namespace MetalBone
     typedef multimap<PropertyType, Declaration*> DeclMap;
 
     // ********** RenderRuleData Impl
-    ID2D1RenderTarget* RenderRuleData::workingRT = 0;
+    MGraphics* RenderRuleData::workingGraphics = 0;
     RenderRuleData::~RenderRuleData()
     {
         for(int i = backgroundROs.size() -1; i >=0; --i)
@@ -280,7 +279,7 @@ namespace MetalBone
         TextRenderObject defaultRO(defaultFont);
         TextRenderObject* tro = textRO == 0 ? &defaultRO : textRO;
 
-        bool useGDI = false;
+        bool useGDI = mApp->getGraphicsBackend() != MApplication::Direct2D;
         if(RenderRule::getTextRenderer() == AutoDetermine)
         {
             unsigned int fontPtSize = tro->font.pointSize();
@@ -306,6 +305,7 @@ namespace MetalBone
             ::ReleaseDC(NULL, calcDC);
         } else
         {
+#ifdef MB_USE_D2D
             IDWriteTextFormat* textFormat = tro->createDWTextFormat();
             IDWriteTextLayout* textLayout;
             mApp->getDWriteFactory()->CreateTextLayout(s.c_str(), s.size(),
@@ -319,6 +319,7 @@ namespace MetalBone
 
             SafeRelease(textFormat);
             SafeRelease(textLayout);
+#endif
         }
 
         return size;
@@ -347,14 +348,16 @@ namespace MetalBone
         {
             if(borderRO->type == BorderRenderObject::ComplexBorder)
             {
-                ComplexBorderRenderObject* cbro = reinterpret_cast<ComplexBorderRenderObject*>(borderRO);
+                ComplexBorderRenderObject* cbro = 
+                    reinterpret_cast<ComplexBorderRenderObject*>(borderRO);
                 r.left   += cbro->widths.left;
                 r.right  += cbro->widths.right;
                 r.top    += cbro->widths.top;
                 r.bottom += cbro->widths.bottom;
             } else
             {
-                SimpleBorderRenderObject* sbro = reinterpret_cast<SimpleBorderRenderObject*>(borderRO);
+                SimpleBorderRenderObject* sbro =
+                    reinterpret_cast<SimpleBorderRenderObject*>(borderRO);
                 r.left   += sbro->width;
                 r.right  += sbro->width;
                 r.top    += sbro->width;
@@ -405,623 +408,6 @@ namespace MetalBone
         w->resize(size2.width(),size2.height());
         return true;
     }
-
-    void RenderRuleData::draw(MD2DPaintContext& context, const MRect& widgetRectInRT,
-        const MRect& clipRectInRT, const wstring& text, unsigned int frameIndex)
-    {
-        workingRT = context.getRenderTarget();
-        M_ASSERT(workingRT != 0);
-
-        D2D1_RECT_F borderRect = widgetRectInRT;
-        if(hasMargin()) {
-            borderRect.left   += (FLOAT)margin->left;
-            borderRect.right  -= (FLOAT)margin->right;
-            borderRect.top    += (FLOAT)margin->top;
-            borderRect.bottom -= (FLOAT)margin->bottom;
-        }
-
-        // We have to get the border geometry first if there's any.
-        // Because drawing the background may depends on the border geometry.
-        ID2D1Geometry* borderGeo = 0;
-        if(borderRO != 0 && borderRO->type == BorderRenderObject::ComplexBorder)
-            borderGeo = reinterpret_cast<ComplexBorderRenderObject*>(borderRO)->createGeometry(borderRect);
-
-        // === Backgrounds ===
-        if(backgroundROs.size() > 0)
-            drawBackgrounds(widgetRectInRT, clipRectInRT, borderGeo, frameIndex);
-
-        // === BorderImage ===
-        if(borderImageRO != 0)
-        {
-            context.fill9PatchRect(borderImageRO->brush,
-                testNoValue(borderImageRO, Value_RepeatX),
-                testNoValue(borderImageRO, Value_RepeatY),
-                widgetRectInRT,
-                &clipRectInRT);
-        }
-
-        // === Border ===
-        if(borderRO != 0)
-        {
-            if(borderRO->type == BorderRenderObject::ComplexBorder)
-            {
-                // Check the ComplexBorderRO's brushes here, so that it don't depend on
-                // RenderRuleData.
-                ComplexBorderRenderObject* cbro = reinterpret_cast<ComplexBorderRenderObject*>(borderRO);
-                if(borderRO->isVisible())
-                    cbro->draw(workingRT, borderGeo, borderRect);
-
-                borderRect.left  += cbro->widths.left;
-                borderRect.top   += cbro->widths.top;
-                borderRect.right -= cbro->widths.right;
-                borderRect.bottom-= cbro->widths.bottom;
-            } else {
-                SimpleBorderRenderObject* sbro = reinterpret_cast<SimpleBorderRenderObject*>(borderRO);
-                FLOAT w = (FLOAT)sbro->width;
-                if(borderRO->isVisible())
-                {
-                    // MS said that the rectangle stroke is centered on the outline. So we
-                    // need to shrink a half of the borderWidth.
-                    FLOAT shrink = w / 2;
-                    borderRect.left   += shrink;
-                    borderRect.top    += shrink;
-                    borderRect.right  -= shrink;
-                    borderRect.bottom -= shrink;
-                    if(borderRO->type == BorderRenderObject::SimpleBorder)
-                        workingRT->DrawRectangle(borderRect, sbro->brush, w);
-                    else {
-                        RadiusBorderRenderObject* rbro = reinterpret_cast<RadiusBorderRenderObject*>(borderRO);
-                        D2D1_ROUNDED_RECT rr;
-                        rr.rect = borderRect;
-                        rr.radiusX = rr.radiusY = (FLOAT)rbro->radius;
-                        workingRT->DrawRoundedRectangle(rr, sbro->brush, w);
-                    }
-                    borderRect.left   += shrink;
-                    borderRect.top    += shrink;
-                    borderRect.right  -= shrink;
-                    borderRect.bottom -= shrink;
-                } else
-                {
-                    borderRect.left   += w;
-                    borderRect.right  -= w;
-                    borderRect.top    += w;
-                    borderRect.bottom -= w;
-                }
-            }
-        }
-
-        // === Text ===
-        if(!text.empty())
-        {
-            if(hasPadding())
-            {
-                borderRect.left   += padding->left;
-                borderRect.top    += padding->top;
-                borderRect.right  -= padding->right;
-                borderRect.bottom -= padding->bottom;
-            }
-
-            switch(RenderRule::getTextRenderer())
-            {
-            case Gdi:
-                drawGdiText(borderRect,clipRectInRT,text);
-                break;
-            case Direct2D:
-                drawD2DText(borderRect,text);
-                break;
-            case AutoDetermine:
-                unsigned int fontPtSize = 12;
-                if(textRO != 0) fontPtSize = textRO->font.pointSize();
-                if(fontPtSize <= RenderRule::getMaxGdiFontPtSize())
-                    drawGdiText(borderRect,clipRectInRT,text);
-                else
-                    drawD2DText(borderRect,text);
-                break;
-            }
-        }
-
-        SafeRelease(borderGeo);
-        workingRT = 0;
-    }
-
-    void RenderRuleData::drawBackgrounds(const MRect& wr, const MRect& cr,
-        ID2D1Geometry* borderGeo, unsigned int frameIndex)
-    {
-        for(unsigned int i = 0; i < backgroundROs.size(); ++i)
-        {
-            MRect contentRect = wr;
-
-            BackgroundRenderObject* bgro  = backgroundROs.at(i);
-            if(frameIndex >= bgro->frameCount)
-                frameIndex = frameIndex % bgro->frameCount;
-
-            if(testNoValue(bgro,Value_Margin))
-            {
-                if(hasMargin()) {
-                    contentRect.left   += margin->left;
-                    contentRect.top    += margin->top;
-                    contentRect.right  -= margin->right;
-                    contentRect.bottom -= margin->bottom;
-                }
-
-                if(testNoValue(bgro,Value_Border)) {
-                    if(borderRO != 0) {
-                        MRect borderWidth;
-                        borderRO->getBorderWidth(borderWidth);
-                        contentRect.left   += borderWidth.left;
-                        contentRect.top    += borderWidth.top;
-                        contentRect.right  -= borderWidth.right;
-                        contentRect.bottom -= borderWidth.bottom;
-                    }
-                    if(hasPadding()) {
-                        contentRect.left   += padding->left;
-                        contentRect.top    += padding->top;
-                        contentRect.right  -= padding->right;
-                        contentRect.bottom -= padding->bottom;
-                    }
-                }
-            }
-
-            ID2D1Brush* brush = bgro->brush;
-            if(brush != bgro->checkedBrush)
-            {
-                bgro->checkedBrush = brush;
-                // Check the size.
-                if(bgro->brush.type() == MD2DBrushHandle::Bitmap)
-                {
-                    bgro->frameCount   = bgro->brush.frameCount();
-
-                    ID2D1BitmapBrush* bb = (ID2D1BitmapBrush*)brush;
-                    ID2D1Bitmap* bmp;
-                    bb->GetBitmap(&bmp);
-                    D2D1_SIZE_F size = bmp->GetSize();
-                    unsigned int& w = bgro->width;
-                    unsigned int& h = bgro->height;
-                    // Make sure the size is valid.
-                    if(w == 0 || w + bgro->x > (unsigned int)size.width )
-                        w = (unsigned int)size.width  - bgro->x;
-                    if(h == 0 || h + bgro->y > (unsigned int)size.height)
-                        h = (unsigned int)size.height - bgro->y;
-                    h /= bgro->frameCount;
-
-                    if(bgro->frameCount != 1)
-                    {
-                        if(totalFrameCount % bgro->frameCount != 0)
-                            totalFrameCount *= bgro->frameCount;
-                        bgro->values &= (~Value_Repeat);
-                    }
-                }
-            }
-
-            int dx = 0 - bgro->x;
-            int dy = 0 - bgro->y;
-            if(bgro->width != 0)
-            {
-                if(testNoValue(bgro,Value_Left)) {
-                    if(testValue(bgro,Value_HCenter))
-                        contentRect.left = (contentRect.left + contentRect.right - bgro->width) / 2;
-                    else
-                        contentRect.left = contentRect.right - bgro->width;
-                }
-                if(testNoValue(bgro,Value_RepeatX)) {
-                    int r = contentRect.left + bgro->width;
-                    if(contentRect.right > r)
-                        contentRect.right  = r;
-                }
-            }
-            if(bgro->height != 0)
-            {
-                if(testNoValue(bgro, Value_Top)) {
-                    if(testValue(bgro, Value_VCenter))
-                        contentRect.top = (contentRect.top + contentRect.bottom - bgro->height) / 2;
-                    else
-                        contentRect.top = contentRect.bottom - bgro->height;
-                }
-                if(testNoValue(bgro, Value_RepeatY)) {
-                    int b = contentRect.top + bgro->height;
-                    if(contentRect.bottom > b)
-                        contentRect.bottom = b;
-                }
-            }
-
-            dx += (int)contentRect.left;
-            dy += (int)contentRect.top;
-            dy -= frameIndex * bgro->height;
-            if(dx != 0 || dy != 0)
-                brush->SetTransform(D2D1::Matrix3x2F::Translation((FLOAT)dx,(FLOAT)dy));
-
-            D2D1_RECT_F clip;
-            clip.left   = (FLOAT) max(contentRect.left  ,cr.left);
-            clip.top    = (FLOAT) max(contentRect.top   ,cr.top);
-            clip.right  = (FLOAT) min(contentRect.right ,cr.right);
-            clip.bottom = (FLOAT) min(contentRect.bottom,cr.bottom);
-
-            if(bgro->brush.type() == MD2DBrushHandle::LinearGradient)
-            {
-                D2D1_RECT_F cr = contentRect;
-                bgro->brush.getLinearGraidentBrush(&cr);
-            }
-
-            if(testNoValue(bgro,Value_Border) || borderRO == 0)
-                workingRT->FillRectangle(clip,brush);
-            else
-            {
-                if(borderRO->type == BorderRenderObject::SimpleBorder) {
-                    workingRT->FillRectangle(clip,brush);
-                } else if(borderRO->type == BorderRenderObject::RadiusBorder) {
-                    D2D1_ROUNDED_RECT rrect;
-                    rrect.rect    = clip;
-                    rrect.radiusX = FLOAT(reinterpret_cast<RadiusBorderRenderObject*>(borderRO)->radius);
-                    rrect.radiusY = rrect.radiusX;
-                    workingRT->FillRoundedRectangle(rrect,brush);
-                } else {
-                    workingRT->FillGeometry(borderGeo,brush);
-                }
-            }
-        }
-    }
-
-    class D2DOutlineTextRenderer : public IDWriteTextRenderer
-    {
-        public:
-            D2DOutlineTextRenderer(ID2D1RenderTarget* r, TextRenderObject* tro, ID2D1Brush* outlineBrush,
-                ID2D1Brush* textBrush, ID2D1Brush* shadowBrush = 0):
-            rt(r),tRO(tro),obrush(outlineBrush),tbrush(textBrush),sbrush(shadowBrush){}
-
-            HRESULT __stdcall DrawGlyphRun(void* clientDrawingContext, FLOAT baselineOriginX, FLOAT baselineOriginY,
-                DWRITE_MEASURING_MODE measuringMode, DWRITE_GLYPH_RUN const* glyphRun,
-                DWRITE_GLYPH_RUN_DESCRIPTION const* glyphRunDescription,
-                IUnknown* clientDrawingEffect);
-
-            HRESULT __stdcall IsPixelSnappingDisabled(void*, BOOL* isDiabled) { *isDiabled = FALSE; return S_OK; }
-            HRESULT __stdcall GetCurrentTransform(void*, DWRITE_MATRIX* matrix) { rt->GetTransform(reinterpret_cast<D2D1_MATRIX_3X2_F*>(matrix)); return S_OK; }
-            HRESULT __stdcall GetPixelsPerDip(void*, FLOAT* ppd) { *ppd = 1.f; return S_OK; }
-
-            HRESULT __stdcall DrawUnderline(void*,FLOAT,FLOAT,DWRITE_UNDERLINE const*,IUnknown*) { return E_NOTIMPL; }
-            HRESULT __stdcall DrawStrikethrough(void*,FLOAT,FLOAT,DWRITE_STRIKETHROUGH const*,IUnknown*) { return E_NOTIMPL; }
-            HRESULT __stdcall DrawInlineObject(void*,FLOAT,FLOAT,IDWriteInlineObject*,BOOL,BOOL,IUnknown*) { return E_NOTIMPL; }
-            unsigned long __stdcall AddRef() { return 0; }
-            unsigned long __stdcall Release(){ return 0; }
-            HRESULT __stdcall QueryInterface(IID const&, void**) { return E_NOTIMPL; }
-
-        private:
-            ID2D1RenderTarget* rt;
-            ID2D1Brush* obrush;
-            ID2D1Brush* tbrush;
-            ID2D1Brush* sbrush;
-            TextRenderObject* tRO;
-    };
-
-    HRESULT D2DOutlineTextRenderer::DrawGlyphRun(void*, FLOAT baselineOriginX, FLOAT baselineOriginY,
-        DWRITE_MEASURING_MODE, DWRITE_GLYPH_RUN const* glyphRun, DWRITE_GLYPH_RUN_DESCRIPTION const*, IUnknown*)
-    {
-        ID2D1PathGeometry* pPathGeometry = NULL;
-        ID2D1GeometrySink* pSink = NULL;
-        mApp->getD2D1Factory()->CreatePathGeometry(&pPathGeometry); 
-        pPathGeometry->Open(&pSink);
-        glyphRun->fontFace->GetGlyphRunOutline(
-            glyphRun->fontEmSize,
-            glyphRun->glyphIndices,
-            glyphRun->glyphAdvances,
-            glyphRun->glyphOffsets,
-            glyphRun->glyphCount,
-            glyphRun->isSideways,
-            glyphRun->bidiLevel%2,
-            pSink);
-
-        pSink->Close();
-
-        // Initialize a matrix to translate the origin of the glyph run.
-        D2D1::Matrix3x2F const matrix = D2D1::Matrix3x2F(
-            1.0f, 0.0f, 0.0f, 1.0f,
-            baselineOriginX, baselineOriginY);
-
-        ID2D1TransformedGeometry* pTransformedGeometry = NULL;
-        mApp->getD2D1Factory()->CreateTransformedGeometry(pPathGeometry, &matrix, &pTransformedGeometry);
-        ID2D1StrokeStyle* pStrokeStyle;
-        D2D1_STROKE_STYLE_PROPERTIES strokeStyle = D2D1::StrokeStyleProperties(
-            D2D1_CAP_STYLE_FLAT,D2D1_CAP_STYLE_FLAT,D2D1_CAP_STYLE_FLAT,D2D1_LINE_JOIN_ROUND);
-        mApp->getD2D1Factory()->CreateStrokeStyle(&strokeStyle,0,0,&pStrokeStyle);
-        if(sbrush != 0)
-        {
-            // Draw shadow.
-            // Remark: If the shadow color is not opaque, we will see the outline of the shadow.
-            // We can however render the opaque shadow to a bitmap then render the bitmap to the
-            // rendertarget with opacity applied.
-            ID2D1TransformedGeometry* shadowGeo = NULL;
-            D2D1::Matrix3x2F const shadowMatrix = D2D1::Matrix3x2F(
-                1.0f, 0.0f, 0.0f, 1.0f,
-                baselineOriginX + tRO->shadowOffsetX, baselineOriginY + tRO->shadowOffsetY);
-            mApp->getD2D1Factory()->CreateTransformedGeometry(pPathGeometry, &shadowMatrix, &shadowGeo);
-
-            rt->DrawGeometry(shadowGeo,sbrush,tRO->outlineWidth,pStrokeStyle);
-            rt->FillGeometry(shadowGeo,sbrush);
-
-            SafeRelease(shadowGeo);
-        }
-
-        rt->DrawGeometry(pTransformedGeometry,obrush,tRO->outlineWidth,pStrokeStyle);
-        rt->FillGeometry(pTransformedGeometry,tbrush);
-
-        SafeRelease(pStrokeStyle);
-        SafeRelease(pPathGeometry);
-        SafeRelease(pSink);
-        SafeRelease(pTransformedGeometry);
-        return S_OK;
-    }
-
-    void RenderRuleData::drawD2DText(const D2D1_RECT_F& drawRect, const wstring& text)
-    {
-        MFont defaultFont;
-        TextRenderObject defaultRO(defaultFont);
-        TextRenderObject* tro = textRO == 0 ? &defaultRO : textRO;
-        bool hasOutline = tro->outlineWidth != 0 && !tro->outlineColor.isTransparent();
-        bool hasShadow  = !tro->shadowColor.isTransparent() &&
-            ( tro->shadowBlur != 0 || (tro->shadowOffsetX != 0 || tro->shadowOffsetY != 0) );
-
-        IDWriteTextFormat* textFormat = tro->createDWTextFormat();
-        IDWriteTextLayout* textLayout = 0;
-        mApp->getDWriteFactory()->CreateTextLayout(text.c_str(), text.size(), textFormat,
-            drawRect.right - drawRect.left, drawRect.bottom - drawRect.top, &textLayout);
-
-        if(hasOutline)
-        {
-            ID2D1Brush* sbrush = 0;
-            if(hasShadow) sbrush = tro->shadowBrush;
-            D2DOutlineTextRenderer renderer(workingRT,textRO,tro->outlineBrush,tro->textBrush,sbrush);
-            textLayout->Draw(0,&renderer,drawRect.left,drawRect.top);
-        } else
-        {
-            if(hasShadow)
-            {
-                workingRT->DrawTextLayout(
-                    D2D1::Point2F(drawRect.left + tro->shadowOffsetX, drawRect.top + tro->shadowOffsetY),
-                    textLayout, tro->shadowBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
-            }
-            workingRT->DrawTextLayout(D2D1::Point2F(drawRect.left, drawRect.top),
-                textLayout, tro->textBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
-        }
-
-        SafeRelease(textFormat);
-        SafeRelease(textLayout);
-    }
-
-#ifndef MB_NO_GDIPLUS
-    using namespace Gdiplus;
-#endif
-    void RenderRuleData::drawGdiText(const D2D1_RECT_F& borderRect,
-        const MRect& clipRectInRT, const wstring& text)
-    {
-        // TODO: Add support for underline and its line style.
-
-        HRESULT result = workingRT->Flush();
-        if(result != S_OK) return;
-
-        HDC textDC;
-        ID2D1GdiInteropRenderTarget* gdiTarget;
-        workingRT->QueryInterface(&gdiTarget);
-        result = gdiTarget->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&textDC);
-
-        bool hasClip = false;
-        if(result == D2DERR_RENDER_TARGET_HAS_LAYER_OR_CLIPRECT)
-        {
-            hasClip = true;
-            workingRT->PopAxisAlignedClip();
-            gdiTarget->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&textDC);
-        }
-
-        MFont defaultFont;
-        TextRenderObject defaultRO(defaultFont);
-        TextRenderObject* tro = textRO == 0 ? &defaultRO : textRO;
-        bool hasOutline = tro->outlineWidth != 0 && !tro->outlineColor.isTransparent();
-        bool hasShadow  = !tro->shadowColor.isTransparent() &&
-            ( tro->shadowBlur != 0 || (tro->shadowOffsetX != 0 || tro->shadowOffsetY != 0) );
-
-        MRect drawRect((LONG)borderRect.left, (LONG)borderRect.top,
-            (LONG)borderRect.right, (LONG)borderRect.bottom);
-
-        HRGN  clipRGN = ::CreateRectRgn(drawRect.left, drawRect.top, drawRect.right, drawRect.bottom);
-        HRGN  oldRgn  = (HRGN)::SelectObject(textDC,clipRGN);
-        HFONT oldFont = (HFONT)::SelectObject(textDC,tro->font.getHandle());
-        ::SetBkMode(textDC,TRANSPARENT);
-
-#ifndef MB_NO_GDIPLUS
-        // Draw the text
-        if(hasOutline) // If we need to draw the outline, we have to use GDI+.
-        {
-            StringFormat sf;
-            if(testValue(textRO, Value_Ellipsis))
-                sf.SetTrimming(StringTrimmingEllipsisWord);
-            else
-                sf.SetTrimming(StringTrimmingNone);
-            if(testValue(textRO, Value_Wrap))
-                sf.SetFormatFlags(StringFormatFlagsNoWrap);
-            if(testValue(textRO, Value_HCenter))
-                sf.SetAlignment(StringAlignmentCenter);
-            else if(testValue(textRO, Value_Right))
-                sf.SetAlignment(StringAlignmentFar);
-            else
-                sf.SetAlignment(StringAlignmentNear);
-            if(testValue(textRO, Value_Top))
-                sf.SetLineAlignment(StringAlignmentNear);
-            else if(testValue(textRO, Value_Bottom))
-                sf.SetLineAlignment(StringAlignmentFar);
-            else
-                sf.SetLineAlignment(StringAlignmentCenter);
-
-            GraphicsPath textPath;
-            Font f(textDC);
-            FontFamily fm;
-            f.GetFamily(&fm);
-            unsigned int style = FontStyleRegular;
-            if(tro->font.isBold())
-                style = tro->font.isItalic() ? FontStyleBoldItalic : FontStyleBold;
-            else if(tro->font.isItalic())
-                style = FontStyleItalic;
-            int w = drawRect.width() + tro->shadowBlur * 2;
-            int h = drawRect.height()+ tro->shadowBlur * 2;
-            Rect layoutRect(drawRect.left + tro->shadowOffsetX, drawRect.top + tro->shadowOffsetY, w, h);
-            textPath.AddString(text.c_str(), -1, &fm, style, f.GetSize(), layoutRect, &sf);
-
-            Graphics graphics(textDC);
-            graphics.SetSmoothingMode(SmoothingModeAntiAlias);
-            if(hasShadow)
-            {
-                Pen shadowPen(tro->shadowColor.getARGB());
-                shadowPen.SetLineJoin(LineJoinRound);
-                shadowPen.SetWidth(tro->outlineWidth);
-                graphics.DrawPath(&shadowPen,&textPath);
-                SolidBrush shadowBrush(tro->shadowColor.getARGB());
-                graphics.FillPath(&shadowBrush,&textPath);
-            }
-            if(tro->shadowOffsetX != 0 || tro->shadowOffsetY != 0)
-            {
-                Matrix matrix;
-                matrix.Translate((REAL)-tro->shadowOffsetX,(REAL)-tro->shadowOffsetY);
-                textPath.Transform(&matrix);
-            }
-            Pen outlinePen(tro->outlineColor.getARGB());
-            outlinePen.SetLineJoin(LineJoinRound);
-            outlinePen.SetWidth(tro->outlineWidth);
-            graphics.DrawPath(&outlinePen,&textPath);
-            SolidBrush textBrush(tro->color.getARGB());
-            graphics.FillPath(&textBrush,&textPath);
-        } else
-#endif
-        {
-            unsigned int formatParam = tro->getGDITextFormat();
-            if(hasShadow)
-            {
-                if(tro->shadowBlur != 0 || tro->shadowColor.getAlpha() != 0xFF)
-                {
-                    HDC tempDC = ::CreateCompatibleDC(0);
-                    void* pvBits;
-
-                    int width  = drawRect.width() + tro->shadowBlur * 2;
-                    int height = drawRect.height()+ tro->shadowBlur * 2;
-
-                    BITMAPINFO bmi = {};
-                    bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-                    bmi.bmiHeader.biWidth       = width;
-                    bmi.bmiHeader.biHeight      = height;
-                    bmi.bmiHeader.biCompression = BI_RGB;
-                    bmi.bmiHeader.biPlanes      = 1;
-                    bmi.bmiHeader.biBitCount    = 32;
-
-                    HBITMAP tempBMP = ::CreateDIBSection(tempDC, &bmi, DIB_RGB_COLORS, &pvBits, 0, 0);
-                    HBITMAP oldBMP  = (HBITMAP)::SelectObject(tempDC, tempBMP);
-                    HFONT   oldFont = (HFONT)  ::SelectObject(tempDC, tro->font);
-
-                    ::SetTextColor(tempDC, RGB(255,255,255));
-                    ::SetBkColor  (tempDC, RGB(0,0,0));
-                    ::SetBkMode   (tempDC, OPAQUE);
-
-                    MRect shadowRect(tro->shadowBlur, tro->shadowBlur, drawRect.width(), drawRect.height());
-                    ::DrawTextW(tempDC, (LPWSTR)text.c_str(), -1, &shadowRect, formatParam);
-
-                    unsigned int* pixel = (unsigned int*)pvBits;
-                    for(int i = width * height - 1; i >= 0; --i)
-                    {
-                        if(pixel[i] != 0) {
-                            if(pixel[i] == 0xFFFFFF)
-                                pixel[i] = 0xFF000000 | tro->shadowColor.getRGB();
-                            else
-                            {
-                                BYTE alpha = (pixel[i] >> 24) & 0xFF;
-                                BYTE* component = (BYTE*)(pixel+i);
-                                unsigned int color = tro->shadowColor.getARGB();
-                                component[0] = ( color      & 0xFF) * alpha >> 8; 
-                                component[1] = ((color >> 8)& 0xFF) * alpha >> 8;
-                                component[2] = ((color >>16)& 0xFF) * alpha >> 8;
-                                component[3] = alpha;
-                            }
-                        }
-                    }
-
-                    if(tro->shadowBlur == 0)
-                    {
-                        BLENDFUNCTION bf = { AC_SRC_OVER, 0, tro->shadowColor.getAlpha(), AC_SRC_ALPHA };
-                        int xCor = drawRect.left - tro->shadowBlur;
-                        int yCor = drawRect.top  - tro->shadowBlur;
-                        int tempXCor = xCor;
-                        int tempYCor = yCor;
-                        if(xCor < clipRectInRT.left) xCor = clipRectInRT.left;
-                        if(yCor < clipRectInRT.top ) yCor = clipRectInRT.top;
-                        int w = 0 - xCor + (clipRectInRT.right  < drawRect.right  ? clipRectInRT.right  : drawRect.right);
-                        int h = 0 - yCor + (clipRectInRT.bottom < drawRect.bottom ? clipRectInRT.bottom : drawRect.bottom);
-                        ::GdiAlphaBlend(textDC, xCor + tro->shadowOffsetX, yCor + tro->shadowOffsetY,
-                            w, h, tempDC, xCor - tempXCor, yCor - tempYCor, w, h, bf);
-                    } else {
-                        // TODO: Implement blur. Don't know why the GDI+ version is still 1.0 on Win7 SDK,
-                        // So, we cannot use the gdiplus's blur effect.
-                    }
-
-                    ::SelectObject(tempDC,oldBMP);
-                    ::SelectObject(tempDC,oldFont);
-                    ::DeleteObject(tempBMP);
-                    ::DeleteDC(tempDC);
-
-                } else {
-
-                    MRect shadowRect = drawRect;
-                    shadowRect.offset(tro->shadowOffsetX,tro->shadowOffsetY);
-                    ::SetTextColor(textDC, tro->shadowColor.getCOLORREF());
-                    ::DrawTextW(textDC, (LPWSTR)text.c_str(), -1, &shadowRect, formatParam);
-                }
-            }
-
-            ::SetTextColor(textDC, tro->color.getCOLORREF());
-            ::DrawTextW(textDC, (LPWSTR)text.c_str(), -1, &drawRect, formatParam);
-        }
-
-        // Remark: Maybe we could make fixAlpha an option;
-        // Restrict the fixing area to the Text's bounding rect,
-        // not the entire drawing rect.
-        bool fixAlpha = true;
-        if(fixAlpha)
-        {
-            HDC tempDC = ::CreateCompatibleDC(0);
-            void* pvBits;
-            BITMAPINFO bmi = {};
-            int width  = drawRect.width();
-            int height = drawRect.height();
-            bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-            bmi.bmiHeader.biWidth       = width;
-            bmi.bmiHeader.biHeight      = height;
-            bmi.bmiHeader.biCompression = BI_RGB;
-            bmi.bmiHeader.biPlanes      = 1;
-            bmi.bmiHeader.biBitCount    = 32;
-            HBITMAP tempBMP = ::CreateDIBSection(tempDC, &bmi, DIB_RGB_COLORS, &pvBits, 0, 0);
-            HBITMAP oldBMP  = (HBITMAP)::SelectObject(tempDC, tempBMP);
-
-            ::BitBlt(tempDC, 0, 0, width, height, textDC, drawRect.left, drawRect.top, SRCCOPY);
-
-            unsigned int* pixel = (unsigned int*)pvBits;
-            for(int i = width * height - 1; i >= 0; --i)
-            {
-                BYTE* component = (BYTE*)(pixel + i);
-                if(component[3] == 0)
-                    component[3] = 0xFF;
-            }
-
-            ::SetDIBitsToDevice(textDC, drawRect.left, drawRect.top,
-                width, height, 0, 0, 0, height, pvBits, &bmi, DIB_RGB_COLORS);
-            ::SelectObject(tempDC, oldBMP);
-            ::DeleteObject(tempBMP);
-            ::DeleteDC(tempDC);
-        }
-
-        ::SelectObject(textDC,oldFont);
-        ::SelectObject(textDC,oldRgn);
-        ::DeleteObject(clipRGN);
-
-        gdiTarget->ReleaseDC(0);
-        gdiTarget->Release();
-
-        if(hasClip)
-            workingRT->PushAxisAlignedClip(clipRectInRT, D2D1_ANTIALIAS_MODE_ALIASED);
-    }
-
 
     enum BorderType { BT_Simple, BT_Radius, BT_Complex };
     enum BackgroundOpaqueType {
@@ -1175,11 +561,11 @@ namespace MetalBone
         const CssValue& brushValue = values.at(0);
         BackgroundRenderObject* newObject = new BackgroundRenderObject();
         if(brushValue.type == CssValue::Uri) {
-            newObject->brush = MD2DBrushHandle::create(brushValue.getString());
+            newObject->brush = MGraphicsResFactory::createBrush(brushValue.getString());
         } else if(brushValue.type == CssValue::LiearGradient) {
-            newObject->brush = MD2DBrushHandle::create(brushValue.getLinearGradientData());
+            newObject->brush = MGraphicsResFactory::createBrush(brushValue.getLinearGradientData());
         } else{
-            newObject->brush = MD2DBrushHandle::create(brushValue.getColor());
+            newObject->brush = MGraphicsResFactory::createBrush(brushValue.getColor());
         }
 
         size_t index = 1;
@@ -1271,10 +657,10 @@ namespace MetalBone
         if(values.at(1).type == CssValue::Rectangle)
         {
             MRect imageRect = values.at(1).getRect();
-            borderImageRO->brush = MD2DBrushHandle::createNinePatch(
+            borderImageRO->brush = MGraphicsResFactory::createNinePatchBrush(
                 values.at(0).getString(),borderWidth,(MRectU*)&imageRect);
         } else {
-            borderImageRO->brush = MD2DBrushHandle::createNinePatch(
+            borderImageRO->brush = MGraphicsResFactory::createNinePatchBrush(
                 values.at(0).getString(),borderWidth,0);
         }
     }
@@ -1319,11 +705,11 @@ namespace MetalBone
         {
             MColor color(colorValue.getColor());
             obj->isColorTransparent = color.isTransparent();
-            obj->brush = MD2DBrushHandle::create(color);
+            obj->brush = MGraphicsResFactory::createBrush(color);
         } else
         {
             obj->isColorTransparent = false;
-            obj->brush = MD2DBrushHandle::create(lgData);
+            obj->brush = MGraphicsResFactory::createBrush(lgData);
         }
     }
 
@@ -1503,7 +889,7 @@ namespace MetalBone
             colors[2] == colors[3]) obj->uniform = true;
 
         for(int i = 0; i < 4; ++i) {
-            obj->brushes[i] = MD2DBrushHandle::create(colors[i]);
+            obj->brushes[i] = MGraphicsResFactory::createBrush(colors[i]);
             if(!colors[i].isTransparent())
                 obj->isTransparent = false;
         }
@@ -1817,7 +1203,7 @@ namespace MetalBone
                 {
                 case PT_Color:
                     textRO->color = values.at(0).getColor();
-                    textRO->textBrush = MD2DBrushHandle::create(textRO->color);
+                    textRO->textBrush = MGraphicsResFactory::createBrush(textRO->color);
                     break;
                 case PT_TextShadow:
                     if(values.size() < 2)
@@ -1829,7 +1215,7 @@ namespace MetalBone
                         if(values.at(i).type == CssValue::Color)
                         {
                             textRO->shadowColor = values.at(i).getColor();
-                            textRO->shadowBrush = MD2DBrushHandle::create(textRO->shadowColor);
+                            textRO->shadowBrush = MGraphicsResFactory::createBrush(textRO->shadowColor);
                         } else
                             textRO->shadowBlur = (char)values.at(i).getUInt();
                     }
@@ -1837,7 +1223,7 @@ namespace MetalBone
                 case PT_TextOutline:
                     textRO->outlineWidth = (char)values.at(0).getUInt();
                     textRO->outlineColor = values.at(values.size() - 1).getColor();
-                    textRO->outlineBrush = MD2DBrushHandle::create(textRO->outlineColor);
+                    textRO->outlineBrush = MGraphicsResFactory::createBrush(textRO->outlineColor);
                     if(values.size() >= 3)
                         textRO->outlineBlur = (char)values.at(1).getUInt();
                     break;
@@ -1903,9 +1289,6 @@ namespace MetalBone
         { if(data) ++data->refCount; }
     bool RenderRule::opaqueBackground() const
         { return data == 0 ? false : data->opaqueBackground; }
-    void RenderRule::draw(MD2DPaintContext& c,const MRect& wr, const MRect& cr,
-        const wstring& t,unsigned int i)
-        { if(data) data->draw(c,wr,cr,t,i); }
     void RenderRule::init()
         { M_ASSERT(data==0); data = new RenderRuleData(); }
     MCursor* RenderRule::getCursor()
@@ -1950,7 +1333,6 @@ namespace MetalBone
         }
         return -1;
     }
-
     // ********** RenderRuleQuerier Impl 
     RenderRuleQuerier::~RenderRuleQuerier()
     {

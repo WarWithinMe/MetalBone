@@ -18,7 +18,7 @@ namespace MetalBone
     typedef std::tr1::unordered_map<MWidget*,MRegion> DrawRegionHash;
     typedef std::tr1::unordered_map<MWidget*,bool>    DirtyChildrenHash;
 
-    class MD2DPaintContextData;
+    class MGraphicsData;
     struct WindowExtras
     {
         inline WindowExtras();
@@ -32,7 +32,7 @@ namespace MetalBone
         // We send WM_PAINT messages to that window.
         HWND                   m_wndHandle;
         HWND                   m_dummyHandle;
-        MD2DPaintContextData*  m_pcData;
+        MGraphicsData*         m_graphicsData;
 
         MWidget*               focusedWidget;
         MWidget*               widgetUnderMouse;
@@ -53,7 +53,7 @@ namespace MetalBone
 
     inline WindowExtras::WindowExtras():
         m_wndHandle(NULL), m_dummyHandle(NULL),
-        m_pcData(0),bTrackingMouse(false),
+        m_graphicsData(0),bTrackingMouse(false),
         widgetUnderMouse(0), currWidgetUnderMouse(0),
         mouseGrabber(0), focusedWidget(0),
         lastMouseX(0), lastMouseY(0){}

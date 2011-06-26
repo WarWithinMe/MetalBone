@@ -1,10 +1,14 @@
 #pragma once
 #include "CSSParser.h"
-#include "MD2DUtils.h"
+#include "MGraphicsResource.h"
 #include "MUtils.h"
+#include "MResource.h"
 
 #include <map>
-#include <d2d1.h>
+
+#ifdef MB_USE_D2D
+#  include <d2d1.h>
+#endif
 
 using namespace std;
 using namespace std::tr1;
@@ -12,9 +16,11 @@ using namespace std::tr1;
 namespace MetalBone
 {
     class MRect;
+    class MGraphics;
     namespace CSS
     {
         enum   PropertyType;
+        enum   FixGDIAlpha;
         struct Declaration;
         struct GeometryRenderObject;
         struct BackgroundRenderObject;
@@ -35,13 +41,10 @@ namespace MetalBone
                 inline RenderRuleData();
                 ~RenderRuleData();
 
-                void draw(MD2DPaintContext&, const MRect& widgetRectInRT,
-                    const MRect& clipRectInRT, const wstring& text, unsigned int frameIndex);
-
                 // Return true if we changed the widget's size.
-                bool  setGeometry(MWidget*);
+                bool  setGeometry     (MWidget*);
                 // Calc the string size according to the css text format.
-                MSize getStringSize(const wstring&, int maxWidth);
+                MSize getStringSize   (const wstring&, int maxWidth);
                 MRect getContentMargin();
 
                 inline bool         hasMargin()          const;
@@ -64,10 +67,6 @@ namespace MetalBone
                 bool   opaqueBackground;
 
             private:
-                void drawBackgrounds(const MRect& widgetRect, const MRect& clipRect, ID2D1Geometry*, unsigned int frameIndex);
-                void drawGdiText    (const D2D1_RECT_F& borderRect, const MRect& clipRect, const wstring& text);
-                void drawD2DText    (const D2D1_RECT_F& borderRect, const wstring& text);
-
                 // Initialization
                 void init(multimap<PropertyType, Declaration*>&);
                 BackgroundRenderObject* createBackgroundRO(CssValueArray&,bool* forceOpaque);
@@ -75,8 +74,7 @@ namespace MetalBone
                 void setSimpleBorderRO  (multimap<PropertyType, Declaration*>::iterator&, multimap<PropertyType, Declaration*>::iterator);
                 void setComplexBorderRO (multimap<PropertyType, Declaration*>::iterator&, multimap<PropertyType, Declaration*>::iterator);
 
-                static ID2D1RenderTarget* workingRT;
-
+                static MGraphics* workingGraphics;
                 friend class MSSSPrivate;
         };
 
@@ -97,18 +95,18 @@ namespace MetalBone
             // We remember the brush's pointer, so that if the brush is recreated,
             // we can recheck the background property again. But if a brush is recreated
             // at the same position, we won't know.
-            MD2DBrushHandle brush;
-            ID2D1Brush*    checkedBrush;
+            MBrushHandle   brush;
             unsigned int   x, y, width, height;
             unsigned int   values;
             unsigned short frameCount; // Do we need more frames?
             bool           infiniteLoop;
+            bool           brushChecked;
         };
 
         struct BorderImageRenderObject
         {
             inline BorderImageRenderObject();
-            MD2DBrushHandle brush;
+             MBrushHandle  brush;
             MRect*         imageRect;
             unsigned int   values;
         };
@@ -126,7 +124,7 @@ namespace MetalBone
         {
             inline SimpleBorderRenderObject();
 
-            MD2DBrushHandle brush;
+            MBrushHandle   brush;
             unsigned int   width;
             ValueType      style;
             bool           isColorTransparent;
@@ -144,7 +142,7 @@ namespace MetalBone
         {
             ComplexBorderRenderObject();
 
-            MD2DBrushHandle brushes[4];  // T, R, B, L
+            MBrushHandle   brushes[4];  // T, R, B, L
             MRectU         styles;
             MRectU         widths;
             unsigned int   radiuses[4]; // TL, TR, BL, BR
@@ -154,8 +152,10 @@ namespace MetalBone
             void getBorderWidth(MRect&) const;
             bool isVisible()            const;
 
+#ifdef MB_USE_D2D
             ID2D1Geometry* createGeometry(const D2D1_RECT_F&);
             void draw(ID2D1RenderTarget*,ID2D1Geometry*,const D2D1_RECT_F&);
+#endif
         };
 
         // TextRenderObject is intended to use GDI to render text,
@@ -173,9 +173,9 @@ namespace MetalBone
             MColor outlineColor;
             MColor shadowColor;
 
-            MD2DBrushHandle outlineBrush;
-            MD2DBrushHandle shadowBrush;
-            MD2DBrushHandle textBrush;
+            MBrushHandle outlineBrush;
+            MBrushHandle shadowBrush;
+            MBrushHandle textBrush;
 
             unsigned int values;  // AlignmentXY, Decoration, OverFlow
             ValueType    lineStyle;
@@ -187,7 +187,10 @@ namespace MetalBone
             char  outlineBlur;
 
             unsigned int       getGDITextFormat();
+
+#ifdef MB_USE_D2D
             IDWriteTextFormat* createDWTextFormat();
+#endif
         };
 
 
@@ -208,9 +211,9 @@ namespace MetalBone
             return true;
         }
         inline BorderImageRenderObject::BorderImageRenderObject():
-            imageRect(0),values(Value_Unknown){}
+            imageRect(0), values(Value_Unknown){}
         inline GeometryRenderObject::GeometryRenderObject():
-            x(INT_MAX),y(INT_MAX), 
+            x(INT_MAX), y(INT_MAX), 
             width(-1), height(-1), minWidth(-1),
             minHeight(-1), maxWidth(-1), maxHeight(-1){}
         inline TextRenderObject::TextRenderObject(const MFont& f):
@@ -219,13 +222,13 @@ namespace MetalBone
             shadowOffsetX(0), shadowOffsetY(0), shadowBlur(0),
             outlineWidth(0), outlineBlur(0){}
         inline BackgroundRenderObject::BackgroundRenderObject():
-            checkedBrush(0), x(0), y(0), width(0), height(0),
+            x(0), y(0), width(0), height(0),
             values(Value_Top | Value_Left | Value_Margin),
-            frameCount(1), infiniteLoop(true){}
+            frameCount(1), infiniteLoop(true), brushChecked(false){}
         inline SimpleBorderRenderObject::SimpleBorderRenderObject():
-            width(0),style(Value_Solid) { type = SimpleBorder; }
+            width(0), style(Value_Solid) { type = SimpleBorder; }
         inline RadiusBorderRenderObject::RadiusBorderRenderObject():
-            radius(0){ type = RadiusBorder; }
+            radius(0) { type = RadiusBorder; }
         inline void SimpleBorderRenderObject::getBorderWidth(MRect& rect) const
             { rect.left = rect.right = rect.bottom = rect.top = width; }
         inline int  SimpleBorderRenderObject::getWidth() const { return width; }

@@ -11,24 +11,9 @@
 #ifndef MSVC
 #  define MSVC
 #endif
-#define MB_NO_GDIPLUS
 #define MB_USE_D2D
 
 /* ---------- Switches ---------- */
-
-
-#ifdef MB_USE_D2D
-#  pragma comment(lib, "windowscodecs.lib") // WIC
-#  pragma comment(lib, "d2d1.lib")          // Direct2D
-#  pragma comment(lib, "dwrite.lib")        // DirectWrite
-#endif
-
-#pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
-
-#ifndef MB_NO_GDIPLUS
-#  pragma comment(lib, "gdiplus.lib")       // Gdi+
-//#  pragma comment(linker,"\"/manifestdependency:type='Win32' name='Microsoft.Windows.GdiPlus' version='1.1.6001.18000' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
-#endif
 
 #include <windows.h>
 

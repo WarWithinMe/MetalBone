@@ -1,7 +1,7 @@
 #pragma once
 
 #include "MWidget.h"
-#include "MD2DUtils.h"
+#include "MGraphicsResource.h"
 #include "MResource.h"
 
 // MButton
@@ -81,7 +81,7 @@ namespace MetalBone
             {
                 TabData():id(0),width(0){}
                 std::wstring    text;
-                MD2DImageHandle icon;
+                MImageHandle    icon;
                 int             id;
                 int             width;
             };

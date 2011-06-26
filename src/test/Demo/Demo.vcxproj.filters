@@ -81,17 +81,26 @@
     <ClInclude Include="MainWindow.h">
       <Filter>Header</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\MD2DPaintContext.h">
-      <Filter>ExternMB\Header</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\private\MD2DPaintContextData.h">
-      <Filter>ExternMB\Header\private</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\private\RenderRuleData.h">
       <Filter>ExternMB\Header\private</Filter>
     </ClInclude>
     <ClInclude Include="..\..\MD2DUtils.h">
       <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MGraphicsResource.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\MGraphics.h">
+      <Filter>ExternMB\Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\private\MD2DGraphicsData.h">
+      <Filter>ExternMB\Header\private</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\private\MGDIGraphicsData.h">
+      <Filter>ExternMB\Header\private</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\private\MGraphicsData.h">
+      <Filter>ExternMB\Header\private</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -128,13 +137,19 @@
     <ClCompile Include="main.cpp">
       <Filter>Source</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\MD2DPaintContext.cpp">
-      <Filter>ExternMB\Source</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\MD2DUtils.cpp">
       <Filter>ExternMB\Source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\private\RenderRule.cpp">
+      <Filter>ExternMB\Source\private</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MGraphics.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\MGraphicsResource.cpp">
+      <Filter>ExternMB\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\private\MD2DGraphicsData.cpp">
       <Filter>ExternMB\Source\private</Filter>
     </ClCompile>
   </ItemGroup>

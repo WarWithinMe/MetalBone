@@ -1,34 +1,34 @@
 #include "MCommonWidgets.h"
 #include "MStyleSheet.h"
-#include "MD2DPaintContext.h"
+#include "MGraphics.h"
 
 namespace MetalBone
 {
-	using namespace std;
-	void MButton::setChecked(bool checked)
-	{
-		if(!b_checkable) return;
+    using namespace std;
+    void MButton::setChecked(bool checked)
+    {
+        if(!b_checkable) return;
 
-		b_isChecked = checked;
-		toggled.Emit();
-		updateSSAppearance();
-	}
+        b_isChecked = checked;
+        toggled.Emit();
+        updateSSAppearance();
+    }
 
-	void MButton::setText(const std::wstring& text)
-	{
-		if(text == s_text) return;
+    void MButton::setText(const std::wstring& text)
+    {
+        if(text == s_text) return;
 
-		s_text = text;
-		repaint();
-	}
+        s_text = text;
+        repaint();
+    }
 
     void MButton::mousePressEvent(MMouseEvent* e)
     {
         e->accept();
     }
 
-	void MButton::mouseReleaseEvent(MMouseEvent* e)
-	{
+    void MButton::mouseReleaseEvent(MMouseEvent* e)
+    {
         if(e->getX() >= 0 && e->getX() <= width() &&
            e->getY() >= 0 && e->getY() <= height())
         {
@@ -36,12 +36,12 @@ namespace MetalBone
             clicked.Emit();
             setChecked(!b_isChecked);
         }
-	}
+    }
 
-	unsigned int MButton::getWidgetPseudo(bool markAsLast, unsigned int initP)
-		{ return MWidget::getWidgetPseudo(markAsLast, b_isChecked ? CSS::PC_Checked : initP); }
-	void MButton::doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT)
-		{ mApp->getStyleSheet()->draw(this,widgetRectInRT,clipRectInRT,s_text); }
+    unsigned int MButton::getWidgetPseudo(bool markAsLast, unsigned int initP)
+        { return MWidget::getWidgetPseudo(markAsLast, b_isChecked ? CSS::PC_Checked : initP); }
+    void MButton::doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT)
+        { mApp->getStyleSheet()->draw(this,widgetRectInRT,clipRectInRT,s_text); }
 
 
     MTabBar::MTabBar():tabQuerier(L"TabBar",L"Tab"),
@@ -111,7 +111,7 @@ namespace MetalBone
         tabData.id   = id;
         tabData.text = tabText;
         if(!imagePath.empty())
-            tabData.icon = MD2DImageHandle::create(imagePath);
+            tabData.icon = MGraphicsResFactory::createImage(imagePath);
 
         CSS::RenderRule rule = mApp->getStyleSheet()->getRenderRule(&tabQuerier);
         MSize size = rule.getStringSize(tabText);
@@ -170,9 +170,9 @@ namespace MetalBone
         {
             TabData& tabData = tabs[id];
             if(!imagePath.empty())
-                tabData.icon = MD2DImageHandle::create(imagePath);
+                tabData.icon = MGraphicsResFactory::createImage(imagePath);
             else
-                tabData.icon = MD2DImageHandle();
+                tabData.icon = MImageHandle();
             repaint();
         }
     }
@@ -358,7 +358,7 @@ namespace MetalBone
 
     void MTabBar::doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT)
     {
-        MD2DPaintContext context(this);
+        MGraphics graphics(this);
         MRect tabRect;
         tabRect.top    = widgetRectInRT.top;
         tabRect.bottom = widgetRectInRT.top  + tabHeight;
@@ -377,16 +377,15 @@ namespace MetalBone
                 CSS::RenderRule rule = 
                     mApp->getStyleSheet()->getRenderRule(&tabQuerier,
                     tit->first == checkedID ? CSS::PC_Checked : CSS::PC_Default);
-                rule.draw(context,tabRect,clipRectInRT,tit->second.text);
+                rule.draw(graphics,tabRect,clipRectInRT,tit->second.text);
 
-                ID2D1Bitmap* iconBmp = tit->second.icon;
-                D2D1_SIZE_U iconSize = iconBmp->GetPixelSize();
+                MSize iconSize = tit->second.icon.getSize();
+                int iconX = tabRect.left + (tit->second.width - iconSize.width()) / 2;
 
-                int iconX = tabRect.left + (tit->second.width - iconSize.width) / 2;
-                context.getRenderTarget()->DrawBitmap(iconBmp,
-                    D2D1::RectF((FLOAT)iconX,(FLOAT)tabRect.top + topMargin,
-                    (FLOAT)iconX + iconSize.width,
-                    (FLOAT)tabRect.top + topMargin + iconSize.height));
+                graphics.drawImage(tit->second.icon, MRect(iconX,
+                        tabRect.top + topMargin,
+                        iconX + iconSize.width(), 
+                        tabRect.top + topMargin + iconSize.height()));
             }
             tabRect.left = tabRect.right;
 
@@ -743,7 +742,7 @@ namespace MetalBone
             thumbRectInRT.left   += n_thumbStartPos;
         }
 
-        MD2DPaintContext context(this);
-        rule.draw(context, thumbRectInRT, clipRectInRT);
+        MGraphics graphics(this);
+        rule.draw(graphics, thumbRectInRT, clipRectInRT);
     }
 }

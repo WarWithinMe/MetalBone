@@ -1,5 +1,14 @@
 #include "MBGlobal.h"
 
+#ifdef MB_USE_D2D
+#  pragma comment(lib, "windowscodecs.lib") // WIC
+#  pragma comment(lib, "d2d1.lib")          // Direct2D
+#  pragma comment(lib, "dwrite.lib")        // DirectWrite
+#  pragma comment(lib, "Delayimp.lib")
+#endif
+
+#pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+
 #ifdef MB_DEBUG
 #include <iostream>
 #include <stdlib.h>

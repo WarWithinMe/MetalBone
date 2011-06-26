@@ -325,7 +325,7 @@ namespace MetalBone
             void draw(int xOffsetInWnd, int yOffsetInWnd, bool drawMySelf);
 
         friend struct MApplicationData;
-        friend class  MD2DPaintContext;
+        friend class  MGraphics;
     };
 
 

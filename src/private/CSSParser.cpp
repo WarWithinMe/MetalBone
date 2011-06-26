@@ -1,239 +1,239 @@
 #include "CSSParser.h"
 #include "MStyleSheet.h"
-#include "MD2DUtils.h"
+#include "MGraphicsResource.h"
 #include <string>
 #include <sstream>
 
 namespace MetalBone
 {
-	namespace CSS
-	{
+    namespace CSS
+    {
         struct CSSValuePair { const wchar_t* name; unsigned int value; };
-		static const CSSValuePair pseudos[knownPseudoCount] = {
-			{ L"active",      PC_Active     },
-			{ L"checked",     PC_Checked    },
-			{ L"default",     PC_Default    },
-			{ L"disabled",    PC_Disabled   },
-			{ L"edit-focus",  PC_EditFocus  },
-			{ L"editable",    PC_Editable   },
-			{ L"enabled",     PC_Enabled    },
-			{ L"first",       PC_First      },
-			{ L"focus",       PC_Focus      },
-			{ L"has-children",PC_Children   },
-			{ L"has-siblings",PC_Sibling    },
-			{ L"horizontal",  PC_Horizontal },
-			{ L"hover",       PC_Hover      },
-			{ L"last",        PC_Last       },
-			{ L"pressed",     PC_Pressed    },
-			{ L"read-only",   PC_ReadOnly   },
-			{ L"selected",    PC_Selected   },
-			{ L"unchecked",   PC_Unchecked  },
-			{ L"vertical",    PC_Vertical   }
-		};
-		static const CSSValuePair properties[knownPropertyCount] = {
-			{ L"background",                 PT_Background              },
-			{ L"background-alignment",       PT_BackgroundAlignment     },
-			{ L"background-clip",            PT_BackgroundClip          },
-			{ L"background-position",        PT_BackgroundPosition      },
-			{ L"background-repeat",          PT_BackgroundRepeat        },
-			{ L"background-size",            PT_BackgroundSize          },
-			{ L"border",                     PT_Border                  },
-			{ L"border-bottom",              PT_BorderBottom            },
-			{ L"border-bottom-color",        PT_BorderBottomColor       },
-			{ L"border-bottom-left-radius",  PT_BorderBottomLeftRadius  },
-			{ L"border-bottom-right-radius", PT_BorderBottomRightRadius },
-			{ L"border-bottom-style",        PT_BorderBottomStyle       },
-			{ L"border-bottom-width",        PT_BorderBottomWidth       },
-			{ L"border-color",               PT_BorderColor             },
-			{ L"border-image",               PT_BorderImage             },
-			{ L"border-left",                PT_BorderLeft              },
-			{ L"border-left-color",          PT_BorderLeftColor         },
-			{ L"border-left-style",          PT_BorderLeftStyle         },
-			{ L"border-left-width",          PT_BorderLeftWidth         },
-			{ L"border-radius",              PT_BorderRadius            },
-			{ L"border-right",               PT_BorderRight             },
-			{ L"border-right-color",         PT_BorderRightColor        },
-			{ L"border-right-style",         PT_BorderRightStyle        },
-			{ L"border-right-width",         PT_BorderRightWidth        },
-			{ L"border-style",               PT_BorderStyles            },
-			{ L"border-top",                 PT_BorderTop               },
-			{ L"border-top-color",           PT_BorderTopColor          },
-			{ L"border-top-left-radius",     PT_BorderTopLeftRadius     },
-			{ L"border-top-right-radius",    PT_BorderTopRightRadius    },
-			{ L"border-top-style",           PT_BorderTopStyle          },
-			{ L"border-top-width",           PT_BorderTopWidth          },
-			{ L"border-width",               PT_BorderWidth             },
-			{ L"color",                      PT_Color                   },
-			{ L"cursor",                     PT_Cursor                  },
-			{ L"font",                       PT_Font                    },
-			{ L"font-size",                  PT_FontSize                },
-			{ L"font-style",                 PT_FontStyle               },
-			{ L"font-weight",                PT_FontWeight              },
-			{ L"height",                     PT_Height                  },
-			{ L"inherit-background",         PT_InheritBackground       },
-			{ L"margin",                     PT_Margin                  },
-			{ L"margin-bottom",              PT_MarginBottom            },
-			{ L"margin-left",                PT_MarginLeft              },
-			{ L"margin-right",               PT_MarginRight             },
-			{ L"margin-top",                 PT_MarginTop               },
-			{ L"max-height",                 PT_MaximumHeight           },
-			{ L"max-width",                  PT_MaximumWidth            },
-			{ L"min-height",                 PT_MinimumHeight           },
-			{ L"min-width",                  PT_MinimumWidth            },
-			{ L"padding",                    PT_Padding                 },
-			{ L"padding-bottom",             PT_PaddingBottom           },
-			{ L"padding-left",               PT_PaddingLeft             },
-			{ L"padding-right",              PT_PaddingRight            },
-			{ L"padding-top",                PT_PaddingTop              },
-			{ L"text-align",                 PT_TextAlignment           },
-			{ L"text-decoration",            PT_TextDecoration          },
-			{ L"text-outline",               PT_TextOutline             },
-			{ L"text-overflow",              PT_TextOverflow            },
-			{ L"text-shadow",                PT_TextShadow              },
-			{ L"text-underline-style",       PT_TextUnderlineStyle      },
-			{ L"width",                      PT_Width                   },
-			{ L"x",                          PT_PosX                    },
-			{ L"y",                          PT_PosY                    }
-		};
-		static const CSSValuePair knownValues[KnownValueCount - 1] = {
-			{ L"bold",         Value_Bold        },
-			{ L"border",       Value_Border      },
-			{ L"bottom",       Value_Bottom      },
-			{ L"center",       Value_Center      },
-			{ L"clip",         Value_Clip        },
-			{ L"content",      Value_Content     },
-			{ L"crosshair",    Value_Cross       },
-			{ L"dashed",       Value_Dashed      },
-			{ L"default",      Value_Default     },
-			{ L"dot-dash",     Value_DotDash     },
-			{ L"dot-dot-dash", Value_DotDotDash  },
-			{ L"dotted",       Value_Dotted      },
-			{ L"ellipsis",     Value_Ellipsis    },
-			{ L"ew-resize",    Value_SizeHor     },
-			{ L"help",         Value_Help        },
-			{ L"italic",       Value_Italic      },
-			{ L"left",         Value_Left        },
-			{ L"line-through", Value_LineThrough },
-			{ L"margin",       Value_Margin      },
-			{ L"move",         Value_SizeAll     },
-			{ L"nesw-resize",  Value_SizeBDiag   },
-			{ L"no-cursor",    Value_Blank       },
-			{ L"no-repeat",    Value_NoRepeat    },
-			{ L"none",         Value_None        },
-			{ L"normal",       Value_Normal      },
-			{ L"not-allowed",  Value_Forbidden   },
-			{ L"ns-resize",    Value_SizeVer     },
-			{ L"nwse-resize",  Value_SizeFDiag   },
-			{ L"oblique",      Value_Oblique     },
-			{ L"opaque",       Value_Opaque      },
-			{ L"overline",     Value_Overline    },
-			{ L"padding",      Value_Padding     },
-			{ L"pointer",      Value_Hand        },
-			{ L"progress",     Value_AppStarting },
-			{ L"repeat",       Value_Repeat      },
-			{ L"repeat-x",     Value_RepeatX     },
-			{ L"repeat-y",     Value_RepeatY     },
-			{ L"right",        Value_Right       },
-			{ L"single-loop",  Value_SingleLoop  },
-			{ L"solid",        Value_Solid       },
-			{ L"stretch",      Value_Stretch     },
-			{ L"text",         Value_IBeam       },
-			{ L"top",          Value_Top         },
-			{ L"transparent",  Value_Transparent },
-			{ L"true",         Value_True        },
-			{ L"underline",    Value_Underline   },
-			{ L"up-arrow",     Value_UpArrow     },
-			{ L"wait",         Value_Wait        },
-			{ L"wave",         Value_Wave        },
-			{ L"wrap",         Value_Wrap        },
-		};
-	}
+        static const CSSValuePair pseudos[knownPseudoCount] = {
+            { L"active",      PC_Active     },
+            { L"checked",     PC_Checked    },
+            { L"default",     PC_Default    },
+            { L"disabled",    PC_Disabled   },
+            { L"edit-focus",  PC_EditFocus  },
+            { L"editable",    PC_Editable   },
+            { L"enabled",     PC_Enabled    },
+            { L"first",       PC_First      },
+            { L"focus",       PC_Focus      },
+            { L"has-children",PC_Children   },
+            { L"has-siblings",PC_Sibling    },
+            { L"horizontal",  PC_Horizontal },
+            { L"hover",       PC_Hover      },
+            { L"last",        PC_Last       },
+            { L"pressed",     PC_Pressed    },
+            { L"read-only",   PC_ReadOnly   },
+            { L"selected",    PC_Selected   },
+            { L"unchecked",   PC_Unchecked  },
+            { L"vertical",    PC_Vertical   }
+        };
+        static const CSSValuePair properties[knownPropertyCount] = {
+            { L"background",                 PT_Background              },
+            { L"background-alignment",       PT_BackgroundAlignment     },
+            { L"background-clip",            PT_BackgroundClip          },
+            { L"background-position",        PT_BackgroundPosition      },
+            { L"background-repeat",          PT_BackgroundRepeat        },
+            { L"background-size",            PT_BackgroundSize          },
+            { L"border",                     PT_Border                  },
+            { L"border-bottom",              PT_BorderBottom            },
+            { L"border-bottom-color",        PT_BorderBottomColor       },
+            { L"border-bottom-left-radius",  PT_BorderBottomLeftRadius  },
+            { L"border-bottom-right-radius", PT_BorderBottomRightRadius },
+            { L"border-bottom-style",        PT_BorderBottomStyle       },
+            { L"border-bottom-width",        PT_BorderBottomWidth       },
+            { L"border-color",               PT_BorderColor             },
+            { L"border-image",               PT_BorderImage             },
+            { L"border-left",                PT_BorderLeft              },
+            { L"border-left-color",          PT_BorderLeftColor         },
+            { L"border-left-style",          PT_BorderLeftStyle         },
+            { L"border-left-width",          PT_BorderLeftWidth         },
+            { L"border-radius",              PT_BorderRadius            },
+            { L"border-right",               PT_BorderRight             },
+            { L"border-right-color",         PT_BorderRightColor        },
+            { L"border-right-style",         PT_BorderRightStyle        },
+            { L"border-right-width",         PT_BorderRightWidth        },
+            { L"border-style",               PT_BorderStyles            },
+            { L"border-top",                 PT_BorderTop               },
+            { L"border-top-color",           PT_BorderTopColor          },
+            { L"border-top-left-radius",     PT_BorderTopLeftRadius     },
+            { L"border-top-right-radius",    PT_BorderTopRightRadius    },
+            { L"border-top-style",           PT_BorderTopStyle          },
+            { L"border-top-width",           PT_BorderTopWidth          },
+            { L"border-width",               PT_BorderWidth             },
+            { L"color",                      PT_Color                   },
+            { L"cursor",                     PT_Cursor                  },
+            { L"font",                       PT_Font                    },
+            { L"font-size",                  PT_FontSize                },
+            { L"font-style",                 PT_FontStyle               },
+            { L"font-weight",                PT_FontWeight              },
+            { L"height",                     PT_Height                  },
+            { L"inherit-background",         PT_InheritBackground       },
+            { L"margin",                     PT_Margin                  },
+            { L"margin-bottom",              PT_MarginBottom            },
+            { L"margin-left",                PT_MarginLeft              },
+            { L"margin-right",               PT_MarginRight             },
+            { L"margin-top",                 PT_MarginTop               },
+            { L"max-height",                 PT_MaximumHeight           },
+            { L"max-width",                  PT_MaximumWidth            },
+            { L"min-height",                 PT_MinimumHeight           },
+            { L"min-width",                  PT_MinimumWidth            },
+            { L"padding",                    PT_Padding                 },
+            { L"padding-bottom",             PT_PaddingBottom           },
+            { L"padding-left",               PT_PaddingLeft             },
+            { L"padding-right",              PT_PaddingRight            },
+            { L"padding-top",                PT_PaddingTop              },
+            { L"text-align",                 PT_TextAlignment           },
+            { L"text-decoration",            PT_TextDecoration          },
+            { L"text-outline",               PT_TextOutline             },
+            { L"text-overflow",              PT_TextOverflow            },
+            { L"text-shadow",                PT_TextShadow              },
+            { L"text-underline-style",       PT_TextUnderlineStyle      },
+            { L"width",                      PT_Width                   },
+            { L"x",                          PT_PosX                    },
+            { L"y",                          PT_PosY                    }
+        };
+        static const CSSValuePair knownValues[KnownValueCount - 1] = {
+            { L"bold",         Value_Bold        },
+            { L"border",       Value_Border      },
+            { L"bottom",       Value_Bottom      },
+            { L"center",       Value_Center      },
+            { L"clip",         Value_Clip        },
+            { L"content",      Value_Content     },
+            { L"crosshair",    Value_Cross       },
+            { L"dashed",       Value_Dashed      },
+            { L"default",      Value_Default     },
+            { L"dot-dash",     Value_DotDash     },
+            { L"dot-dot-dash", Value_DotDotDash  },
+            { L"dotted",       Value_Dotted      },
+            { L"ellipsis",     Value_Ellipsis    },
+            { L"ew-resize",    Value_SizeHor     },
+            { L"help",         Value_Help        },
+            { L"italic",       Value_Italic      },
+            { L"left",         Value_Left        },
+            { L"line-through", Value_LineThrough },
+            { L"margin",       Value_Margin      },
+            { L"move",         Value_SizeAll     },
+            { L"nesw-resize",  Value_SizeBDiag   },
+            { L"no-cursor",    Value_Blank       },
+            { L"no-repeat",    Value_NoRepeat    },
+            { L"none",         Value_None        },
+            { L"normal",       Value_Normal      },
+            { L"not-allowed",  Value_Forbidden   },
+            { L"ns-resize",    Value_SizeVer     },
+            { L"nwse-resize",  Value_SizeFDiag   },
+            { L"oblique",      Value_Oblique     },
+            { L"opaque",       Value_Opaque      },
+            { L"overline",     Value_Overline    },
+            { L"padding",      Value_Padding     },
+            { L"pointer",      Value_Hand        },
+            { L"progress",     Value_AppStarting },
+            { L"repeat",       Value_Repeat      },
+            { L"repeat-x",     Value_RepeatX     },
+            { L"repeat-y",     Value_RepeatY     },
+            { L"right",        Value_Right       },
+            { L"single-loop",  Value_SingleLoop  },
+            { L"solid",        Value_Solid       },
+            { L"stretch",      Value_Stretch     },
+            { L"text",         Value_IBeam       },
+            { L"top",          Value_Top         },
+            { L"transparent",  Value_Transparent },
+            { L"true",         Value_True        },
+            { L"underline",    Value_Underline   },
+            { L"up-arrow",     Value_UpArrow     },
+            { L"wait",         Value_Wait        },
+            { L"wave",         Value_Wave        },
+            { L"wrap",         Value_Wrap        },
+        };
+    }
 }
 
 using namespace MetalBone::CSS;
 using namespace std;
 const CSSValuePair* findCSSValue(const wstring& p, const CSSValuePair values[], int valueCount)
 {
-	const CSSValuePair* crItem = 0;
-	int left = 0;
-	--valueCount;
-	while(left <= valueCount)
-	{
-		int middle = (left + valueCount) >> 1;
-		crItem = &(values[middle]);
-		int result = wcscmp(crItem->name,p.c_str());
-		if(result == 0)
-			return crItem;
-		else if(result == 1)
-			valueCount = middle - 1;
-		else
-			left = middle + 1;
-	}
+    const CSSValuePair* crItem = 0;
+    int left = 0;
+    --valueCount;
+    while(left <= valueCount)
+    {
+        int middle = (left + valueCount) >> 1;
+        crItem = &(values[middle]);
+        int result = wcscmp(crItem->name,p.c_str());
+        if(result == 0)
+            return crItem;
+        else if(result == 1)
+            valueCount = middle - 1;
+        else
+            left = middle + 1;
+    }
 
-	return 0;
+    return 0;
 }
 
 int Selector::specificity() const
 {
-	int val = 0;
-	for (size_t i = 0; i < basicSelectors.size(); ++i) {
-		const BasicSelector* sel = basicSelectors.at(i);
-		if (!sel->elementName.empty())
-			val += 1;
+    int val = 0;
+    for (size_t i = 0; i < basicSelectors.size(); ++i) {
+        const BasicSelector* sel = basicSelectors.at(i);
+        if (!sel->elementName.empty())
+            val += 1;
 
-		val += sel->pseudoCount * 0x10;
-		if(!sel->id.empty())
-			val += 0x100;
-	}
-	return val;
+        val += sel->pseudoCount * 0x10;
+        if(!sel->id.empty())
+            val += 0x100;
+    }
+    return val;
 }
 
 bool Selector::matchPseudo(unsigned int p) const
 {
-	BasicSelector* bs = basicSelectors.at(basicSelectors.size() - 1);
-	// Always match the default pseudo
-	if(PC_Default == bs->pseudo)
-		return true;
-	// If bs->pseudo is a subset of p, it matches.
-	return (bs->pseudo & p) != bs->pseudo ? false : (PC_Default != p);
+    BasicSelector* bs = basicSelectors.at(basicSelectors.size() - 1);
+    // Always match the default pseudo
+    if(PC_Default == bs->pseudo)
+        return true;
+    // If bs->pseudo is a subset of p, it matches.
+    return (bs->pseudo & p) != bs->pseudo ? false : (PC_Default != p);
 }
 
 StyleSheet::~StyleSheet()
 {
-	size_t length = styleRules.size();
-	for(size_t i = 0; i < length; ++i)
-		delete styleRules.at(i);
+    size_t length = styleRules.size();
+    for(size_t i = 0; i < length; ++i)
+        delete styleRules.at(i);
 }
 
 StyleRule::~StyleRule()
 {
-	size_t length = selectors.size();
-	for(size_t i = 0; i < length; ++i)
-		delete selectors.at(i);
+    size_t length = selectors.size();
+    for(size_t i = 0; i < length; ++i)
+        delete selectors.at(i);
 
-	length = declarations.size();
-	for(size_t i = 0; i < length; ++i)
-		delete declarations.at(i);
+    length = declarations.size();
+    for(size_t i = 0; i < length; ++i)
+        delete declarations.at(i);
 }
 
 Selector::~Selector()
 {
-	size_t length = basicSelectors.size();
-	for(size_t i = 0;i < length; ++i)
-		delete basicSelectors.at(i);
+    size_t length = basicSelectors.size();
+    for(size_t i = 0;i < length; ++i)
+        delete basicSelectors.at(i);
 }
 
 Declaration::~Declaration()
 {
-	size_t length = values.size();
-	for(size_t i = 0; i< length; ++i) {
-		// We cannot delete the String in the ~CssValue();
-		// Because the String are intended to share among CssValues.
-		switch(values.at(i).type)
-		{
-		    case CssValue::Uri:
-		    case CssValue::String:
-			    delete values.at(i).data.vstring;
+    size_t length = values.size();
+    for(size_t i = 0; i< length; ++i) {
+        // We cannot delete the String in the ~CssValue();
+        // Because the String are intended to share among CssValues.
+        switch(values.at(i).type)
+        {
+            case CssValue::Uri:
+            case CssValue::String:
+                delete values.at(i).data.vstring;
                 break;
             case CssValue::LiearGradient:
                 delete values.at(i).data.vlinearGradient;
@@ -241,9 +241,9 @@ Declaration::~Declaration()
             case CssValue::Rectangle:
                 delete values.at(i).data.vrect;
                 break;
-		    default: break;
-		}
-	}
+            default: break;
+        }
+    }
 }
 
 inline void MCSSParser::skipWhiteSpace()
@@ -320,81 +320,81 @@ StyleSheet* MCSSParser::parse(const wstring& sourceCSS)
     }
 
     StyleSheet* ss = new StyleSheet();
-	int order      = pos = 0;
+    int order      = pos = 0;
     cssLength      = css->size();
 
-	while(pos < cssLength)
-	{
-		StyleRule* newStyleRule = new StyleRule(order);
+    while(pos < cssLength)
+    {
+        StyleRule* newStyleRule = new StyleRule(order);
 
-		// If we successfully parsed Selector, we then parse Declaration.
-		// If we failed to parse Declaration, the Declaration must be empty,
-		// so that we can delete the created StyleRule.
-		if(parseSelector(newStyleRule))
-			parseDeclaration(newStyleRule);
+        // If we successfully parsed Selector, we then parse Declaration.
+        // If we failed to parse Declaration, the Declaration must be empty,
+        // so that we can delete the created StyleRule.
+        if(parseSelector(newStyleRule))
+            parseDeclaration(newStyleRule);
 
-		if(newStyleRule->declarations.empty()) 
+        if(newStyleRule->declarations.empty()) 
         {
-			delete newStyleRule;
+            delete newStyleRule;
             continue;
-		}
+        }
 
-		const vector<Selector*>& sels = newStyleRule->selectors;
-		for(size_t i = 0; i < sels.size(); ++i)
-		{
-			const Selector* sel     = sels.at(i);
-			const BasicSelector* bs = sel->basicSelectors.at(sel->basicSelectors.size() - 1);
+        const vector<Selector*>& sels = newStyleRule->selectors;
+        for(size_t i = 0; i < sels.size(); ++i)
+        {
+            const Selector* sel     = sels.at(i);
+            const BasicSelector* bs = sel->basicSelectors.at(sel->basicSelectors.size() - 1);
 
-			if(!bs->id.empty()) {
-				ss->srIdMap.insert(StyleSheet::StyleRuleIdMap::value_type(bs->id, newStyleRule));
-                continue;
-			}
-
-            if(bs->elementName.empty()) {
-				ss->universal.push_back(newStyleRule);
+            if(!bs->id.empty()) {
+                ss->srIdMap.insert(StyleSheet::StyleRuleIdMap::value_type(bs->id, newStyleRule));
                 continue;
             }
 
-			ss->srElementMap.insert(StyleSheet::
-                StyleRuleElementMap::value_type(bs->elementName,newStyleRule));
-		}
+            if(bs->elementName.empty()) {
+                ss->universal.push_back(newStyleRule);
+                continue;
+            }
 
-		ss->styleRules.push_back(newStyleRule);
-		++order;
-	}
+            ss->srElementMap.insert(StyleSheet::
+                StyleRuleElementMap::value_type(bs->elementName,newStyleRule));
+        }
+
+        ss->styleRules.push_back(newStyleRule);
+        ++order;
+    }
 
     return ss;
 }
 
 bool MCSSParser::parseSelector(StyleRule* sr)
 {
-	skipWhiteSpace();
+    skipWhiteSpace();
 
-	int     crSelectorStartIndex = pos;
-	int     cssLengthMinus       = cssLength - 1;
-	wstring commentBuffer;
-	wchar_t byte;
+    int     crSelectorStartIndex = pos;
+    int     cssLengthMinus       = cssLength - 1;
+    wstring commentBuffer;
+    wchar_t byte;
 
-	while(pos < cssLengthMinus)
-	{
-		byte = css->at(pos);
+    while(pos < cssLengthMinus)
+    {
+        byte = css->at(pos);
 
-		if(byte == L'{') // Declaration Block
-		{
-			int posBeforeEndingSpace = pos;
-			while(iswspace(css->at(posBeforeEndingSpace - 1)))
-				--posBeforeEndingSpace;
-			Selector* sel;
-			if(commentBuffer.size() > 0)
-			{
-				commentBuffer.append(*css,crSelectorStartIndex,posBeforeEndingSpace - crSelectorStartIndex);
-				sel = new Selector(&commentBuffer);
-			} else
-				sel = new Selector(css,crSelectorStartIndex,posBeforeEndingSpace - crSelectorStartIndex);
-			sr->selectors.push_back(sel);
-			break;
+        if(byte == L'{') // Declaration Block
+        {
+            int posBeforeEndingSpace = pos;
+            while(iswspace(css->at(posBeforeEndingSpace - 1)))
+                --posBeforeEndingSpace;
+            Selector* sel;
+            if(commentBuffer.size() > 0)
+            {
+                commentBuffer.append(*css,crSelectorStartIndex,posBeforeEndingSpace - crSelectorStartIndex);
+                sel = new Selector(&commentBuffer);
+            } else
+                sel = new Selector(css,crSelectorStartIndex,posBeforeEndingSpace - crSelectorStartIndex);
+            sr->selectors.push_back(sel);
+            break;
 
-		}
+        }
 
         if(byte == L'/' && css->at(pos + 1) == L'*')
         {
@@ -407,118 +407,118 @@ bool MCSSParser::parseSelector(StyleRule* sr)
         }
 
         if(byte == L',')
-		{
-			int posBeforeEndingSpace = pos;
-			while(iswspace(css->at(posBeforeEndingSpace - 1)))
-				--posBeforeEndingSpace;
+        {
+            int posBeforeEndingSpace = pos;
+            while(iswspace(css->at(posBeforeEndingSpace - 1)))
+                --posBeforeEndingSpace;
 
-			Selector* sel;
-			if(commentBuffer.size() > 0)
-			{
-				commentBuffer.append(*css,crSelectorStartIndex,posBeforeEndingSpace - crSelectorStartIndex);
-				sel = new Selector(&commentBuffer);
-				commentBuffer.clear();
-			} else
-				sel = new Selector(css,crSelectorStartIndex,posBeforeEndingSpace - crSelectorStartIndex);
-			sr->selectors.push_back(sel);
+            Selector* sel;
+            if(commentBuffer.size() > 0)
+            {
+                commentBuffer.append(*css,crSelectorStartIndex,posBeforeEndingSpace - crSelectorStartIndex);
+                sel = new Selector(&commentBuffer);
+                commentBuffer.clear();
+            } else
+                sel = new Selector(css,crSelectorStartIndex,posBeforeEndingSpace - crSelectorStartIndex);
+            sr->selectors.push_back(sel);
 
-			++pos;
-			skipWhiteSpace();
-			crSelectorStartIndex = pos;
-		}
-		++pos;
-	}
+            ++pos;
+            skipWhiteSpace();
+            crSelectorStartIndex = pos;
+        }
+        ++pos;
+    }
 
-	return (pos < cssLength);
+    return (pos < cssLength);
 }
 
 Selector::Selector(const wstring* css, int index, int length)
 {
     if(length == -1) { length = css->size(); }
-	if(length ==  0)
-	{
-		BasicSelector* sel = new BasicSelector();
-		sel->relationToNext = BasicSelector::NoRelation;
-		basicSelectors.push_back(sel);
-	}
+    if(length ==  0)
+    {
+        BasicSelector* sel = new BasicSelector();
+        sel->relationToNext = BasicSelector::NoRelation;
+        basicSelectors.push_back(sel);
+    }
 
     length += index;
 
-	while(index < length)
-	{
-		BasicSelector* sel = new BasicSelector();
-		basicSelectors.push_back(sel);
+    while(index < length)
+    {
+        BasicSelector* sel = new BasicSelector();
+        basicSelectors.push_back(sel);
 
-		wstring  pseudo;
-		wstring* buffer = &(sel->elementName);
-		bool     newBS  = false;
+        wstring  pseudo;
+        wstring* buffer = &(sel->elementName);
+        bool     newBS  = false;
 
-		while(index < length)
-		{
-			wchar_t byte = css->at(index);
-			if(iswspace(byte))
-			{
-				while((++index) < length)
+        while(index < length)
+        {
+            wchar_t byte = css->at(index);
+            if(iswspace(byte))
+            {
+                while((++index) < length)
                 {
-					if(css->at(index) == L':')    { --index; break; }
-					if(!iswspace(css->at(index))) { newBS = true; --index; break; }
-				}
-			} else if(byte == L'>')
-			{
-				newBS = true;
-				sel->relationToNext = BasicSelector::MatchNextIfParent;
-			} else
-			{
-				if(newBS)
-				{
-					if(!pseudo.empty())
-						sel->addPseudoAndClearInput(pseudo);
-					break;
-				}
+                    if(css->at(index) == L':')    { --index; break; }
+                    if(!iswspace(css->at(index))) { newBS = true; --index; break; }
+                }
+            } else if(byte == L'>')
+            {
+                newBS = true;
+                sel->relationToNext = BasicSelector::MatchNextIfParent;
+            } else
+            {
+                if(newBS)
+                {
+                    if(!pseudo.empty())
+                        sel->addPseudoAndClearInput(pseudo);
+                    break;
+                }
 
-				if(byte == L'#') {
-					buffer = &(sel->id);// And skip '#';
+                if(byte == L'#') {
+                    buffer = &(sel->id);// And skip '#';
                 } else if(byte == L':')
-				{
-					if(!pseudo.empty())
-						sel->addPseudoAndClearInput(pseudo);
+                {
+                    if(!pseudo.empty())
+                        sel->addPseudoAndClearInput(pseudo);
 
-					buffer = &pseudo; // And Skip ':';
-					while((++index) < length)
+                    buffer = &pseudo; // And Skip ':';
+                    while((++index) < length)
                     {
-						if(!iswspace(css->at(index)))
+                        if(!iswspace(css->at(index)))
                             { --index; break; }
-					}
-				} else if(byte != L'*') // Don't add (*)
-					buffer->append(1,byte);
-			}
-			++index;
-		}
+                    }
+                } else if(byte != L'*') // Don't add (*)
+                    buffer->append(1,byte);
+            }
+            ++index;
+        }
 
-		// When we meet ":pressed{" and it ends the loop,
-		// we should add the last pseudo into the BasicSelector
-		if(!pseudo.empty())
-			sel->addPseudoAndClearInput(pseudo);
+        // When we meet ":pressed{" and it ends the loop,
+        // we should add the last pseudo into the BasicSelector
+        if(!pseudo.empty())
+            sel->addPseudoAndClearInput(pseudo);
 
-		if(index == length)
-			sel->relationToNext = BasicSelector::NoRelation;
+        if(index == length)
+            sel->relationToNext = BasicSelector::NoRelation;
 
-		// TODO: Add more RTTI stuff. Now we can only identify the Class name,
-		// not its inherited Class name. So ".ClassA" is the same as "ClassA" .
-		if(!sel->elementName.empty() && sel->elementName.at(0) == L'.')
-			sel->elementName.erase(0,1);
-	}
+        // TODO: Add more RTTI stuff. Now we can only identify the Class name,
+        // not its inherited Class name. So ".ClassA" is the same as "ClassA" .
+        if(!sel->elementName.empty() && sel->elementName.at(0) == L'.')
+            sel->elementName.erase(0,1);
+    }
 }
 
 void BasicSelector::addPseudoAndClearInput(std::wstring& p)
 {
-	const CSSValuePair* crItem = findCSSValue(p, pseudos, knownPseudoCount);
+    const CSSValuePair* crItem = findCSSValue(p, pseudos, knownPseudoCount);
     p.clear();
 
-	if(crItem) {
-		pseudo |= crItem->value;
-		++pseudoCount;
-	}
+    if(crItem) {
+        pseudo |= crItem->value;
+        ++pseudoCount;
+    }
 }
 
 // Background:      { Brush/Image frame-count Repeat Clip Alignment pos-x pos-y width height }*;
@@ -888,7 +888,7 @@ int Declaration::addValue(const wstring& css, int index, int length)
                 hexStream >> std::hex >> h;
 
                 value.setType(CssValue::Color);
-                value.setUInt((h > 0xFFFFFF ? h : (h | 0xFF000000)));
+                value.setUInt(hexColor.size() >= 8 ? h : (h | 0xFF000000));
             } else if(iswdigit(begin) || begin == L'-')
             {
                 // Number, Length

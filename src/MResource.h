@@ -3,7 +3,6 @@
 #include "MBGlobal.h"
 #include "MApplication.h"
 
-#include <windows.h>
 #include <commctrl.h>
 #include <string>
 #include <unordered_map>

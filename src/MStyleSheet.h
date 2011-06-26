@@ -2,6 +2,8 @@
 
 #include "MBGlobal.h"
 #include "MUtils.h"
+#include "MGraphics.h"
+#include "private/MGraphicsData.h"
 
 #include <windows.h>
 #include <set>
@@ -15,7 +17,7 @@ namespace MetalBone
 {
     class MSSSPrivate;
     class MStyleSheetStyle;
-    class MD2DPaintContext;
+    class MGraphics;
     class MWidget;
     class MCursor;
     namespace CSS
@@ -39,6 +41,19 @@ namespace MetalBone
             Gdi,
             Direct2D,
             AutoDetermine
+        };
+
+        // Specify how to fix the alpha after drawing GDI text.
+        // If the window is not layered window, there's no fix
+        // at all, no matter which enum value is chosen.
+        enum FixGDIAlpha
+        {
+            NoFix,
+            QuickOpaque, // All pixels which has 0 alpha will be of 255 alpha, if the background
+                         // of the text is opaque, choose QuickOpaque is the best.
+            SourceAlpha, // All pixels touched by GDI, their alpha will be the alpha before touched by GDI.
+            GrayScale    // We draw white text on a black DC, then we can get the grayscale alpha.
+                         // This may result in the text to be bolder/darker.
         };
 
         class RenderRuleData;
@@ -69,11 +84,12 @@ namespace MetalBone
 
                 bool opaqueBackground() const;
 
-                void draw(MD2DPaintContext& context,
-                    const MRect& widgetRectInRT,
-                    const MRect& clipRectInRT,
-                    const std::wstring& text = std::wstring(),
-                    unsigned int frameIndex = 0);
+                inline void draw(MGraphics&   graphcis,
+                          const MRect&        drawRect,
+                          const MRect&        clipRect,
+                          const std::wstring& text = std::wstring(),
+                          FixGDIAlpha         fixAlpha = NoFix,
+                          unsigned int        frameIndex = 0);
 
                 inline bool       isValid() const;
                 inline bool       operator==(const RenderRule&) const;
@@ -141,11 +157,13 @@ namespace MetalBone
             void setWidgetSS(MWidget* w, const std::wstring& css);
             void polish(MWidget* w);
 
-            void draw(MWidget* w,
-                const MRect& widgetRectInRT,
-                const MRect& clipRectInRT,
-                const std::wstring& text = std::wstring(),
-                int frameIndex = -1);
+            // FrameIndex == -1 means let MStyleSheetStyle to choose the frame.
+            void draw(MWidget*            widget,
+                      const MRect&        drawRect,
+                      const MRect&        clipRect,
+                      const std::wstring& text = std::wstring(),
+                      CSS::FixGDIAlpha    fixAlpha = CSS::QuickOpaque,
+                      int frameIndex = -1);
 
             void removeCache(MWidget* w);
             void removeCache(CSS::RenderRuleQuerier*);
@@ -202,4 +220,11 @@ namespace MetalBone
     }
     unsigned int CSS::RenderRule::getMaxGdiFontPtSize()
         { return maxGdiFontPtSize; }
+
+    inline void CSS::RenderRule::draw(MGraphics& g,const MRect& wr, const MRect& cr,
+        const std::wstring& t, CSS::FixGDIAlpha f, unsigned int i)
+    { 
+        if(!data) return;
+        g.data->drawRenderRule(data,wr,cr,t,f,i);
+    }
 } // namespace MetalBone

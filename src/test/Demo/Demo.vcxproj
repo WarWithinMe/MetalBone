@@ -72,6 +72,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <DelayLoadDLLs>windowscodecs;d2d1;dwrite;</DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -82,9 +83,10 @@
     <ClInclude Include="..\..\MApplication.h" />
     <ClInclude Include="..\..\MBGlobal.h" />
     <ClInclude Include="..\..\MCommonWidgets.h" />
-    <ClInclude Include="..\..\MD2DPaintContext.h" />
     <ClInclude Include="..\..\MD2DUtils.h" />
     <ClInclude Include="..\..\MEvent.h" />
+    <ClInclude Include="..\..\MGraphics.h" />
+    <ClInclude Include="..\..\MGraphicsResource.h" />
     <ClInclude Include="..\..\MRegion.h" />
     <ClInclude Include="..\..\MResource.h" />
     <ClInclude Include="..\..\MStyleSheet.h" />
@@ -92,7 +94,9 @@
     <ClInclude Include="..\..\MWidget.h" />
     <ClInclude Include="..\..\private\CSSParser.h" />
     <ClInclude Include="..\..\private\MApp_p.h" />
-    <ClInclude Include="..\..\private\MD2DPaintContextData.h" />
+    <ClInclude Include="..\..\private\MD2DGraphicsData.h" />
+    <ClInclude Include="..\..\private\MGDIGraphicsData.h" />
+    <ClInclude Include="..\..\private\MGraphicsData.h" />
     <ClInclude Include="..\..\private\RenderRuleData.h" />
     <ClInclude Include="..\..\private\MWidget_p.h" />
     <ClInclude Include="MainWindow.h" />
@@ -102,13 +106,15 @@
     <ClCompile Include="..\..\MApplication.cpp" />
     <ClCompile Include="..\..\MBGlobal.cpp" />
     <ClCompile Include="..\..\MCommonWidgets.cpp" />
-    <ClCompile Include="..\..\MD2DPaintContext.cpp" />
     <ClCompile Include="..\..\MD2DUtils.cpp" />
+    <ClCompile Include="..\..\MGraphics.cpp" />
+    <ClCompile Include="..\..\MGraphicsResource.cpp" />
     <ClCompile Include="..\..\MRegion.cpp" />
     <ClCompile Include="..\..\MResource.cpp" />
     <ClCompile Include="..\..\MStyleSheet.cpp" />
     <ClCompile Include="..\..\MWidget.cpp" />
     <ClCompile Include="..\..\private\CSSParser.cpp" />
+    <ClCompile Include="..\..\private\MD2DGraphicsData.cpp" />
     <ClCompile Include="..\..\private\RenderRule.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MainWindow.cpp" />

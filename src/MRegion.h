@@ -8,11 +8,9 @@
 
 #pragma once
 
-#include "MBGlobal.h"
 #include "MUtils.h"
 #include "3rd/ContainersInl.h"
 
-#include <windows.h>
 namespace MetalBone
 {
     class METALBONE_EXPORT MRegion
