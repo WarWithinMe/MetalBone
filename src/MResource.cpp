@@ -292,7 +292,7 @@ namespace MetalBone
         MGraphics graphics(graphicsData);
         graphicsData->beginDraw();
         graphicsData->clear();
-        rule.draw(graphics, drawRect, drawRect, tip);
+        rule.draw(graphics, drawRect, drawRect, tip, CSS::QuickOpaque);
         graphicsData->endDraw(MRect(0,0,width,height));
     }
 
