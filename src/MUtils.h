@@ -91,12 +91,19 @@ namespace MetalBone
             inline long width()  const;
             inline bool isPointInside(POINT pt) const;
             inline bool isEmpty() const;
+            // Test if two rect intersects each other.
+            inline bool intersectsRect(const RECT& rc) const;
 
             inline void offset (int dx, int dy);
             inline void inflate(int dx, int dy);
-            inline BOOL subtract (const RECT& rc1, const RECT& rc2);
-            inline BOOL intersect(const RECT& rc1, const RECT& rc2);
-            inline BOOL unionRect(const RECT& rc1, const RECT& rc2);
+
+            // These three functions calls Win32 API :
+            // IntersectRect(LPRECT, const LPRECT, const LPRECT)
+            // SubtractRect (LPRECT, const LPRECT, const LPRECT)
+            // UnionRect    (LPRECT, const LPRECT, const LPRECT)
+            inline BOOL intersect(const RECT& rc);
+            inline BOOL subtract (const RECT& rc);
+            inline BOOL unionRect(const RECT& rc);
 
 #ifdef MB_USE_D2D
             inline operator D2D1_RECT_U() const;
@@ -237,6 +244,9 @@ namespace MetalBone
     }
     inline bool MRect::isEmpty() const
         { return (right == left && bottom == top); }
+    inline bool MRect::intersectsRect(const RECT& rc) const
+        { return !(rc.right  <= left || rc.left >= right ||
+                   rc.bottom <= top  || rc.top  >= bottom); }
     inline void MRect::offset(int dx, int dy)
         { left += dx; right  += dx; top  += dy; bottom += dy; }
     inline void MRect::inflate(int dx, int dy)
@@ -244,12 +254,12 @@ namespace MetalBone
         if((right += dx) < left) right = left;
         if((bottom+= dy) < top ) bottom= top;
     }
-    inline BOOL MRect::subtract(const RECT& rc1, const RECT& rc2)
-        { return ::SubtractRect(this,&rc1,&rc2); }
-    inline BOOL MRect::intersect(const RECT& rc1, const RECT& rc2)
-        { return ::IntersectRect(this,&rc1,&rc2); }
-    inline BOOL MRect::unionRect(const RECT& rc1, const RECT& rc2)
-        { return ::UnionRect(this,&rc1,&rc2); }
+    inline BOOL MRect::subtract(const RECT& rc1)
+        { return ::SubtractRect(this,this,&rc1); }
+    inline BOOL MRect::intersect(const RECT& rc1)
+        { return ::IntersectRect(this,this,&rc1); }
+    inline BOOL MRect::unionRect(const RECT& rc1)
+        { return ::UnionRect(this,this,&rc1); }
 
     inline MRectU::MRectU() { left = top = right = bottom = 0; }
     inline MRectU::MRectU(unsigned int l, unsigned int t, unsigned int r, unsigned int b)

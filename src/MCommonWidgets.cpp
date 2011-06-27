@@ -297,31 +297,42 @@ namespace MetalBone
     void MTabBar::mousePressEvent(MMouseEvent* e)
     {
         e->accept();
-        int clickX = e->getX();
-
         std::map<int, TabData>::iterator tit    = tabs.begin();
         std::map<int, TabData>::iterator titEnd = tabs.end();
 
-        int currentIndex = 0;
-        int tabLeft  = 0;
-        int tabRight = 0;
-        while(tit != titEnd)
+        int updatedItem = 0;
+        int tabLeft     = 0;
+        int tabRight    = 0;
+        int prevSelID   = checkedID;
+        int index       = 0;
+
+        while(tit != titEnd && updatedItem < 2 && index <= shownEndIndex)
         {
-            if(currentIndex >= shownStartIndex)
+            if(index >= shownStartIndex)
             {
                 tabRight += tit->second.width;
-                if(tabLeft <= clickX && tabRight >= clickX)
+                if(tabLeft <= e->getX() && tabRight >= e->getX())
                 {
+                    // The item has been selected, we just have to return.
+                    if(checkedID == tit->first)
+                        return;
+
                     checkedID = tit->second.id;
                     tabSelected(checkedID);
-                    repaint();
-                    return;
+                    repaint(tabLeft, 0, tabRight - tabLeft, tabHeight);
+
+                    ++updatedItem;
+                } else if(tit->first == prevSelID)
+                {
+                    // update the previous checked one.
+                    repaint(tabLeft, 0, tabRight - tabLeft, tabHeight);
+                    ++updatedItem;
                 }
                 tabLeft = tabRight;
             }
 
-            ++currentIndex;
             ++tit;
+            ++index;
         }
     }
 
@@ -365,7 +376,9 @@ namespace MetalBone
         tabRect.left   = widgetRectInRT.left + offset;
         int index = 0;
 
-        mApp->getStyleSheet()->draw(this,widgetRectInRT,clipRectInRT);
+        bool prevDrawn = false;
+
+        mApp->getStyleSheet()->draw(this, widgetRectInRT, clipRectInRT);
 
         std::map<int, TabData>::iterator tit    = tabs.begin();
         std::map<int, TabData>::iterator titEnd = tabs.end();
@@ -374,19 +387,29 @@ namespace MetalBone
             tabRect.right = tabRect.left + tit->second.width;
             if(index >= shownStartIndex)
             {
-                CSS::RenderRule rule = 
-                    mApp->getStyleSheet()->getRenderRule(&tabQuerier,
-                    tit->first == checkedID ? CSS::PC_Checked : CSS::PC_Default);
-                rule.draw(graphics,tabRect,clipRectInRT,tit->second.text);
+                if(tabRect.intersectsRect(clipRectInRT))
+                {
+                    CSS::RenderRule rule = 
+                        mApp->getStyleSheet()->getRenderRule(&tabQuerier,
+                        tit->first == checkedID ? CSS::PC_Checked : CSS::PC_Default);
+                    rule.draw(graphics,tabRect,clipRectInRT,tit->second.text,CSS::QuickOpaque);
 
-                MSize iconSize = tit->second.icon.getSize();
-                int iconX = tabRect.left + (tit->second.width - iconSize.width()) / 2;
+                    MSize iconSize = tit->second.icon.getSize();
+                    int iconX = tabRect.left + (tit->second.width - iconSize.width()) / 2;
 
-                graphics.drawImage(tit->second.icon, MRect(iconX,
+                    graphics.drawImage(tit->second.icon, MRect(iconX,
                         tabRect.top + topMargin,
                         iconX + iconSize.width(), 
                         tabRect.top + topMargin + iconSize.height()));
+
+                    prevDrawn = true;
+                } else if(prevDrawn) {
+                    // If the previous item is drawn, then we can assume the rest 
+                    // won't be drawn.
+                    return;
+                }
             }
+
             tabRect.left = tabRect.right;
 
             ++tit;

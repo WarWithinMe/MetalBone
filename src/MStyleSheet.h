@@ -51,9 +51,7 @@ namespace MetalBone
             NoFix,
             QuickOpaque, // All pixels which has 0 alpha will be of 255 alpha, if the background
                          // of the text is opaque, choose QuickOpaque is the best.
-            SourceAlpha, // All pixels touched by GDI, their alpha will be the alpha before touched by GDI.
-            GrayScale    // We draw white text on a black DC, then we can get the grayscale alpha.
-                         // This may result in the text to be bolder/darker.
+            SourceAlpha  // All pixels touched by GDI, their alpha will be the alpha before touched by GDI.
         };
 
         class RenderRuleData;

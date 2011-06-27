@@ -5,26 +5,26 @@
 
 namespace MetalBone
 {
-	namespace Demo
-	{
-		class SAMainWindow : public MWidget
-		{
-			public:
-				SAMainWindow();
-			protected:
-				virtual void resizeEvent(MResizeEvent*);
+    namespace Demo
+    {
+        class SAMainWindow : public MWidget
+        {
+            public:
+                SAMainWindow();
+            protected:
+                virtual void resizeEvent(MResizeEvent*);
 
-			private:
-				MButton    redxButton;
-				MButton    closeButton;
-				MLabel     titleLabel;
-				MLabel     statusLabel;
-				MTabBar    tabBar;
-				MWidget    contentWidget;
-				MWidget    resizer;
+            private:
+                MButton    redxButton;
+                MButton    closeButton;
+                MLabel     titleLabel;
+                MLabel     statusLabel;
+                MTabBar    tabBar;
+                MWidget    contentWidget;
+                MWidget    resizer;
                 MScrollBar scrollBar;
 
-				inline void closeBtnClicked() { closeWindow(); }
-		};
-	}
+                inline void closeBtnClicked() { closeWindow(); }
+        };
+    }
 }

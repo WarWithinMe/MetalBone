@@ -1,6 +1,8 @@
 What is MetalBone?
 ==========
-MetalBone is a so-called DirectUI library for Win7. It uses Direct2D (also parts of GDI and GDI+) to provide windowless GUI programming support for Windows 7. It should also work for Vista as long as the OS supports DirectD2.
+MetalBone is a so-called DirectUI library for Win7. It uses Direct2D (also parts of GDI and GDI+) to provide windowless GUI programming support for Windows 7. It should also work for Vista as long as the OS supports Direct2D.
+
+It can use other Graphics System to do the drawing now. So it should work under Windows XP.
 
 
 Why is there MetalBone?

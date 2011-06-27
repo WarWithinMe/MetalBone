@@ -697,7 +697,6 @@ namespace MetalBone
     void MD2DGraphicsData::drawGdiText(RenderRuleData* rrdata, const MRect& drawRect,
         const MRect& clipRectInRT, const wstring& text, FixGDIAlpha fixAlpha)
     {
-        // TODO: Add support for underline and its line style.
         MFont defaultFont;
         TextRenderObject defaultRO(defaultFont);
         TextRenderObject* tro = rrdata->textRO == 0 ? &defaultRO : rrdata->textRO;
@@ -706,23 +705,76 @@ namespace MetalBone
         bool hasShadow  = !tro->shadowColor.isTransparent() &&
             ( tro->shadowBlur != 0 || (tro->shadowOffsetX != 0 || tro->shadowOffsetY != 0) );
 
-        HDC textDC    = getDC();
-
+        // TODO: Add support for underline and its line style.
+        HDC   textDC  = getDC();
         HRGN  clipRGN = ::CreateRectRgn(drawRect.left, drawRect.top, drawRect.right, drawRect.bottom);
-        HRGN  oldRgn  = (HRGN)::SelectObject(textDC,clipRGN);
-        HFONT oldFont = (HFONT)::SelectObject(textDC,tro->font.getHandle());
+        HRGN  oldRgn  = (HRGN) ::SelectObject(textDC, clipRGN);
+        HFONT oldFont = (HFONT)::SelectObject(textDC, tro->font.getHandle());
         ::SetBkMode(textDC, TRANSPARENT);
 
-        HDC originalAlphaDC     = NULL;
-        void* originalAlphaBits = 0;
-        HBITMAP originalBMP     = NULL;
-        HBITMAP originalOldBMP  = NULL;
+        unsigned int formatParam = tro->getGDITextFormat();
+        MRect textBoundingRect(0,0,drawRect.width(),drawRect.height());
+
+        // We have to calc the bounding rect of the text, so that
+        // we can do the fixing.
+        if(fixAlpha != NoFix)
+        {
+            formatParam |= DT_CALCRECT;
+
+            bool alignBottom = (formatParam & DT_BOTTOM) != 0;
+            formatParam &= (~DT_BOTTOM);
+
+            unsigned int drawRectW = textBoundingRect.right;
+            unsigned int drawRectH = textBoundingRect.bottom;
+            unsigned int boundingH = ::DrawTextW(textDC, text.c_str(), text.size(),
+                &textBoundingRect, formatParam);
+
+            if(textBoundingRect.right <= drawRectW) {
+                if(formatParam & DT_CENTER) {
+                    textBoundingRect.left  = (drawRectW - textBoundingRect.right) / 2 + drawRect.left;
+                    textBoundingRect.right += textBoundingRect.left; 
+                } else if(formatParam & DT_RIGHT) {
+                    textBoundingRect.left  = drawRect.right - textBoundingRect.right;
+                    textBoundingRect.right = drawRect.right;
+                } else {
+                    textBoundingRect.left  = drawRect.left;
+                    textBoundingRect.right += textBoundingRect.left;
+                }
+            } else {
+                textBoundingRect.left  = drawRect.left;
+                textBoundingRect.right = drawRect.right;
+            }
+            if(boundingH <= drawRectH) {
+                if(alignBottom) {
+                    textBoundingRect.top    = drawRect.bottom - textBoundingRect.bottom;
+                    textBoundingRect.bottom += textBoundingRect.top;
+                    formatParam |= DT_BOTTOM;
+                } else if(formatParam & DT_VCENTER) {
+                    textBoundingRect.top    = drawRectH - boundingH + drawRect.top;
+                    textBoundingRect.bottom += textBoundingRect.top;
+                } else {
+                    textBoundingRect.top    = drawRect.top;
+                    textBoundingRect.bottom = drawRect.top + boundingH;
+                }
+            } else {
+                textBoundingRect.top = drawRect.top;
+                textBoundingRect.bottom = drawRect.bottom;
+            }
+
+            formatParam &= ~(DT_CALCRECT);
+        }
+
+        // Copy the source bits if we have to do SourceAlpha fix.
+        HDC     originalAlphaDC   = NULL;
+        void*   originalAlphaBits = 0;
+        HBITMAP originalBMP       = NULL;
+        HBITMAP originalOldBMP    = NULL;
         if(fixAlpha == SourceAlpha)
         {
             originalAlphaDC = ::CreateCompatibleDC(0);
             BITMAPINFO bmi = {};
-            int width  = drawRect.width();
-            int height = drawRect.height();
+            int width  = textBoundingRect.width();
+            int height = textBoundingRect.height();
             bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
             bmi.bmiHeader.biWidth       = width;
             bmi.bmiHeader.biHeight      = height;
@@ -732,10 +784,10 @@ namespace MetalBone
             originalBMP = ::CreateDIBSection(originalAlphaDC, &bmi,
                 DIB_RGB_COLORS, &originalAlphaBits, 0, 0);
             originalOldBMP = (HBITMAP)::SelectObject(originalAlphaDC, originalBMP);
-            ::BitBlt(originalAlphaDC, 0, 0, width, height, textDC, drawRect.left, drawRect.top, SRCCOPY);
+            ::BitBlt(originalAlphaDC, 0, 0, width, height,
+                textDC, textBoundingRect.left, textBoundingRect.top, SRCCOPY);
         }
 
-        unsigned int formatParam = tro->getGDITextFormat();
         if(hasShadow)
         {
             if(tro->shadowBlur != 0 || tro->shadowColor.getAlpha() != 0xFF)
@@ -823,8 +875,8 @@ namespace MetalBone
             HDC tempDC = ::CreateCompatibleDC(0);
             void* pvBits;
             BITMAPINFO bmi = {};
-            int width  = drawRect.width();
-            int height = drawRect.height();
+            int width  = textBoundingRect.width();
+            int height = textBoundingRect.height();
             bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
             bmi.bmiHeader.biWidth       = width;
             bmi.bmiHeader.biHeight      = height;
@@ -833,7 +885,8 @@ namespace MetalBone
             bmi.bmiHeader.biBitCount    = 32;
             HBITMAP tempBMP = ::CreateDIBSection(tempDC, &bmi, DIB_RGB_COLORS, &pvBits, 0, 0);
             HBITMAP oldBMP  = (HBITMAP)::SelectObject(tempDC, tempBMP);
-            ::BitBlt(tempDC, 0, 0, width, height, textDC, drawRect.left, drawRect.top, SRCCOPY);
+            ::BitBlt(tempDC, 0, 0, width, height, textDC,
+                textBoundingRect.left, textBoundingRect.top, SRCCOPY);
 
             unsigned int* pixel = (unsigned int*)pvBits;
 
@@ -857,42 +910,9 @@ namespace MetalBone
                 ::DeleteObject(originalBMP);
                 ::DeleteDC(originalAlphaDC);
 
-            } else if(fixAlpha == GrayScale)
-            {
-                HDC bwDC          = ::CreateCompatibleDC(0);
-
-                BITMAPINFO bmi = {};
-                int width  = drawRect.width();
-                int height = drawRect.height();
-                bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-                bmi.bmiHeader.biWidth       = width;
-                bmi.bmiHeader.biHeight      = height;
-                bmi.bmiHeader.biCompression = BI_RGB;
-                bmi.bmiHeader.biPlanes      = 1;
-                bmi.bmiHeader.biBitCount    = 32;
-
-                void* bwDCBits    = 0;
-                HBITMAP bwBMP     = ::CreateDIBSection(bwDC, &bmi, DIB_RGB_COLORS, &bwDCBits, 0, 0);
-                HBITMAP bwOldBMP  = (HBITMAP)::SelectObject(bwDC, bwBMP);
-
-                ::SetTextColor(bwDC, 0xFFFFFF);
-                ::SetBkColor(bwDC, 0);
-                ::SetBkMode(bwDC, OPAQUE);
-                ::DrawTextW(bwDC, (LPWSTR)text.c_str(), -1, (MRect*)&drawRect, formatParam);
-
-                unsigned int* bwDCPixel = (unsigned int*)bwDCBits;
-                for(int i = width * height - 1; i >=  0; --i)
-                {
-                    BYTE* component = (BYTE*)(pixel + i);
-                    component[3] = bwDCPixel[i] / 0xFFFFFF;
-                }
-
-                ::SelectObject(bwDC, bwOldBMP);
-                ::DeleteObject(bwBMP);
-                ::DeleteDC(bwDC);
             }
 
-            ::SetDIBitsToDevice(textDC, drawRect.left, drawRect.top,
+            ::SetDIBitsToDevice(textDC, textBoundingRect.left, textBoundingRect.top,
                 width, height, 0, 0, 0, height, pvBits, &bmi, DIB_RGB_COLORS);
             ::SelectObject(tempDC, oldBMP);
             ::DeleteObject(tempBMP);
