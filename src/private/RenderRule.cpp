@@ -6,7 +6,13 @@
 #include "private/RenderRuleData.h"
 #include "private/MGraphicsData.h"
 
-#include <dwrite.h>
+#ifdef MB_USE_D2D
+#  include <dwrite.h>
+#endif
+#ifdef MB_USE_SKIA
+#  include "3rd/skia/core/SkPaint.h"
+#  include "3rd/skia/core/SkTypeface.h"
+#endif
 #include <algorithm>
 
 namespace MetalBone
@@ -250,6 +256,33 @@ namespace MetalBone
             return tf;
         }
 #endif
+#ifdef MB_USE_SKIA
+        void TextRenderObject::configureSkPaint(SkPaint& paint)
+        {
+            paint.setLinearText(testNoValue(this, Value_Wrap));
+            paint.setUnderlineText(testValue(this, Value_Underline));
+            paint.setStrikeThruText(testValue(this, Value_LineThrough));
+            if(testValue(this, Value_Center))
+                paint.setTextAlign(SkPaint::kCenter_Align);
+            else if(testValue(this, Value_Right))
+                paint.setTextAlign(SkPaint::kRight_Align);
+            else
+                paint.setTextAlign(SkPaint::kLeft_Align);
+
+            int bufferSize = 0;
+            const std::wstring& faceName = font.getFaceName();
+            bufferSize = ::WideCharToMultiByte(CP_UTF8, 0, faceName.c_str(), faceName.size(), 0, 0, 0, 0);
+            char* faceNameBuffer = new char[bufferSize];
+            ::WideCharToMultiByte(CP_UTF8, 0, faceName.c_str(), faceName.size(),
+                faceNameBuffer, bufferSize, 0, 0);
+
+            SkTypeface::Style style = font.isBold() ?
+                (font.isItalic() ? SkTypeface::kBoldItalic : SkTypeface::kBold) :
+                (font.isItalic() ? SkTypeface::kItalic : SkTypeface::kNormal);
+            SkTypeface* face = SkTypeface::CreateFromName(faceNameBuffer, style);
+            paint.setTypeface(face)->unref();
+        }
+#endif
     } // namespace CSS
 
 
@@ -279,7 +312,7 @@ namespace MetalBone
         TextRenderObject defaultRO(defaultFont);
         TextRenderObject* tro = textRO == 0 ? &defaultRO : textRO;
 
-        bool useGDI = mApp->getGraphicsBackend() != MApplication::Direct2D;
+        bool useGDI = mApp->getGraphicsBackend() == MApplication::GDI;
         if(RenderRule::getTextRenderer() == AutoDetermine)
         {
             unsigned int fontPtSize = tro->font.pointSize();
@@ -287,7 +320,7 @@ namespace MetalBone
                 useGDI = true;
         }
 
-        if(useGDI || RenderRule::getTextRenderer() == Gdi)
+        if(useGDI || RenderRule::getTextRenderer() == GdiText)
         {
             HDC calcDC = ::GetDC(NULL);
             HFONT oldFont = (HFONT)::SelectObject(calcDC, tro->font.getHandle());
@@ -305,21 +338,32 @@ namespace MetalBone
             ::ReleaseDC(NULL, calcDC);
         } else
         {
+            if(mApp->getGraphicsBackend() == MApplication::Direct2D)
+            {
 #ifdef MB_USE_D2D
-            IDWriteTextFormat* textFormat = tro->createDWTextFormat();
-            IDWriteTextLayout* textLayout;
-            mApp->getDWriteFactory()->CreateTextLayout(s.c_str(), s.size(),
-                textFormat, (FLOAT)maxWidth, 0.f, &textLayout);
+                IDWriteTextFormat* textFormat = tro->createDWTextFormat();
+                IDWriteTextLayout* textLayout;
+                mApp->getDWriteFactory()->CreateTextLayout(s.c_str(), s.size(),
+                    textFormat, (FLOAT)maxWidth, 0.f, &textLayout);
 
-            DWRITE_TEXT_METRICS metrics;
-            textLayout->GetMetrics(&metrics);
+                DWRITE_TEXT_METRICS metrics;
+                textLayout->GetMetrics(&metrics);
 
-            size.cx = (long)metrics.widthIncludingTrailingWhitespace;
-            size.cy = (long)metrics.height;
+                size.cx = (long)metrics.widthIncludingTrailingWhitespace;
+                size.cy = (long)metrics.height;
 
-            SafeRelease(textFormat);
-            SafeRelease(textLayout);
+                SafeRelease(textFormat);
+                SafeRelease(textLayout);
 #endif
+            } else if(mApp->getGraphicsBackend() == MApplication::Skia)
+            {
+#ifdef MB_USE_SKIA
+                // TODO : It seems Skia doesn't work with wchar_t...
+//                 SkPaint paint;
+//                 SkRect bound;
+//                 tro->configureSkPaint(paint);
+#endif
+            }
         }
 
         return size;

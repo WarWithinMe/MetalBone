@@ -38,8 +38,8 @@ namespace MetalBone
 
         enum TextRenderer
         {
-            Gdi,
-            Direct2D,
+            GdiText,
+            OtherSystem, // Use other system text engine, like DirectWrite / Skia
             AutoDetermine
         };
 

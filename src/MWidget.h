@@ -289,6 +289,8 @@ namespace MetalBone
             // children[0] is the bottom-most child.
             MWidgetList m_children;
 
+            // If the widget is a window, l_x and l_y is the screen coordinates of
+            // the window NC-Area, not the client-rect coordinates.
             long l_x;
             long l_y;
             long l_width;

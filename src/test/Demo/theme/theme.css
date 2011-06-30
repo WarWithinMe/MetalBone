@@ -126,14 +126,15 @@
 #MScrollBar #Thumb{
 	border-radius: 7;
 	border: 1px solid #000000;
+	margin: 1 0 1 0;
 	background: url(theme\ThumbBG.jpg) repeat-y border rect(0,0,15,23);
-	border-image: url(theme\Elements.png) rect(82,95,11,45) repeat 8 1 8 10;
+	border-image: url(theme\Elements.png) rect(82,95,11,45) repeat 8 0 8 11;
 }
 
 #MScrollBar #Thumb :hover:vertical, #MScrollBar #Thumb :pressed:vertical{
 	background: url(theme\ThumbBG.jpg) repeat-y border rect(15,0,15,23);
 	background: linear-gradient(left top,left bottom,#4Cff00fc 0%,#4C5400ff 100%) border;
-	border-image: url(theme\Elements.png) rect(82,95,11,45) repeat 8 1 8 10;
+	border-image: url(theme\Elements.png) rect(82,95,11,45) repeat 8 0 8 11;
 }
 ToolTipWidget {
 	border-image: url(theme\Elements.png) rect(75,95,7,26) 4 3 5 3;

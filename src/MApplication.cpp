@@ -32,6 +32,9 @@ namespace MetalBone
         // Make sure the user do not select Direct2D when compiling without it
         if(backend == Direct2D) graphicsBackend = GDI;
 #endif
+#ifndef MB_USE_SKIA
+        if(backend == Skia) graphicsBackend = GDI;
+#endif
 
         s_instance = this;
         mImpl->appHandle = GetModuleHandleW(NULL);
@@ -77,9 +80,12 @@ namespace MetalBone
     MApplication::~MApplication()
     {
 #ifdef MB_USE_D2D
-        SafeRelease(mImpl->wicFactory);
-        SafeRelease(mImpl->d2d1Factory);
-        SafeRelease(mImpl->dwriteFactory);
+        if(graphicsBackend == Direct2D)
+        {
+            SafeRelease(mImpl->wicFactory);
+            SafeRelease(mImpl->d2d1Factory);
+            SafeRelease(mImpl->dwriteFactory);
+        }
 #endif
 
         delete mImpl;
@@ -150,7 +156,7 @@ namespace MetalBone
         wc.lpfnWndProc   = MApplicationData::windowProc;
         wc.hInstance     = mImpl->appHandle;
         wc.hCursor       = gArrowCursor.getHandle();
-        wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+        wc.hbrBackground = NULL;
     }
 
     int MApplication::exec()
@@ -265,6 +271,8 @@ namespace MetalBone
         MWidget* window = 0;
         switch(msg) {
 
+        case WM_ERASEBKGND:
+            return 1;
         case WM_DESTROY:
             // Check if the user wants to quit when the last window is closed.
             if(instance->quitOnLastWindowClosed && instance->topLevelWindows.size() == 0)
@@ -297,23 +305,32 @@ namespace MetalBone
             window = instance->findWidgetByHandle<true>(hwnd);
             if (window == 0) RET_DEFPROC;
 
+            // These are client-rect screen coordinates.
             long newX = (short)LOWORD(lparam);
             long newY = (short)HIWORD(lparam);
-            if(window->l_x != newX || window->l_y != newY)
+
+            if(window->m_windowFlags & WF_AllowTransparency)
             {
                 window->l_x = newX;
                 window->l_y = newY;
-                if(window->m_windowFlags & WF_AllowTransparency)
-                {
-                    BLENDFUNCTION blend = {AC_SRC_OVER,0,255,AC_SRC_ALPHA};
-                    POINT windowPos = {window->l_x, window->l_y};
-                    UPDATELAYEREDWINDOWINFO info = {};
-                    info.cbSize   = sizeof(UPDATELAYEREDWINDOWINFO);
-                    info.dwFlags  = ULW_ALPHA;
-                    info.pblend   = &blend;
-                    info.pptDst   = &windowPos;
-                    ::UpdateLayeredWindowIndirect(window->m_windowExtras->m_wndHandle,&info);
-                }
+
+                BLENDFUNCTION blend = {AC_SRC_OVER,0,255,AC_SRC_ALPHA};
+                POINT windowPos = { newX, newY };
+                UPDATELAYEREDWINDOWINFO info = {};
+                info.cbSize   = sizeof(UPDATELAYEREDWINDOWINFO);
+                info.dwFlags  = ULW_ALPHA;
+                info.pblend   = &blend;
+                info.pptDst   = &windowPos;
+                ::UpdateLayeredWindowIndirect(window->m_windowExtras->m_wndHandle,&info);
+            } else
+            {
+                RECT  wndRect     = { newX, newY, newX, newY};
+                DWORD winStyle    = 0;
+                DWORD winExStyle  = 0;
+                generateStyleFlags(window->m_windowFlags, &winStyle, &winExStyle);
+                ::AdjustWindowRectEx(&wndRect, winStyle, false, winExStyle);
+                window->l_x = wndRect.left;
+                window->l_y = wndRect.right;
             }
             return 0;
         }

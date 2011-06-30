@@ -920,7 +920,7 @@ namespace MetalBone
             bool isPcOpaque = uTarget->isOpaqueDrawing();
             if(isPcOpaque) { continue; }
 
-            if(layeredWindow && !fullWindowUpdate)
+            if(!this->isOpaqueDrawing() && !fullWindowUpdate)
             {
                 MRect wur;
                 uTargetUR.getBounds(wur);
@@ -989,6 +989,16 @@ namespace MetalBone
         do
         {
             draw(0,0,passiveUpdateWidgets.find(this) != passiveUpdateWidgets.end());
+
+            // If the update rect is the whole window
+            // we need to swap the left/top with right/bottom.
+            if(windowUpdateRect.right == 0 && windowUpdateRect.bottom == 0)
+            {
+                windowUpdateRect.right = windowUpdateRect.left;
+                windowUpdateRect.bottom= windowUpdateRect.top;
+                windowUpdateRect.left = 0;
+                windowUpdateRect.top  = 0;
+            }
             result = m_windowExtras->m_graphicsData->endDraw(windowUpdateRect);
         } while (!result && (--retryTimes >= 0));
 

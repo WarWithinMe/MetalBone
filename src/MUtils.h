@@ -6,6 +6,10 @@
 #  include <d2d1helper.h>
 #endif
 
+#ifdef MB_USE_SKIA
+#  include "3rd/skia/core/SkRect.h"
+#endif
+
 //MSize
 //MPoint
 //MRect
@@ -108,6 +112,10 @@ namespace MetalBone
 #ifdef MB_USE_D2D
             inline operator D2D1_RECT_U() const;
             inline operator D2D1_RECT_F() const;
+#endif
+#ifdef MB_USE_SKIA
+            inline operator SkRect()  const;
+            inline operator SkIRect() const;
 #endif
     };
 
@@ -323,6 +331,10 @@ namespace MetalBone
     inline MRectU::operator D2D1_RECT_U  () const { return D2D1::RectU(left,top,right,bottom); }
     inline MRectU::operator D2D1_RECT_F  () const { return D2D1::RectF((FLOAT)left,(FLOAT)top,(FLOAT)right,(FLOAT)bottom); }
     inline MColor::operator D2D1_COLOR_F () const { return D2D1::ColorF(argb & 0xFFFFFF, float(argb >> 24 & 0xFF) / 255); }
+#endif
+#ifdef MB_USE_SKIA
+    inline MRect::operator SkRect()  const { return SkRect::MakeLTRB((SkScalar)left,(SkScalar)top,(SkScalar)right,(SkScalar)bottom); }
+    inline MRect::operator SkIRect() const { return SkIRect::MakeLTRB(left,top,right,bottom); }
 #endif
 }
 

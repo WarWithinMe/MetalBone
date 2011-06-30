@@ -9,6 +9,14 @@
 #  include <d2d1helper.h>
 #endif
 
+#ifdef MB_USE_SKIA
+#  include "MResource.h"
+#  include "3rd/skia/core/SkBitmap.h"
+#  include "3rd/skia/core/SkShader.h"
+#  include "3rd/skia/effects/SkGradientShader.h"
+#  include <wincodec.h>
+#endif
+
 using namespace std;
 using namespace std::tr1;
 
@@ -174,6 +182,13 @@ namespace MetalBone
 
     MBrushHandle MGraphicsResFactory::createBrush(const LinearGradientData* linear)
     {
+        if(linear->stopCount < 2)
+        {
+            // We cannot initialize such kind of linear gradient brush.
+            // So we change the brush to solid transparent.
+            return createBrush(MColor());
+        }
+
         BrushData*& brush = resManager.linearBrushCache[linear];
         if(brush == 0)
         {
@@ -284,63 +299,89 @@ namespace MetalBone
 
     void MGraphicsResFactory::discardResources()
     {
+        ResourceManager::SolidBrushCache::iterator sit    = resManager.solidBrushCache.begin();
+        ResourceManager::SolidBrushCache::iterator sitEnd = resManager.solidBrushCache.end();
+        ResourceManager::BitmapBrushCache::iterator bit    = resManager.bitmapBrushCache.begin();
+        ResourceManager::BitmapBrushCache::iterator bitEnd = resManager.bitmapBrushCache.end();
+        ResourceManager::LinearBrushCache::iterator lit    = resManager.linearBrushCache.begin();
+        ResourceManager::LinearBrushCache::iterator litEnd = resManager.linearBrushCache.end();
+        ResourceManager::BitmapCache::iterator it    = resManager.bitmapCache.begin();
+        ResourceManager::BitmapCache::iterator itEnd = resManager.bitmapCache.end();
+
         switch(mApp->getGraphicsBackend())
         {
+#ifdef MB_USE_D2D
             case MApplication::Direct2D:
-            {
-                ResourceManager::SolidBrushCache::iterator sit    = resManager.solidBrushCache.begin();
-                ResourceManager::SolidBrushCache::iterator sitEnd = resManager.solidBrushCache.end();
-                while(sit != sitEnd)
-                {
+                while(sit != sitEnd) {
                     BrushData* data = sit->second;
-                    if(data->brush)
-                    {
+                    if(data->brush) {
                         ((ID2D1SolidColorBrush*)data->brush)->Release();
                         data->brush = 0;
                     }
                     ++sit;
                 }
-
-                ResourceManager::BitmapBrushCache::iterator bit    = resManager.bitmapBrushCache.begin();
-                ResourceManager::BitmapBrushCache::iterator bitEnd = resManager.bitmapBrushCache.end();
-                while(bit != bitEnd)
-                {
+                while(bit != bitEnd) {
                     BrushData* data = bit->second;
-                    if(data->brush)
-                    {
+                    if(data->brush) {
                         ((ID2D1BitmapBrush*)data->brush)->Release();
                         data->brush = 0;
                     }
                     ++bit;
                 }
-
-                ResourceManager::LinearBrushCache::iterator lit    = resManager.linearBrushCache.begin();
-                ResourceManager::LinearBrushCache::iterator litEnd = resManager.linearBrushCache.end();
-                while(lit != litEnd)
-                {
+                while(lit != litEnd) {
                     BrushData* data = lit->second;
-                    if(data->brush)
-                    {
+                    if(data->brush) {
                         ((ID2D1LinearGradientBrush*)data->brush)->Release();
                         data->brush = 0;
                     }
                     ++lit;
                 }
-
-                ResourceManager::BitmapCache::iterator it    = resManager.bitmapCache.begin();
-                ResourceManager::BitmapCache::iterator itEnd = resManager.bitmapCache.end();
-                while(it != itEnd)
-                {
+                while(it != itEnd) {
                     ImageData* data = it->second;
-                    if(data->bitmap)
-                    {
+                    if(data->bitmap) {
                         ((ID2D1Bitmap*)data->bitmap)->Release();
                         data->bitmap = 0;
                     }
                     ++it;
                 }
-            }
-            break;
+                break;
+#endif
+#ifdef MB_USE_SKIA
+            case MApplication::Skia:
+                while(sit != sitEnd) {
+                    BrushData* data = sit->second;
+                    if(data->brush) {
+                        delete (MColor*)data->brush;
+                        data->brush = 0;
+                    }
+                    ++sit;
+                }
+                while(bit != bitEnd) {
+                    BrushData* data = bit->second;
+                    if(data->brush) {
+                        delete (SkBitmap*)data->brush;
+                        data->brush = 0;
+                    }
+                    ++bit;
+                }
+                while(lit != litEnd) {
+                    BrushData* data = lit->second;
+                    if(data->brush) {
+                        ((SkShader*)data->brush)->unref();
+                        data->brush = 0;
+                    }
+                    ++lit;
+                }
+                while(it != itEnd) {
+                    ImageData* data = it->second;
+                    if(data->bitmap) {
+                        delete (SkBitmap*)data->bitmap;
+                        data->bitmap = 0;
+                    }
+                    ++it;
+                }
+                break;
+#endif
         }
 
         ResourceManager::NinePatchBrushCache::iterator nit    = resManager.ninePatchCache.begin();
@@ -367,6 +408,11 @@ namespace MetalBone
                     }
                     break;
 #endif
+#ifdef MB_USE_SKIA
+                case MApplication::Skia:
+                    // Nothing to do.
+                    return;
+#endif
                 case MApplication::GDI:
                     break;
             }
@@ -386,6 +432,16 @@ namespace MetalBone
                 ((ID2D1Brush*)brush)->Release();
                 break;
 #endif
+#ifdef MB_USE_SKIA
+            case MApplication::Skia:
+                if(type == MBrushHandle::Bitmap)
+                    delete (SkBitmap*)brush;
+                else if(type == MBrushHandle::Solid)
+                    delete (MColor*)brush;
+                else if(type == MBrushHandle::LinearGradient)
+                    ((SkShader*)brush)->unref();
+                break;
+#endif
             case MApplication::GDI:
                 break;
         }
@@ -403,6 +459,11 @@ namespace MetalBone
                 ((ID2D1Bitmap*)bitmap)->Release();
                 break;
 #endif
+#ifdef MB_USE_SKIA
+            case MApplication::Skia:
+                delete (SkBitmap*)bitmap;
+                break;
+#endif
             case MApplication::GDI:
                 break;
         }
@@ -412,6 +473,8 @@ namespace MetalBone
         MBrushHandle& connerBrush, MBrushHandle::NinePatchPortion p);
     static void  updateLinearGraidentD2D(void* linearBrush,
         const LinearGradientData* linearData, const MRect& drawingRect);
+    static void* updateLinearGraidentSkia(void* linearBrush,
+        const LinearGradientData* linear, const MRect& drawingRect);
 
     void MBrushHandle::updateLinearGraident(const MRect& drawingRect)
     {
@@ -423,6 +486,11 @@ namespace MetalBone
             case MApplication::Direct2D:
                 updateLinearGraidentD2D(getBrush(), data->v.linearData, drawingRect);
                 break;
+#ifdef MB_USE_SKIA
+            case MApplication::Skia:
+                data->brush = updateLinearGraidentSkia(getBrush(),data->v.linearData,drawingRect);
+                break;
+#endif
         }
     }
 
@@ -431,19 +499,27 @@ namespace MetalBone
         M_ASSERT(data != 0);
         M_ASSERT(data->type == NinePatch);
 
+        NinePatchData* ninePatch = data->v.ninePatchData;
+        MBrushHandle mainBrush(ninePatch->mainBmpBrush);
+
         switch(mApp->getGraphicsBackend())
         {
-            case MApplication::Direct2D:
 #ifdef MB_USE_D2D
-                NinePatchData* ninePatch = data->v.ninePatchData;
-                MBrushHandle mainBrush(ninePatch->mainBmpBrush);
-                ID2D1BitmapBrush* conner = (ID2D1BitmapBrush*)mainBrush.getBrush();
-                if(p == Conner) return conner;
-                if(ninePatch->portionCreated)
-                    return ninePatch->b[p];
-                else
-                    return createPortionD2D(ninePatch, mainBrush, p);
+            case MApplication::Direct2D:
+                {
+                    ID2D1BitmapBrush* conner = (ID2D1BitmapBrush*)mainBrush.getBrush();
+                    if(p == Conner) return conner;
+                    if(ninePatch->portionCreated)
+                        return ninePatch->b[p];
+                    else
+                        return createPortionD2D(ninePatch, mainBrush, p);
+                }
 #endif
+#ifdef MB_USE_SKIA
+            case MApplication::Skia:
+                return mainBrush.getBrush();
+#endif
+            break;
         }
 
         return 0;
@@ -455,15 +531,21 @@ namespace MetalBone
 
         switch(mApp->getGraphicsBackend())
         {
-            case MApplication::Direct2D:
 #ifdef MB_USE_D2D
+            case MApplication::Direct2D:
                 {
                     ID2D1Bitmap* bmp = (ID2D1Bitmap*)getImage();
                     D2D1_SIZE_U size = bmp->GetPixelSize();
                     return MSize(size.width,size.height);
                 }
 #endif
-                break;
+#ifdef MB_USE_SKIA
+            case MApplication::Skia:
+                {
+                    SkBitmap* bmp = (SkBitmap*)getImage();
+                    return MSize(bmp->width(), bmp->height());
+                }
+#endif
         }
 
         return MSize();
@@ -475,8 +557,8 @@ namespace MetalBone
 
         switch(mApp->getGraphicsBackend())
         {
-            case MApplication::Direct2D:
 #ifdef MB_USE_D2D
+            case MApplication::Direct2D:
                 {
                     ID2D1BitmapBrush* bmpBrush = (ID2D1BitmapBrush*) getBrush();
                     ID2D1Bitmap* bmp;
@@ -488,27 +570,35 @@ namespace MetalBone
                     return MSize(size.width, size.height);
                 }
 #endif
-                break;
+#ifdef MB_USE_SKIA
+            case MApplication::Skia:
+                {
+                    SkBitmap* bmp = (SkBitmap*)getBrush();
+                    return MSize(bmp->width(), bmp->height());
+                }
+#endif
         }
 
         return MSize();
     }
 
+    void* createSkiaBitmap(const std::wstring& filePath, unsigned int* frameCount);
+
     void* MBrushHandle::getBrush()
     {
         M_ASSERT(data != 0);
+        if(data->brush != 0) return data->brush;
 
         switch(mApp->getGraphicsBackend())
         {
-            case MApplication::Direct2D:
 #ifdef MB_USE_D2D
-                if(data->brush == 0)
+            case MApplication::Direct2D:
                 {
                     ID2D1RenderTarget* rt = MD2DGraphics::getRecentRenderTarget();
-                    if(type() == MBrushHandle::Solid) {
+                    if(type() == Solid) {
                         ID2D1SolidColorBrush** brush = (ID2D1SolidColorBrush**) &data->brush;
                         rt->CreateSolidColorBrush(MColor(data->v.color),brush);
-                    } else if(type() == MBrushHandle::Bitmap) {
+                    } else if(type() == Bitmap) {
                         data->brush = createD2DBitmapBrush(data->v.imageData->filePath,
                             rt, &(data->v.imageData->frameCount));
                     } else if(type() == LinearGradient) {
@@ -517,31 +607,60 @@ namespace MetalBone
                         return 0;
                     }
                 }
-                return data->brush;
+                break;
+#endif
+#ifdef MB_USE_SKIA
+            case MApplication::Skia:
+                if(type() == Solid)
+                    data->brush = new MColor(data->v.color);
+                else if(type() == Bitmap)
+                    data->brush = createSkiaBitmap(data->v.imageData->filePath,&(data->v.imageData->frameCount));
+                else if(type() == LinearGradient)
+                {
+                    const LinearGradientData* linear = data->v.linearData;
+                    SkPoint   pts[2]; pts[0].set(0.f, 0.f); pts[1].set(1.f, 0.f);
+                    SkColor*  colors = new SkColor[linear->stopCount];
+                    SkScalar* pos    = new SkScalar[linear->stopCount];
+
+                    for(int i = 0; i < linear->stopCount; ++i) {
+                        colors[i] = linear->stops[i].argb;
+                        pos[i]    = linear->stops[i].pos;
+                    }
+
+                    data->brush = SkGradientShader::CreateLinear(pts, colors, pos,
+                        linear->stopCount, SkShader::kClamp_TileMode);
+                    delete[] colors;
+                    delete[] pos;
+                }
+                else if(type() == NinePatch)
+                    return 0;
+                break;
 #endif
         }
 
-        return 0;
+        return data->brush;
     }
 
     void* MImageHandle::getImage()
     {
         M_ASSERT(data != 0);
+        if(data->bitmap != 0) return data->bitmap;
+
         switch(mApp->getGraphicsBackend())
         {
-            case MApplication::Direct2D:
 #ifdef MB_USE_D2D
-                if(data->bitmap == 0)
-                {
-                    data->bitmap = createD2DBitmap(data->filePath,
-                        MD2DGraphics::getRecentRenderTarget(), &data->frameCount);
-                }
-                return data->bitmap;
-#endif
+            case MApplication::Direct2D:
+                data->bitmap = createD2DBitmap(data->filePath,
+                    MD2DGraphics::getRecentRenderTarget(), &data->frameCount);
                 break;
+#endif
+#ifdef MB_USE_SKIA
+            case MApplication::Skia:
+                data->bitmap = createSkiaBitmap(data->filePath, &data->frameCount);
+                break;
+#endif
         }
-
-        return 0;
+        return data->bitmap;
     }
 
     // ==============================
@@ -579,6 +698,71 @@ namespace MetalBone
 
         brush->SetStartPoint(startPoint);
         brush->SetEndPoint(endPoint);
+#endif
+    }
+
+    static void* updateLinearGraidentSkia(void* linearBrush,
+        const LinearGradientData* linear, const MRect& drawingRect)
+    {
+#ifdef MB_USE_SKIA
+        SkShader* brush = (SkShader*)linearBrush;
+        // Create a new one if we need to.
+        if(brush == 0)
+        {
+            SkPoint   pts[2]; pts[0].set(0.f, 0.f); pts[1].set(1.f, 0.f);
+            SkColor*  colors = new SkColor[linear->stopCount];
+            SkScalar* pos    = new SkScalar[linear->stopCount];
+
+            for(int i = 0; i < linear->stopCount; ++i)
+            {
+                colors[i] = linear->stops[i].argb;
+                pos[i]    = linear->stops[i].pos;
+            }
+
+            brush = SkGradientShader::CreateLinear(pts, colors, pos,
+                linear->stopCount, SkShader::kClamp_TileMode);
+            delete[] colors;
+            delete[] pos;
+        }
+
+        // Transform
+        // Calc the positions.
+        int startX = linear->isPercentagePos(LinearGradientData::StartX) ?
+                     drawingRect.width() * linear->getPosValue(LinearGradientData::StartX) / 100 :
+                     linear->getPosValue(LinearGradientData::StartX);
+        int startY = linear->isPercentagePos(LinearGradientData::StartY) ?
+                     drawingRect.width() * linear->getPosValue(LinearGradientData::StartY) / 100 :
+                     linear->getPosValue(LinearGradientData::StartY);
+        startX += drawingRect.left;
+        startY += drawingRect.top;
+
+        int endX = linear->isPercentagePos(LinearGradientData::EndX) ?
+                   drawingRect.width() * linear->getPosValue(LinearGradientData::EndX) / 100 :
+                   linear->getPosValue(LinearGradientData::EndX);
+        int endY = linear->isPercentagePos(LinearGradientData::EndY) ?
+                   drawingRect.width() * linear->getPosValue(LinearGradientData::EndY) / 100 :
+                   linear->getPosValue(LinearGradientData::EndY);
+        endX += drawingRect.left;
+        endY += drawingRect.top;
+
+        // Calc the matrix
+        SkMatrix matrix; matrix.setTranslate((SkScalar)startX, (SkScalar)startY);
+        matrix.preScale((SkScalar)drawingRect.width(), (SkScalar)drawingRect.height());
+
+        int dx = endX - startX;
+        int dy = endY - startY;
+        int length;
+        if(dx == 0) length = abs(endY - startY); else
+        if(dy == 0) length = abs(endX - startX); else
+        { length = (int)sqrt(float(dx*dx + dy*dy)); }
+        if(length == 0) length = 1;
+
+        SkMatrix rotate; rotate.setSinCos(((SkScalar)dy) / length, ((SkScalar)dx) / length);
+        matrix.preConcat(rotate);
+        brush->setLocalMatrix(matrix);
+        return brush;
+#else
+        return 0;
 #endif
     }
 
@@ -727,6 +911,91 @@ namespace MetalBone
 
         SafeRelease(bitmap);
         return ninePatch->b[p];
+#else
+        return 0;
+#endif
+    }
+
+    void* createSkiaBitmap(const std::wstring& filePath, unsigned int* frameCount)
+    {
+#ifdef MB_USE_SKIA
+        SkBitmap* bmp = new SkBitmap();
+        // COM
+        HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        if(FAILED(hr)) return bmp;
+
+        IWICImagingFactory*    factory    = 0;
+        IWICBitmapDecoder*     decoder    = 0;
+        IWICBitmapFrameDecode* frame	  = 0;
+
+        // Create Factory
+        if(FAILED( CoCreateInstance(CLSID_WICImagingFactory,NULL,
+            CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&factory)) )) goto END;
+
+        // Create Decoder.
+        if(filePath.at(0) == L':')  // Image file is inside MResources.
+        {
+            MResource res;
+            if(res.open(filePath))
+            {
+                IWICStream* stream = 0;
+                if(FAILED(factory->CreateStream(&stream))) goto END;
+                if(FAILED(stream->InitializeFromMemory((WICInProcPointer)res.byteBuffer(),res.length())))
+                {
+                    SafeRelease(stream);
+                    goto END;
+                }
+                hr = factory->CreateDecoderFromStream(stream,
+                    NULL,WICDecodeMetadataCacheOnDemand,&decoder);
+                SafeRelease(stream);
+                if(FAILED(hr)) goto END;
+            } else { goto END; }
+        } else {
+            if(FAILED( factory->CreateDecoderFromFilename(filePath.c_str(),NULL,
+                GENERIC_READ, WICDecodeMetadataCacheOnDemand,&decoder) ))
+                goto END;
+        }
+
+        if(FAILED(decoder->GetFrameCount(frameCount))) { goto END; }
+        if(FAILED(decoder->GetFrame(0, &frame))) { goto END; }
+
+        UINT width, height;
+        if(FAILED(frame->GetSize(&width, &height))) { goto END; }
+
+        bmp->setConfig(SkBitmap::kARGB_8888_Config, width, height * (*frameCount));
+        bmp->allocPixels();
+
+        for(size_t i = 0; i < *frameCount; ++i)
+        {
+            if(i != 0) decoder->GetFrame(i, &frame);
+            IWICFormatConverter* converter  = 0;
+            factory->CreateFormatConverter(&converter);
+            converter->Initialize(frame,
+                GUID_WICPixelFormat32bppPBGRA,
+                WICBitmapDitherTypeNone,NULL,
+                0.f,WICBitmapPaletteTypeCustom);
+
+            IWICBitmapSource* convertedBMP;
+            converter->QueryInterface(IID_PPV_ARGS(&convertedBMP));
+
+            bmp->lockPixels();
+            bmp->eraseColor(0);
+            const int stride = bmp->rowBytes();
+            convertedBMP->CopyPixels(NULL, stride, stride * height,
+                reinterpret_cast<BYTE*>(bmp->getPixels()) + bmp->rowBytes() * height * i );
+            bmp->unlockPixels();
+
+            SafeRelease(frame);
+            SafeRelease(convertedBMP);
+            SafeRelease(converter);
+        }
+
+        END:
+            CoUninitialize();
+            SafeRelease(factory);
+            SafeRelease(decoder);
+
+        return bmp;
 #else
         return 0;
 #endif

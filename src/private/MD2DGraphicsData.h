@@ -48,8 +48,6 @@ namespace MetalBone
 
         private:
             void createRenderTarget();
-            void drawGdiText(CSS::RenderRuleData*, const MRect& borderRect, const MRect& clipRect,
-                const std::wstring& text, CSS::FixGDIAlpha);
             void drawD2DText(CSS::RenderRuleData*, const D2D1_RECT_F& borderRect,
                 const std::wstring& text);
 

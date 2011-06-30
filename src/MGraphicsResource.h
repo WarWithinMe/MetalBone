@@ -32,7 +32,7 @@ namespace MetalBone
         public:
             enum Type {  Unknown, Solid, LinearGradient, Bitmap, NinePatch };
 
-            // The 9-Patch Brush consist of four brushes.
+            // Notes for Direct2D, the 9-Patch Brush consist of four brushes.
             // The "Conner" contains the whole image. It's used to draw the 4 conners.
             // The "Center" is the center of the image. It will be
             // repeat/strech horizontally and vertically.
@@ -50,18 +50,35 @@ namespace MetalBone
             // |-------------|
             // | 6 |  7  | 8 |
             // ---------------
+            // 
+            // Notes for Skia, the 9-Patch Brush consist of only one brush (i.e. the
+            // whole image). So calling getPortion will return the same value of
+            // a brush, regardless of which portion it is.
             enum NinePatchPortion { VerCenter, HorCenter, Center, Conner };
 
-            // It is only safe to get the actual brush during window redrawing. 
-            // The return value will always be 0, if the brush is 9-patch
-            // (use getPortion() to get the 9-patch brush instead).
+            // The return value of getBrush() will always be 0, if the brush
+            // is 9-patch (use getPortion() to get the 9-patch brush instead).
             // You should type-cast the return void* to something else.
-            // For example, if you're using Direct2D as the Graphics Backend.
-            // You can do this: (ID2D1Brush*) myBrush.getBrush();
-            // And this: (ID2D1BitmapBrush*) myBrush.getPortion(...);
+            //
+            // Notes for Direct2D, it is only safe to get the actual brush
+            // during window redrawing. Because we need a ID2D1RenderTarget to
+            // create the brush. Other Graphics Backend may not be restricted
+            // at this point.
+            // 
+            // What getBrush() returns;
+            // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-++-+-+-+-+-+-+     
+            // |  BrushType  |         Solid        |     LinearGradient      |     Bitamp      | NinePatch |
+            // +--------------------------------------------------------------------------------------------+
+            // |  Direct2D   |ID2D1SolidColorBrush* |ID2D1LinearGradientBrush*|ID2D1BitmapBrush*|     0     |
+            // +--------------------------------------------------------------------------------------------+
+            // |    Skia     |        MColor*       |        SkShader*        |     SkBitmap*   |     0     |
+            // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
             void* getBrush();
             void* getPortion(NinePatchPortion);
             
+            // Notes for Skia, we only create one SkShader for one MBrushHandle.
+            // After calling updateLinearGradient(), the all we changed is the 
+            // matrix applied to the SkShader.
             void updateLinearGraident(const MRect& drawingRect);
 
             Type type() const;
@@ -104,12 +121,15 @@ namespace MetalBone
             // Frames are layouted vertically.
             unsigned int frameCount() const;
 
-            // When using Direct2D as Graphics Backend, getting the actual ID2D1Bitmap
+            // 1. When using Direct2D as Graphics Backend, getting the actual ID2D1Bitmap
             // relies on MD2DPaintContext::getRenderTarget(). That is, it is only safe
             // to get the actual image during window redrawing. 
-            // You should type-cast the return value to something else.
-            // For example, if you're using Direct2D as Grahphics Backend.
+            // 2. You should type-cast the return value to something else.
+            // For example:
+            // If you're using Direct2D as Grahphics Backend.
             // You can do this: (ID2D1Bitmap*) myBmp.getImage();
+            // If you're using Skia.
+            // You can do this: (SkBitmap*) myBmp.getImage();
             void* getImage();
 
             // If the image has not been created, calling this fuction will create the image.

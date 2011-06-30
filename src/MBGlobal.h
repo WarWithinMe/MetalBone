@@ -2,20 +2,46 @@
 
 /* ++++++++++ Switches ++++++++++ */
 
-// If defined, MetalBone is not exported.
+// -Define METALBONE_LIBRARY and MB_DECL_EXPORT to build metalbone
+// -as a dll.
+// -Define METALBONE_LIBRARY only to link with that dll.
+// -If you are building as a static lib, do not define METALBONE_LIBRARY
 //#define METALBONE_LIBRARY
 //#define MB_DECL_EXPORT
+
 #define STRIP_METALBONE_NAMESPACE
 #define MB_DEBUGBREAK_INSTEADOF_ABORT
+
+#define SK_IGNORE_STDINT_DOT_H // See 3rd/skia/core/SkTypes.h
+
 // Use MSVC to compile, currently only MSVC is supported
 #ifndef MSVC
 #  define MSVC
 #endif
+
+// === Something about Direct2D ===
+// -1. When using Direct2D to draw a bitmap repeatly, you should put
+//     this bitmap in a single image file. For example, In "Demo", I
+//     want the bitmap in ThumbBG.jpg, vertically repeating. So I take
+//     it out of Elements.png
+//     
 #define MB_USE_D2D
 
-/* ---------- Switches ---------- */
+// === How to build MetalBone with Skia? ===
+// -1. Clone the "skia_lib_build" hub.
+// -2. Navigate to skia_lib_build/project to build skia as static libs.
+// -3. You need to add these path to your project's include path: 
+//     metalbone/src/3rd/skia/config
+//     metalbone/src/3rd/skia/core
+//     ...
+//     metalbone/src/3rd/skia/....
+//
+// === Something about Skia ===
+// -1. Seems like Skia doesn't deal with wchar_t. So we may draw the text
+//     using GDI only.
+#define MB_USE_SKIA
 
-#include <windows.h>
+/* ---------- Switches ---------- */
 
 #ifdef _DEBUG
 #  if !defined(MB_DEBUG)
@@ -29,6 +55,8 @@
 #ifndef _UNICODE
 #  define _UNICODE
 #endif
+
+#include <windows.h>
 
 #ifdef METALBONE_LIBRARY
 #  ifdef MB_DECL_EXPORT

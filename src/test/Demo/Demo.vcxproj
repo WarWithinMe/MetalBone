@@ -39,7 +39,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\Program Files\Visual Leak Detector\include;$(SolutionDir)\..;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Program Files\Visual Leak Detector\include;$(SolutionDir)\..;$(SolutionDir)\..\3rd\skia\images;$(SolutionDir)\..\3rd\skia\effects;$(SolutionDir)\..\3rd\skia\core;$(IncludePath)</IncludePath>
+    <LibraryPath>D:\Work\C++\MetalBone\MetalBone\lib\skia\Debug;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -97,6 +98,7 @@
     <ClInclude Include="..\..\private\MD2DGraphicsData.h" />
     <ClInclude Include="..\..\private\MGDIGraphicsData.h" />
     <ClInclude Include="..\..\private\MGraphicsData.h" />
+    <ClInclude Include="..\..\private\MSkiaGraphicsData.h" />
     <ClInclude Include="..\..\private\RenderRuleData.h" />
     <ClInclude Include="..\..\private\MWidget_p.h" />
     <ClInclude Include="MainWindow.h" />
@@ -115,6 +117,7 @@
     <ClCompile Include="..\..\MWidget.cpp" />
     <ClCompile Include="..\..\private\CSSParser.cpp" />
     <ClCompile Include="..\..\private\MD2DGraphicsData.cpp" />
+    <ClCompile Include="..\..\private\MSkiaGraphicsData.cpp" />
     <ClCompile Include="..\..\private\RenderRule.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MainWindow.cpp" />

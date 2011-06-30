@@ -227,6 +227,8 @@ namespace MetalBone
             void show(const std::wstring&, long x, long y);
             void createRenderTarget();
 
+            void deleteThis() { delete this; }
+
         private:
             bool isShown;
             HWND winHandle;
@@ -248,6 +250,8 @@ namespace MetalBone
 
         graphicsData = MGraphicsData::create(winHandle,1,1);
         graphicsData->setLayeredWindow(true);
+
+        mApp->aboutToQuit.Connect(this, &ToolTipWidget::deleteThis);
     }
     inline ToolTipWidget::~ToolTipWidget()
     {
@@ -301,7 +305,7 @@ namespace MetalBone
     {
         enum TipType { System, Custom };
         ToolTipHelper():type(System),lastTip(0){}
-        ~ToolTipHelper() { delete toolTipWidget; }
+        ~ToolTipHelper() {}
         HWND      toolTipWnd; // The Windows ToolTip Control Handle
         TipType   type;
         MToolTip* lastTip;

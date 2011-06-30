@@ -102,6 +102,9 @@
     <ClInclude Include="..\..\private\MGraphicsData.h">
       <Filter>ExternMB\Header\private</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\private\MSkiaGraphicsData.h">
+      <Filter>ExternMB\Header\private</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\MApplication.cpp">
@@ -150,6 +153,9 @@
       <Filter>ExternMB\Source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\private\MD2DGraphicsData.cpp">
+      <Filter>ExternMB\Source\private</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\private\MSkiaGraphicsData.cpp">
       <Filter>ExternMB\Source\private</Filter>
     </ClCompile>
   </ItemGroup>

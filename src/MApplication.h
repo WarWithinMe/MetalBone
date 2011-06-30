@@ -24,8 +24,9 @@ namespace MetalBone
             enum GraphicsBackend
             {
                 GDI,
-                Direct2D
-                // We could also add AGG, Skia...
+                Direct2D,
+                Skia
+                // We could also add AGG, Cario...
             };
 
             // hardwareAccelerated is ignore if the backend is not Direct2D.

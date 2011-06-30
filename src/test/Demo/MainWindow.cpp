@@ -7,7 +7,7 @@ namespace Demo {
 
     SAMainWindow::SAMainWindow()
     {
-        setWindowFlags(WF_AllowTransparency | WF_MinimizeButton);
+        // setWindowFlags(WF_AllowTransparency | WF_MinimizeButton);
         setObjectName(L"SettingWindow");
         setMinimumSize(400,400);
         ensurePolished();

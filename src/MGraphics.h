@@ -25,6 +25,8 @@ namespace MetalBone
 
             // We can always get the HDC of a window to draw on.
             // We should call releaseDC() after we finish using the DC.
+            // The updatedRect may be ignored depending on what Graphics
+            // Backend it is.
             HDC  getDC    ();
             void releaseDC(const MRect& updatedRect);
 
@@ -43,6 +45,12 @@ namespace MetalBone
 struct ID2D1RenderTarget;
 namespace MetalBone
 {
+    // ======================================================
+    //  A convenient class for getting the ID2D1RenderTarget 
+    //  of a window, to do custom drawing. It has no use if
+    //  the Graphics Backend is not Direct2D
+    // ======================================================
+
     class METALBONE_EXPORT MD2DGraphics : public MGraphics
     {
         public:
@@ -54,6 +62,33 @@ namespace MetalBone
             ID2D1RenderTarget* getRenderTarget();
             // Get the latest ID2D1RenderTarget which called BeginDraw()
             static ID2D1RenderTarget* getRecentRenderTarget();
+    };
+}
+#endif
+#ifdef MB_USE_SKIA
+class SkCanvas;
+namespace MetalBone
+{
+    // ==================================================
+    //  A convenient class for getting the SkCanvas of a 
+    //  window, to do custom drawing. It has no use if
+    //  the Graphics Backend is not Skia 
+    // ==================================================
+
+    class METALBONE_EXPORT MSkiaGraphics : public MGraphics
+    {
+        public:
+            explicit MSkiaGraphics(MWidget* w):MGraphics(w)
+                { M_ASSERT(mApp->getGraphicsBackend() == MApplication::Skia); }
+            explicit MSkiaGraphics(MGraphicsData* d):MGraphics(d)
+                { M_ASSERT(mApp->getGraphicsBackend() == MApplication::Skia); }
+
+            // Calling this function between MGraphicsData::beginDraw() and
+            // MGraphicsData::endDraw() (i.e. when in MWidget::drawWindow())
+            // will return the SkCanvas of the window. You can draw anything
+            // on it.
+            // In other time, this function returns 0.
+            SkCanvas* getCanvas();
     };
 }
 #endif

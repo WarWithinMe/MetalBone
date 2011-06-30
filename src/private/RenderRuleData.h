@@ -9,6 +9,9 @@
 #ifdef MB_USE_D2D
 #  include <d2d1.h>
 #endif
+#ifdef MB_USE_SKIA
+class SkPaint;
+#endif
 
 using namespace std;
 using namespace std::tr1;
@@ -96,6 +99,11 @@ namespace MetalBone
             // we can recheck the background property again. But if a brush is recreated
             // at the same position, we won't know.
             MBrushHandle   brush;
+            // The x, y, width and height is not checked when creating the 
+            // BackgroundRenderObject. It is mainly because we cannot create the
+            // D2D resources at that time. So one should check these values when
+            // drawing.
+            // These values are all 0. Or they're the RECT of the background image.
             unsigned int   x, y, width, height;
             unsigned int   values;
             unsigned short frameCount; // Do we need more frames?
@@ -106,7 +114,7 @@ namespace MetalBone
         struct BorderImageRenderObject
         {
             inline BorderImageRenderObject();
-             MBrushHandle  brush;
+            MBrushHandle   brush;
             MRect*         imageRect;
             unsigned int   values;
         };
@@ -190,6 +198,9 @@ namespace MetalBone
 
 #ifdef MB_USE_D2D
             IDWriteTextFormat* createDWTextFormat();
+#endif
+#ifdef MB_USE_SKIA
+            void configureSkPaint(SkPaint&);
 #endif
         };
 

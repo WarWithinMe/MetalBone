@@ -1,5 +1,6 @@
 #pragma once
 #include "MBGlobal.h"
+#include <string>
 namespace MetalBone
 {
     class MRect;
@@ -56,5 +57,12 @@ namespace MetalBone
         protected:
             MGraphicsData():layeredWindow(false){}
             bool layeredWindow;
+
+            // This function use getDC() to get the HDC of the window,
+            // then use GDI API to draw the text for the RenderRule.
+            // The purpose of this function is to make it possible to be hooked
+            // by GDI++. GDI++ can produce nice effect when drawing small text.
+            void drawGdiText(CSS::RenderRuleData*, const MRect& drawingRectInDC,
+                const MRect& clipRectInDC, const std::wstring& text, CSS::FixGDIAlpha);
     };
 };
