@@ -516,6 +516,15 @@ namespace MetalBone
         // === Text ===
         if(!text.empty())
         {
+            if(borderRO != 0)
+            {
+                MRect borderWidth;
+                borderRO->getBorderWidth(borderWidth);
+                borderRect.left   += borderWidth.left;
+                borderRect.top    += borderWidth.top;
+                borderRect.right  -= borderWidth.right;
+                borderRect.bottom -= borderWidth.bottom;
+            }
             if(rrdata->hasPadding())
             {
                 borderRect.left   += rrdata->padding->left;

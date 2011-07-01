@@ -11,8 +11,7 @@
 
 #define STRIP_METALBONE_NAMESPACE
 #define MB_DEBUGBREAK_INSTEADOF_ABORT
-
-#define SK_IGNORE_STDINT_DOT_H // See 3rd/skia/core/SkTypes.h
+#define VLD // Virtual Leak Detect
 
 // Use MSVC to compile, currently only MSVC is supported
 #ifndef MSVC
@@ -39,6 +38,8 @@
 // === Something about Skia ===
 // -1. Seems like Skia doesn't deal with wchar_t. So we may draw the text
 //     using GDI only.
+// -2. If you're including Skia's header file, you should include MBGlobal.h
+//     first, because we have make some #define here.
 #define MB_USE_SKIA
 
 /* ---------- Switches ---------- */
@@ -50,10 +51,17 @@
 #  if !defined(MB_DEBUG_D2D)
 #    define MB_DEBUG_D2D
 #  endif
+#elif defined(VLD)
+#  undef VLD
 #endif
 
 #ifndef _UNICODE
 #  define _UNICODE
+#endif
+
+#ifdef MB_USE_SKIA
+#  define SK_BUILD_FOR_WIN
+#  define SK_IGNORE_STDINT_DOT_H // See 3rd/skia/core/SkTypes.h
 #endif
 
 #include <windows.h>

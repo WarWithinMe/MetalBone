@@ -3,7 +3,11 @@
 #include <windows.h>
 #include "RenderRuleData.h"
 #include "MStyleSheet.h"
+#include "utils/MSkiaUtils.h"
 #include "3rd/skia/core/SkShader.h"
+#include "3rd/skia/effects/SkLayerRasterizer.h"
+#include "3rd/skia/effects/SkBlurMaskFilter.h"
+
 
 MSkiaGraphicsData::~MSkiaGraphicsData()
 {
@@ -330,8 +334,8 @@ void MSkiaGraphicsData::drawRenderRule(RenderRuleData* rrdata,
         borderRect.bottom -= rrdata->margin->bottom;
     }
 
-    // We have to get the border geometry first if there's any.
-    // Because drawing the background may depends on the border geometry.
+    // We have to get the border path first if there's any.
+    // Because drawing the background may depends on the border path.
     BorderRenderObject* borderRO = rrdata->borderRO;
     SkPath borderPath;
     if(borderRO != 0)
@@ -491,6 +495,15 @@ void MSkiaGraphicsData::drawRenderRule(RenderRuleData* rrdata,
     // === Text ===
     if(!text.empty())
     {
+        if(borderRO != 0)
+        {
+            MRect borderWidth;
+            borderRO->getBorderWidth(borderWidth);
+            borderRect.left   += borderWidth.left;
+            borderRect.top    += borderWidth.top;
+            borderRect.right  -= borderWidth.right;
+            borderRect.bottom -= borderWidth.bottom;
+        }
         if(rrdata->hasPadding())
         {
             borderRect.left   += rrdata->padding->left;
@@ -605,9 +618,79 @@ void MSkiaGraphicsData::drawBitmapRectEx(const SkBitmap& image, const SkIRect* s
 void MSkiaGraphicsData::drawSkiaText(CSS::RenderRuleData* rrdata, const SkRect& borderRect,
     const std::wstring& text)
 {
+    MFont defaultFont;
+    TextRenderObject defaultRO(defaultFont);
+    TextRenderObject* tro = rrdata->textRO == 0 ? &defaultRO : rrdata->textRO;
+
+    bool hasOutline = tro->outlineWidth != 0 && !tro->outlineColor.isTransparent();
+    bool hasShadow  = !tro->shadowColor.isTransparent() &&
+        ( tro->shadowBlur != 0 || (tro->shadowOffsetX != 0 || tro->shadowOffsetY != 0) );
+
     SkPaint paint;
-    paint.setAntiAlias(true);
-    // TODO : It seems Skia doesn't work with wchar_t...
+    tro->configureSkPaint(paint);
+
+    SkTextBoxW textbox;
+    if(testValue(tro, Value_Bottom))  { textbox.setSpacingAlign(SkTextBoxW::kEnd_SpacingAlign); } else
+    if(testValue(tro, Value_VCenter)) { textbox.setSpacingAlign(SkTextBoxW::kCenter_SpacingAlign); }
+    if(testValue(tro, Value_Wrap))    { textbox.setMode(SkTextBoxW::kLineBreak_Mode); }
+    textbox.setBox(SkIRect::MakeLTRB(
+        (int)borderRect.fLeft,  (int)borderRect.fTop, 
+        (int)borderRect.fRight, (int)borderRect.fBottom));
+
+    bool    checkedBoundingRect = false;
+    SkIRect boundingRect;
+
+    if(hasShadow) {
+        if(tro->shadowBlur > 0) {
+            paint.setMaskFilter(SkBlurMaskFilter::Create(
+                (SkScalar)tro->shadowBlur, SkBlurMaskFilter::kNormal_BlurStyle))->unref();
+        }
+
+        paint.setColor(tro->shadowColor.getARGB());
+
+        SkMatrix matrix;
+        matrix.setTranslate((SkScalar)tro->shadowOffsetX, (SkScalar)tro->shadowOffsetY);
+        canvas->setMatrix(matrix);
+            
+        textbox.drawText(canvas, text, paint, &boundingRect);
+        paint.setMaskFilter(NULL);
+        canvas->resetMatrix();
+        checkedBoundingRect = true;
+    }
+
+    paint.setColor(tro->color.getARGB());
+    if(checkedBoundingRect) {
+        int x;
+        switch(paint.getTextAlign()) {
+            case SkPaint::kLeft_Align:   x = boundingRect.fLeft;  break;
+            case SkPaint::kRight_Align:  x = boundingRect.fRight; break;
+            case SkPaint::kCenter_Align: x = (boundingRect.width() >> 1) + boundingRect.fLeft; break;
+        }
+        canvas->drawText(text.c_str(),
+            text.size() * sizeof(wchar_t),
+            (SkScalar)x, 
+            (SkScalar)boundingRect.fTop, 
+            paint);
+    } else {
+        textbox.drawText(canvas, text, paint, hasOutline ? &boundingRect : 0);
+    }
+
+    if(hasOutline) {
+        paint.setStyle(SkPaint::kStroke_Style);
+        paint.setStrokeWidth((SkScalar)tro->outlineWidth);
+        paint.setColor(tro->outlineColor.getARGB());
+        int x;
+        switch(paint.getTextAlign()) {
+            case SkPaint::kLeft_Align:   x = boundingRect.fLeft;  break;
+            case SkPaint::kRight_Align:  x = boundingRect.fRight; break;
+            case SkPaint::kCenter_Align: x = (boundingRect.width() >> 1) + boundingRect.fLeft; break;
+        }
+        canvas->drawText(text.c_str(),
+            text.size() * sizeof(wchar_t), 
+            (SkScalar)x, 
+            (SkScalar)boundingRect.fTop, 
+            paint);
+    }
 }
 
 #endif

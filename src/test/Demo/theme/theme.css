@@ -137,9 +137,9 @@
 	border-image: url(theme\Elements.png) rect(82,95,11,45) repeat 8 0 8 11;
 }
 ToolTipWidget {
-	border-image: url(theme\Elements.png) rect(75,95,7,26) 4 3 5 3;
-	border: 4 3 5 3;
-	padding: 4 7;
+	border-image: url(theme\Elements.png) rect(75,95,7,26) 3 3 5 3;
+	border: 3 3 5 3;
+	padding: 2 2 0 2;
 	color:#9b6a13;
 	font: 9 Î¢ÈíÑÅºÚ;
 	text-align: left center;

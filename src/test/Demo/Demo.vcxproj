@@ -40,7 +40,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>C:\Program Files\Visual Leak Detector\include;$(SolutionDir)\..;$(SolutionDir)\..\3rd\skia\images;$(SolutionDir)\..\3rd\skia\effects;$(SolutionDir)\..\3rd\skia\core;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\Work\C++\MetalBone\MetalBone\lib\skia\Debug;$(LibraryPath)</LibraryPath>
+    <LibraryPath>D:\Work\C++\MetalBone\MetalBone\lib\skia\Debug;C:\Program Files\Visual Leak Detector\lib\Win32;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -84,7 +84,6 @@
     <ClInclude Include="..\..\MApplication.h" />
     <ClInclude Include="..\..\MBGlobal.h" />
     <ClInclude Include="..\..\MCommonWidgets.h" />
-    <ClInclude Include="..\..\MD2DUtils.h" />
     <ClInclude Include="..\..\MEvent.h" />
     <ClInclude Include="..\..\MGraphics.h" />
     <ClInclude Include="..\..\MGraphicsResource.h" />
@@ -101,6 +100,8 @@
     <ClInclude Include="..\..\private\MSkiaGraphicsData.h" />
     <ClInclude Include="..\..\private\RenderRuleData.h" />
     <ClInclude Include="..\..\private\MWidget_p.h" />
+    <ClInclude Include="..\..\utils\MD2DUtils.h" />
+    <ClInclude Include="..\..\utils\MSkiaUtils.h" />
     <ClInclude Include="MainWindow.h" />
   </ItemGroup>
   <ItemGroup>
@@ -108,7 +109,6 @@
     <ClCompile Include="..\..\MApplication.cpp" />
     <ClCompile Include="..\..\MBGlobal.cpp" />
     <ClCompile Include="..\..\MCommonWidgets.cpp" />
-    <ClCompile Include="..\..\MD2DUtils.cpp" />
     <ClCompile Include="..\..\MGraphics.cpp" />
     <ClCompile Include="..\..\MGraphicsResource.cpp" />
     <ClCompile Include="..\..\MRegion.cpp" />
@@ -119,6 +119,8 @@
     <ClCompile Include="..\..\private\MD2DGraphicsData.cpp" />
     <ClCompile Include="..\..\private\MSkiaGraphicsData.cpp" />
     <ClCompile Include="..\..\private\RenderRule.cpp" />
+    <ClCompile Include="..\..\utils\MD2DUtils.cpp" />
+    <ClCompile Include="..\..\utils\MSkiaUtils.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MainWindow.cpp" />
   </ItemGroup>

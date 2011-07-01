@@ -12,6 +12,7 @@
 #ifdef MB_USE_SKIA
 #  include "3rd/skia/core/SkPaint.h"
 #  include "3rd/skia/core/SkTypeface.h"
+#  include "utils/MSkiaUtils.h"
 #endif
 #include <algorithm>
 
@@ -262,7 +263,7 @@ namespace MetalBone
             paint.setLinearText(testNoValue(this, Value_Wrap));
             paint.setUnderlineText(testValue(this, Value_Underline));
             paint.setStrikeThruText(testValue(this, Value_LineThrough));
-            if(testValue(this, Value_Center))
+            if(testValue(this, Value_HCenter))
                 paint.setTextAlign(SkPaint::kCenter_Align);
             else if(testValue(this, Value_Right))
                 paint.setTextAlign(SkPaint::kRight_Align);
@@ -271,16 +272,25 @@ namespace MetalBone
 
             int bufferSize = 0;
             const std::wstring& faceName = font.getFaceName();
-            bufferSize = ::WideCharToMultiByte(CP_UTF8, 0, faceName.c_str(), faceName.size(), 0, 0, 0, 0);
-            char* faceNameBuffer = new char[bufferSize];
-            ::WideCharToMultiByte(CP_UTF8, 0, faceName.c_str(), faceName.size(),
+            bufferSize = ::WideCharToMultiByte(CP_ACP, 0, faceName.c_str(), faceName.size(), 0, 0, 0, 0);
+            char* faceNameBuffer = new char[bufferSize + 1];
+            ::WideCharToMultiByte(CP_ACP, 0, faceName.c_str(), faceName.size(),
                 faceNameBuffer, bufferSize, 0, 0);
+            faceNameBuffer[bufferSize] = '\0';
 
             SkTypeface::Style style = font.isBold() ?
                 (font.isItalic() ? SkTypeface::kBoldItalic : SkTypeface::kBold) :
                 (font.isItalic() ? SkTypeface::kItalic : SkTypeface::kNormal);
             SkTypeface* face = SkTypeface::CreateFromName(faceNameBuffer, style);
             paint.setTypeface(face)->unref();
+
+            paint.setAntiAlias(true);
+            paint.setTextEncoding(SkPaint::kUTF16_TextEncoding);
+            paint.setColor(color.getARGB());
+            paint.setHinting(SkPaint::kFull_Hinting);
+            paint.setTextSize((SkScalar)font.pixelSize());
+
+            delete[] faceNameBuffer;
         }
 #endif
     } // namespace CSS
@@ -358,10 +368,26 @@ namespace MetalBone
             } else if(mApp->getGraphicsBackend() == MApplication::Skia)
             {
 #ifdef MB_USE_SKIA
-                // TODO : It seems Skia doesn't work with wchar_t...
-//                 SkPaint paint;
-//                 SkRect bound;
-//                 tro->configureSkPaint(paint);
+               SkPaint paint;
+               tro->configureSkPaint(paint);
+               
+               SkTextBoxW textbox;
+               if(testValue(tro, Value_Bottom))
+               { 
+                   textbox.setSpacingAlign(SkTextBoxW::kStart_SpacingAlign);
+               } else if(testValue(tro, Value_VCenter))
+               {
+                   textbox.setSpacingAlign(SkTextBoxW::kEnd_SpacingAlign);
+               }
+
+               if(testValue(tro, Value_Wrap))
+                   textbox.setMode(SkTextBoxW::kLineBreak_Mode);
+
+               SkIRect rect;
+               rect.setLTRB(0,0,maxWidth,0);
+               textbox.setBox(rect);
+               textbox.getBoundingRect(s, paint, &rect);
+               return MSize(rect.width(), rect.height());
 #endif
             }
         }
@@ -1080,9 +1106,9 @@ namespace MetalBone
             } else
             {
                 while(tempDeclIter != declIterEnd && tempDeclIter->first <= PT_BorderRadius)
-                { declIter2 = tempDeclIter; ++tempDeclIter; }
+                { ++tempDeclIter; }
                 borderRO = new ComplexBorderRenderObject();
-                setComplexBorderRO(declIter, declIter2);
+                setComplexBorderRO(declIter, tempDeclIter);
             }
 
             if(declIter == declIterEnd) goto END;

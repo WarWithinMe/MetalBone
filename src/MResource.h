@@ -174,6 +174,7 @@ namespace MetalBone
             bool  isItalic() const;
             const std::wstring& getFaceName() const;
             unsigned int pointSize() const;
+            unsigned int pixelSize() const;
 
             operator HFONT() const;
             const MFont& operator=(const MFont&);

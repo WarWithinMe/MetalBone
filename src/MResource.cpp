@@ -576,6 +576,8 @@ namespace MetalBone
         { return data->faceName; }
     unsigned int MFont::pointSize() const
         { return data->ptSize; }
+    unsigned int MFont::pixelSize() const
+        { return data->ptSize * mApp->winDpi() / 72; }
 
     const MFont& MFont::operator=(const MFont& rhs)
     {

@@ -28,6 +28,12 @@
     <Filter Include="Header">
       <UniqueIdentifier>{dc66ed5d-87f9-443b-927e-9fbb7f61d6cc}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ExternMB\Header\utils">
+      <UniqueIdentifier>{ad02fdb4-c013-495c-b9b3-296951636518}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ExternMB\Source\utils">
+      <UniqueIdentifier>{a11f27f1-3547-4059-b2bc-2ef2a53aca2b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\MApplication.h">
@@ -84,9 +90,6 @@
     <ClInclude Include="..\..\private\RenderRuleData.h">
       <Filter>ExternMB\Header\private</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\MD2DUtils.h">
-      <Filter>ExternMB\Header</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\MGraphicsResource.h">
       <Filter>ExternMB\Header</Filter>
     </ClInclude>
@@ -104,6 +107,12 @@
     </ClInclude>
     <ClInclude Include="..\..\private\MSkiaGraphicsData.h">
       <Filter>ExternMB\Header\private</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\utils\MD2DUtils.h">
+      <Filter>ExternMB\Header\utils</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\utils\MSkiaUtils.h">
+      <Filter>ExternMB\Header\utils</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -140,9 +149,6 @@
     <ClCompile Include="main.cpp">
       <Filter>Source</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\MD2DUtils.cpp">
-      <Filter>ExternMB\Source</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\private\RenderRule.cpp">
       <Filter>ExternMB\Source\private</Filter>
     </ClCompile>
@@ -157,6 +163,12 @@
     </ClCompile>
     <ClCompile Include="..\..\private\MSkiaGraphicsData.cpp">
       <Filter>ExternMB\Source\private</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\utils\MD2DUtils.cpp">
+      <Filter>ExternMB\Source\utils</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\utils\MSkiaUtils.cpp">
+      <Filter>ExternMB\Source\utils</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

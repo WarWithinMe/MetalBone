@@ -16,6 +16,11 @@
 #  pragma comment(lib, "usp10.lib")
 #endif
 
+#ifdef VLD
+#  include "vld.h"
+#  pragma comment(lib, "vld.lib")
+#endif
+
 #ifdef MB_DEBUG
 #include <iostream>
 #include <stdlib.h>

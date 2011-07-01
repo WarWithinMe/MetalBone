@@ -23,7 +23,7 @@ namespace MetalBone
         public:
             enum GraphicsBackend
             {
-                GDI,
+                GDI, // GDI is not available for now.
                 Direct2D,
                 Skia
                 // We could also add AGG, Cario...

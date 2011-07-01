@@ -4,7 +4,7 @@
 #include <unordered_map>
 
 #ifdef MB_USE_D2D
-#  include "MD2DUtils.h"
+#  include "utils/MD2DUtils.h"
 #  include <d2d1.h>
 #  include <d2d1helper.h>
 #endif
@@ -706,24 +706,6 @@ namespace MetalBone
     {
 #ifdef MB_USE_SKIA
         SkShader* brush = (SkShader*)linearBrush;
-        // Create a new one if we need to.
-        if(brush == 0)
-        {
-            SkPoint   pts[2]; pts[0].set(0.f, 0.f); pts[1].set(1.f, 0.f);
-            SkColor*  colors = new SkColor[linear->stopCount];
-            SkScalar* pos    = new SkScalar[linear->stopCount];
-
-            for(int i = 0; i < linear->stopCount; ++i)
-            {
-                colors[i] = linear->stops[i].argb;
-                pos[i]    = linear->stops[i].pos;
-            }
-
-            brush = SkGradientShader::CreateLinear(pts, colors, pos,
-                linear->stopCount, SkShader::kClamp_TileMode);
-            delete[] colors;
-            delete[] pos;
-        }
 
         // Transform
         // Calc the positions.

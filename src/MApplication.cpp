@@ -783,7 +783,7 @@ namespace MetalBone
         case WM_ACTIVATEAPP:
         case WM_MOUSELEAVE:
             {
-                bool leaved = msg == WM_MOUSEMOVE ? true : wparam == FALSE;
+                bool leaved = msg == WM_MOUSELEAVE ? true : wparam == FALSE;
                 if(leaved)
                 {
                     if(window->m_windowExtras->bTrackingMouse)
