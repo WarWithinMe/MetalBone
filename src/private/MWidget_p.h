@@ -40,6 +40,8 @@ namespace MetalBone
         MWidget*               mouseGrabber;
         int                    lastMouseX;
         int                    lastMouseY;
+        int                    clientAreaPosX;
+        int                    clientAreaPosY;
         bool                   bTrackingMouse;
 
         inline void grabMouse(MWidget*);
@@ -56,7 +58,8 @@ namespace MetalBone
         m_graphicsData(0),bTrackingMouse(false),
         widgetUnderMouse(0), currWidgetUnderMouse(0),
         mouseGrabber(0), focusedWidget(0),
-        lastMouseX(0), lastMouseY(0){}
+        lastMouseX(0), lastMouseY(0),
+        clientAreaPosX(0), clientAreaPosY(0){}
     inline void WindowExtras::clearUpdateQueue()
     {
         updateWidgets.clear();

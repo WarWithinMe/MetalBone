@@ -270,7 +270,7 @@ namespace MetalBone
     {
         if(isShown)
         {
-            ::SetWindowPos(winHandle, NULL, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+            ::SetWindowPos(winHandle, NULL, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
             return;
         }
 
@@ -290,7 +290,7 @@ namespace MetalBone
             graphicsData->resize(width,height);
         }
 
-        ::SetWindowPos(winHandle, HWND_TOPMOST, x, y, width, height, SWP_NOREDRAW | SWP_SHOWWINDOW);
+        ::SetWindowPos(winHandle, HWND_TOPMOST, x, y, width, height, SWP_NOREDRAW | SWP_SHOWWINDOW | SWP_NOACTIVATE);
 
         MRect drawRect(0,0,width,height);
         MGraphics graphics(graphicsData);
@@ -317,18 +317,18 @@ namespace MetalBone
     {
         if(toolTipWidget == 0)
         {
-            HWND tooltipWnd = ::CreateWindowExW(WS_EX_TOPMOST,
+            HWND tooltipWnd = ::CreateWindowExW(WS_EX_TOPMOST | WS_EX_NOACTIVATE,
                 TOOLTIPS_CLASSW, 0,
                 WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
                 CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,
                 0,0,mApp->getAppHandle(),0);
 
             TOOLINFOW ti = {};
-            ti.cbSize   = sizeof(TOOLINFOW);
-            ti.uFlags   = TTF_ABSOLUTE | TTF_IDISHWND;
-            ti.hwnd     = tooltipWnd;
-            ti.uId      = (UINT_PTR)tooltipWnd;
-            ti.lpszText = L"";
+            ti.cbSize    = sizeof(TOOLINFOW);
+            ti.uFlags    = TTF_ABSOLUTE | TTF_IDISHWND;
+            ti.hwnd      = tooltipWnd;
+            ti.uId       = (UINT_PTR)tooltipWnd;
+            ti.lpszText  = L"";
 
             ::SendMessageW(tooltipWnd, TTM_ADDTOOLW, 0, (LPARAM)&ti);
             ::SendMessageW(tooltipWnd, TTM_SETMAXTIPWIDTH, 0, (LPARAM)MAX_TOOLTIP_WIDTH);

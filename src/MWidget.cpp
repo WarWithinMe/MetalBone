@@ -309,16 +309,20 @@ namespace MetalBone
             m_parent = 0;
         }
 
-        MRect rect(0,0,l_width,l_height);
-        generateStyleFlags(m_windowFlags,&winStyle,&winExStyle);
-        if(!isLayered)
-            ::AdjustWindowRectEx(&rect,winStyle,false,winExStyle);
+        MRect rect(0, 0, l_width, l_height);
+        generateStyleFlags(m_windowFlags, &winStyle, &winExStyle);
+        if(!isLayered) {
+            ::AdjustWindowRectEx(&rect, winStyle, false, winExStyle);
+        }
+
+        m_windowExtras->clientAreaPosX = -rect.left;
+        m_windowExtras->clientAreaPosY = -rect.top;
         
         m_windowExtras->m_wndHandle = CreateWindowExW(winExStyle,
             gMWidgetClassName,
             m_windowExtras->m_windowTitle.c_str(),
             winStyle,
-            l_x,l_y, // Remark: we should offset a bit, due to the border frame.
+            l_x,l_y,
             rect.width(), rect.height(),
             parentHandle,NULL,
             mApp->getAppHandle(), NULL);

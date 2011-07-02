@@ -324,13 +324,13 @@ namespace MetalBone
                 ::UpdateLayeredWindowIndirect(window->m_windowExtras->m_wndHandle,&info);
             } else
             {
-                RECT  wndRect     = { newX, newY, newX, newY};
+                RECT  wndRect     = { newX, newY, newX, newY };
                 DWORD winStyle    = 0;
                 DWORD winExStyle  = 0;
                 generateStyleFlags(window->m_windowFlags, &winStyle, &winExStyle);
                 ::AdjustWindowRectEx(&wndRect, winStyle, false, winExStyle);
                 window->l_x = wndRect.left;
-                window->l_y = wndRect.right;
+                window->l_y = wndRect.top;
             }
             return 0;
         }
@@ -370,8 +370,8 @@ namespace MetalBone
                         // simulate the Non-Client area.
                         
                         MWidget* currWidgetUnderMouse = xtr->widgetUnderMouse;
-                        int xpos = GET_X_LPARAM(lparam) - window->x();
-                        int ypos = GET_Y_LPARAM(lparam) - window->y();
+                        int xpos = GET_X_LPARAM(lparam) - window->x() - xtr->clientAreaPosX;
+                        int ypos = GET_Y_LPARAM(lparam) - window->y() - xtr->clientAreaPosY;
 
                         // We will have to find the widget every time, if the
                         // widget is not WR_Normal. Because we do not store its
@@ -879,6 +879,22 @@ namespace MetalBone
                 }
             }
             RET_DEFPROC;
+        case WM_STYLECHANGED:
+            if((window->m_windowFlags & WF_AllowTransparency) == 0)
+            {
+                xtr->clientAreaPosX = 0;
+                xtr->clientAreaPosY = 0;
+            } else {
+                DWORD winStyle    = 0;
+                DWORD winExStyle  = 0;
+                MRect rect(0, 0, window->width(), window->height());
+                generateStyleFlags(window->m_windowFlags, &winStyle, &winExStyle);
+                ::AdjustWindowRectEx(&rect, winStyle, false, winExStyle);
+
+                xtr->clientAreaPosX = -rect.left;
+                xtr->clientAreaPosY = -rect.top;
+            }
+            
 
         default: RET_DEFPROC;
         }
