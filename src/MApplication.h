@@ -6,9 +6,9 @@
 
 #define mApp MetalBone::MApplication::instance()
 
+struct IWICImagingFactory;
 #ifdef MB_USE_D2D
 struct IDWriteFactory;
-struct IWICImagingFactory;
 struct ID2D1Factory;
 #endif
 
@@ -76,10 +76,12 @@ namespace MetalBone
             void loadStyleSheetFromFile(const std::wstring& path, bool isAscii = true);
             MStyleSheetStyle* getStyleSheet();
 
+            // We use WIC to decode images.
+            IWICImagingFactory* getWICImagingFactory();
+
 #ifdef MB_USE_D2D
             ID2D1Factory*       getD2D1Factory();
             IDWriteFactory*     getDWriteFactory();
-            IWICImagingFactory* getWICImagingFactory();
 #endif
 
             inline unsigned int winDpi() const;

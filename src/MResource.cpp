@@ -840,7 +840,10 @@ namespace MetalBone
             target = 0;
             if(modifier == 0 || virtualKey == 0)
                 return;
-            unsigned int mod = modifier & (~KeypadModifier) | MOD_NOREPEAT;
+            unsigned int mod = modifier & (~KeypadModifier);
+#if(WINVER >= 0x0601)
+            mod |= MOD_NOREPEAT;
+#endif
             ::RegisterHotKey(0,getKey(),mod,virtualKey);
         } else {
             ::UnregisterHotKey(0,getKey());
@@ -903,7 +906,7 @@ namespace MetalBone
 
     bool MResource::open(const std::wstring& fileName)
     {
-        ResourceCache::const_iterator iter;
+        ResourceCache::iterator iter;
         if(fileName.at(0) == L':' && fileName.at(1) == L'/')
         {
             std::wstring temp(fileName,2,fileName.length() - 2);
@@ -911,7 +914,7 @@ namespace MetalBone
         } else {
             iter = cache.find(fileName);
         }
-        if(iter == cache.cend())
+        if(iter == cache.end())
             return false;
 
         buffer = iter->second->buffer;
@@ -921,15 +924,15 @@ namespace MetalBone
 
     void MResource::clearCache()
     {
-        ResourceCache::const_iterator it    = cache.cbegin();
-        ResourceCache::const_iterator itEnd = cache.cend();
+        ResourceCache::iterator it    = cache.begin();
+        ResourceCache::iterator itEnd = cache.end();
         while(it != itEnd) { delete it->second; ++it; }
         cache.clear();
     }
 
     bool MResource::addFileToCache(const std::wstring& filePath)
     {
-        if(cache.find(filePath) != cache.cend())
+        if(cache.find(filePath) != cache.end())
             return false;
 
         HANDLE resFile = ::CreateFileW(filePath.c_str(),GENERIC_READ,

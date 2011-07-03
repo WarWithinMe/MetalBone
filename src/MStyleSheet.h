@@ -75,12 +75,16 @@ namespace MetalBone
 
                 // If x or y not exist, return INT_MAX.
                 // If others not exist, return -1.
-                int      getGeometry(Geometry);
-                MSize    getStringSize(const std::wstring&, int maxWidth = INT_MAX);
-                MRect    getContentMargin();
-                MCursor* getCursor();
+                int             getGeometry(Geometry);
+                MSize           getStringSize(const std::wstring&, int maxWidth = INT_MAX);
+                MRect           getContentMargin();
+                MCursor*        getCursor();
 
-                bool opaqueBackground() const;
+                bool            opaqueBackground()   const;
+
+                // Returns a frameIndex. If someone use this index as draw() parameter,
+                // every background will be in the first frame.
+                unsigned int    getFrameCount()      const;
 
                 inline void draw(MGraphics&   graphcis,
                           const MRect&        drawRect,

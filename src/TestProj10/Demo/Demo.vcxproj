@@ -40,11 +40,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>C:\Program Files\Visual Leak Detector\include;$(SolutionDir)\..;$(SolutionDir)\..\3rd\skia\images;$(SolutionDir)\..\3rd\skia\effects;$(SolutionDir)\..\3rd\skia\core;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\Work\C++\MetalBone\MetalBone\lib\skia\Debug;C:\Program Files\Visual Leak Detector\lib\Win32;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(SolutionDir)\..\..\lib\skia\debug;C:\Program Files\Visual Leak Detector\lib\Win32;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <IncludePath>C:\Program Files\Visual Leak Detector\include;$(SolutionDir)\..;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)\..\..\lib\skia\release;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -73,7 +74,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <DelayLoadDLLs>windowscodecs;d2d1;dwrite;</DelayLoadDLLs>
+      <DelayLoadDLLs>d2d1;dwrite;</DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

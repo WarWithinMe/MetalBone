@@ -553,7 +553,10 @@ namespace MetalBone
 
     MSize MBrushHandle::bitmapSize()
     {
-        M_ASSERT(data->type == MBrushHandle::Bitmap);
+        mWarning(data->type != MBrushHandle::Bitmap,
+            L"[Warning]Getting bitmap size of a brush, which is not a bitmap brush.");
+
+        if(data->type != MBrushHandle::Bitmap) return MSize();
 
         switch(mApp->getGraphicsBackend())
         {
@@ -636,6 +639,14 @@ namespace MetalBone
                     return 0;
                 break;
 #endif
+        }
+
+        if(data->brush == 0 && type() != Solid)
+        {
+            // If we still have a null brush here, we change it to solid brush
+            // So that the user can still draw.
+            data->type = Solid;
+            return getBrush();
         }
 
         return data->brush;
@@ -902,17 +913,9 @@ namespace MetalBone
     {
 #ifdef MB_USE_SKIA
         SkBitmap* bmp = new SkBitmap();
-        // COM
-        HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-        if(FAILED(hr)) return bmp;
-
-        IWICImagingFactory*    factory    = 0;
+        IWICImagingFactory*    factory    = mApp->getWICImagingFactory();
         IWICBitmapDecoder*     decoder    = 0;
         IWICBitmapFrameDecode* frame	  = 0;
-
-        // Create Factory
-        if(FAILED( CoCreateInstance(CLSID_WICImagingFactory,NULL,
-            CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&factory)) )) goto END;
 
         // Create Decoder.
         if(filePath.at(0) == L':')  // Image file is inside MResources.
@@ -922,12 +925,12 @@ namespace MetalBone
             {
                 IWICStream* stream = 0;
                 if(FAILED(factory->CreateStream(&stream))) goto END;
-                if(FAILED(stream->InitializeFromMemory((WICInProcPointer)res.byteBuffer(),res.length())))
+                if(FAILED(stream->InitializeFromMemory((BYTE*)res.byteBuffer(),res.length())))
                 {
                     SafeRelease(stream);
                     goto END;
                 }
-                hr = factory->CreateDecoderFromStream(stream,
+                HRESULT hr = factory->CreateDecoderFromStream(stream,
                     NULL,WICDecodeMetadataCacheOnDemand,&decoder);
                 SafeRelease(stream);
                 if(FAILED(hr)) goto END;
@@ -973,8 +976,6 @@ namespace MetalBone
         }
 
         END:
-            CoUninitialize();
-            SafeRelease(factory);
             SafeRelease(decoder);
 
         return bmp;

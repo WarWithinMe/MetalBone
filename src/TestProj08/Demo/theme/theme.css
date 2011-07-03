@@ -148,22 +148,22 @@ ToolTipWidget {
 }
 
 MetalBone--MCheckBox {
-	width:43;
-	height:24;
+	width:86;
+	height:48;
 }
 
 MetalBone--MCheckBox :checked{
-	background : url(theme\CheckBox.png) 8 rect(43,0,43,192) opaque single-loop;
+	background : url(theme\CheckBox.png) 8 rect(86,0,86,384) opaque single-loop;
 }
 
 MetalBone--MCheckBox :unchecked{
-	background : url(theme\CheckBox.png) 8 rect(0,0,43,192) opaque single-loop;
+	background : url(theme\CheckBox.png) 8 rect(0,0,86,384) opaque single-loop;
 }
 
 MetalBone--MCheckBox :checked:disabled{
-	background : url(theme\CheckBox.png) rect(43,192,43,24) opaque single-loop;
+	background : url(theme\CheckBox.png) rect(86,384,86,48) opaque single-loop;
 }
 
 MetalBone--MCheckBox :unchecked:disabled{
-	background : url(theme\CheckBox.png) rect(0,192,43,24) opaque single-loop;
+	background : url(theme\CheckBox.png) rect(0,384,86,48) opaque single-loop;
 }

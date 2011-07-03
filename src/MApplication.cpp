@@ -7,9 +7,9 @@
 #ifdef MB_USE_D2D
 #  include <d2d1.h>
 #  include <dwrite.h>
-#  include <wincodec.h>
 #endif
 
+#include <wincodec.h>
 #include <fstream>
 
 namespace MetalBone
@@ -50,12 +50,18 @@ namespace MetalBone
         wc.lpszClassName = gMWidgetClassName;
         RegisterClassW(&wc);
 
+        // COM
+        HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        M_ASSERT_X(SUCCEEDED(hr), "Cannot initialize COM!", "MApplicationData()");
+
+        // WIC
+        hr = CoCreateInstance(CLSID_WICImagingFactory,NULL,
+            CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&(mImpl->wicFactory)));
+        M_ASSERT_X(SUCCEEDED(hr), "Cannot create WIC Component. FATAL!", "MApplication()");
+
 #ifdef MB_USE_D2D
         if(graphicsBackend == Direct2D)
         {
-            // COM
-            HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-            M_ASSERT_X(SUCCEEDED(hr), "Cannot initialize COM!", "MApplicationData()");
             // D2D
 #  ifdef MB_DEBUG_D2D
             D2D1_FACTORY_OPTIONS opts;
@@ -69,20 +75,17 @@ namespace MetalBone
             DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
                 __uuidof(IDWriteFactory),
                 reinterpret_cast<IUnknown**>(&mImpl->dwriteFactory));
-            // WIC
-            hr = CoCreateInstance(CLSID_WICImagingFactory,NULL,
-                CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&(mImpl->wicFactory)));
-            M_ASSERT_X(SUCCEEDED(hr), "Cannot create WIC Component. FATAL!", "MApplication()");
         }
 #endif
     }
 
     MApplication::~MApplication()
     {
+        SafeRelease(mImpl->wicFactory);
+
 #ifdef MB_USE_D2D
         if(graphicsBackend == Direct2D)
         {
-            SafeRelease(mImpl->wicFactory);
             SafeRelease(mImpl->d2d1Factory);
             SafeRelease(mImpl->dwriteFactory);
         }
@@ -92,17 +95,15 @@ namespace MetalBone
         MApplicationData::instance = 0;
         s_instance = 0;
 
-#ifdef MB_USE_D2D
         CoUninitialize();
-#endif
     }
 
 #ifdef MB_USE_D2D
     ID2D1Factory*             MApplication::getD2D1Factory()        { return mImpl->d2d1Factory;     }
     IDWriteFactory*           MApplication::getDWriteFactory()      { return mImpl->dwriteFactory;   }
-    IWICImagingFactory*       MApplication::getWICImagingFactory()  { return mImpl->wicFactory;      }
 #endif
 
+    IWICImagingFactory*       MApplication::getWICImagingFactory()  { return mImpl->wicFactory;      }
     const std::set<MWidget*>& MApplication::topLevelWindows() const { return mImpl->topLevelWindows; }
     HINSTANCE                 MApplication::getAppHandle()    const { return mImpl->appHandle;       }
     MStyleSheetStyle*         MApplication::getStyleSheet()         { return &(mImpl->ssstyle);      }
@@ -314,14 +315,20 @@ namespace MetalBone
                 window->l_x = newX;
                 window->l_y = newY;
 
-                BLENDFUNCTION blend = {AC_SRC_OVER,0,255,AC_SRC_ALPHA};
-                POINT windowPos = { newX, newY };
+                // We don't have UpdateLayeredWindowIndirect() in WinXP
+#if (_WIN32_WINNT < 6000) // Vista == 6000
+                ::MoveWindow(window->m_windowExtras->m_wndHandle, newX, newY,
+                    window->width(), window->height(), false);
+#else
+                BLENDFUNCTION blend     = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+                POINT         windowPos = { newX, newY };
                 UPDATELAYEREDWINDOWINFO info = {};
                 info.cbSize   = sizeof(UPDATELAYEREDWINDOWINFO);
                 info.dwFlags  = ULW_ALPHA;
                 info.pblend   = &blend;
                 info.pptDst   = &windowPos;
                 ::UpdateLayeredWindowIndirect(window->m_windowExtras->m_wndHandle,&info);
+#endif
             } else
             {
                 RECT  wndRect     = { newX, newY, newX, newY };
@@ -666,7 +673,7 @@ namespace MetalBone
                     ::SendMessage(hwnd,WM_NCHITTEST,wparam,lparam);
 
                 MWidget* cw = xtr->mouseGrabber ? xtr->mouseGrabber : xtr->widgetUnderMouse;
-                if(cw != 0)
+                if(cw != 0 && !cw->isDisabled())
                 {
                     if(cw->focusPolicy() == ClickFocus)
                         cw->setFocus();
@@ -754,7 +761,7 @@ namespace MetalBone
                     ::SendMessage(hwnd,WM_MOUSEMOVE,wparam,lparam);
 
                 MWidget* cw = xtr->mouseGrabber ? xtr->mouseGrabber : xtr->widgetUnderMouse;
-                if(cw != 0)
+                if(cw != 0 && !cw->isDisabled())
                 {
                     MouseButton btn = (msg == WM_LBUTTONDBLCLK ? LeftButton :
                         (msg == WM_RBUTTONDBLCLK ? RightButton : MiddleButton));

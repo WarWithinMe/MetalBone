@@ -67,10 +67,16 @@ public:
 
 	void Emit() const
 	{
+#if (_MSC_VER < 1600)
+        DelegateIterator i = (DelegateList*)&delegateList->begin();
+		DelegateIterator e = (DelegateList*)&delegateList->end();
+        while(i != e) { (*i)(); ++i; }
+#else
 		for (DelegateIterator i = delegateList.begin(); i != delegateList.end(); ++i)
 		{
 			(*i)();
 		}
+#endif
 	}
 
 	void operator() () const
@@ -128,10 +134,16 @@ public:
 
 	void Emit( Param1 p1 ) const
 	{
+#if (_MSC_VER < 1600)
+        DelegateIterator i = (DelegateList*)&delegateList->begin();
+        DelegateIterator e = (DelegateList*)&delegateList->end();
+        while(i != e) { (*i)(p1); ++i; }
+#else
 		for (DelegateIterator i = delegateList.begin(); i != delegateList.end(); ++i)
 		{
 			(*i)( p1 );
 		}
+#endif
 	}
 
 	void operator() ( Param1 p1 ) const
@@ -189,10 +201,16 @@ public:
 
 	void Emit( Param1 p1, Param2 p2 ) const
 	{
+#if (_MSC_VER < 1600)
+        DelegateIterator i = (DelegateList*)&delegateList->begin();
+        DelegateIterator e = (DelegateList*)&delegateList->end();
+        while(i != e) { (*i)(p1,p2); ++i; }
+#else
 		for (DelegateIterator i = delegateList.begin(); i != delegateList.end(); ++i)
 		{
 			(*i)( p1, p2 );
 		}
+#endif
 	}
 
 	void operator() ( Param1 p1, Param2 p2 ) const
@@ -250,10 +268,16 @@ public:
 
 	void Emit( Param1 p1, Param2 p2, Param3 p3 ) const
 	{
+#if (_MSC_VER < 1600)
+        DelegateIterator i = (DelegateList*)&delegateList->begin();
+        DelegateIterator e = (DelegateList*)&delegateList->end();
+        while(i != e) { (*i)(p1,p2,p3); ++i; }
+#else
 		for (DelegateIterator i = delegateList.begin(); i != delegateList.end(); ++i)
 		{
 			(*i)( p1, p2, p3 );
 		}
+#endif
 	}
 
 	void operator() ( Param1 p1, Param2 p2, Param3 p3 ) const
@@ -311,10 +335,16 @@ public:
 
 	void Emit( Param1 p1, Param2 p2, Param3 p3, Param4 p4 ) const
 	{
+#if (_MSC_VER < 1600)
+        DelegateIterator i = (DelegateList*)&delegateList->begin();
+        DelegateIterator e = (DelegateList*)&delegateList->end();
+        while(i != e) { (*i)(p1,p2,p3,p4); ++i; }
+#else
 		for (DelegateIterator i = delegateList.begin(); i != delegateList.end(); ++i)
 		{
 			(*i)( p1, p2, p3, p4 );
 		}
+#endif
 	}
 
 	void operator() ( Param1 p1, Param2 p2, Param3 p3, Param4 p4 ) const
@@ -372,10 +402,16 @@ public:
 
 	void Emit( Param1 p1, Param2 p2, Param3 p3, Param4 p4, Param5 p5 ) const
 	{
+#if (_MSC_VER < 1600)
+        DelegateIterator i = (DelegateList*)&delegateList->begin();
+        DelegateIterator e = (DelegateList*)&delegateList->end();
+        while(i != e) { (*i)(p1,p2,p3,p4,p5); ++i; }
+#else
 		for (DelegateIterator i = delegateList.begin(); i != delegateList.end(); ++i)
 		{
 			(*i)( p1, p2, p3, p4, p5 );
 		}
+#endif
 	}
 
 	void operator() ( Param1 p1, Param2 p2, Param3 p3, Param4 p4, Param5 p5 ) const
@@ -433,10 +469,16 @@ public:
 
 	void Emit( Param1 p1, Param2 p2, Param3 p3, Param4 p4, Param5 p5, Param6 p6 ) const
 	{
+#if (_MSC_VER < 1600)
+        DelegateIterator i = (DelegateList*)&delegateList->begin();
+        DelegateIterator e = (DelegateList*)&delegateList->end();
+        while(i != e) { (*i)(p1,p2,p3,p4,p5,p6); ++i; }
+#else
 		for (DelegateIterator i = delegateList.begin(); i != delegateList.end(); ++i)
 		{
 			(*i)( p1, p2, p3, p4, p5, p6 );
 		}
+#endif
 	}
 
 	void operator() ( Param1 p1, Param2 p2, Param3 p3, Param4 p4, Param5 p5, Param6 p6 ) const
@@ -494,10 +536,16 @@ public:
 
 	void Emit( Param1 p1, Param2 p2, Param3 p3, Param4 p4, Param5 p5, Param6 p6, Param7 p7 ) const
 	{
+#if (_MSC_VER < 1600)
+        DelegateIterator i = (DelegateList*)&delegateList->begin();
+        DelegateIterator e = (DelegateList*)&delegateList->end();
+        while(i != e) { (*i)(p1,p2,p3,p4,p5,p6,p7); ++i; }
+#else
 		for (DelegateIterator i = delegateList.begin(); i != delegateList.end(); ++i)
 		{
 			(*i)( p1, p2, p3, p4, p5, p6, p7 );
 		}
+#endif
 	}
 
 	void operator() ( Param1 p1, Param2 p2, Param3 p3, Param4 p4, Param5 p5, Param6 p6, Param7 p7 ) const
@@ -555,10 +603,16 @@ public:
 
 	void Emit( Param1 p1, Param2 p2, Param3 p3, Param4 p4, Param5 p5, Param6 p6, Param7 p7, Param8 p8 ) const
 	{
+#if (_MSC_VER < 1600)
+        DelegateIterator i = (DelegateList*)&delegateList->begin();
+        DelegateIterator e = (DelegateList*)&delegateList->end();
+        while(i != e) { (*i)(p1,p2,p3,p4,p5,p6,p7,p8); ++i; }
+#else
 		for (DelegateIterator i = delegateList.begin(); i != delegateList.end(); ++i)
 		{
 			(*i)( p1, p2, p3, p4, p5, p6, p7, p8 );
 		}
+#endif
 	}
 
 	void operator() ( Param1 p1, Param2 p2, Param3 p3, Param4 p4, Param5 p5, Param6 p6, Param7 p7, Param8 p8 ) const

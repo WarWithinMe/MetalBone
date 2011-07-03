@@ -1,5 +1,10 @@
 #pragma once
 
+// We can only use MSVC to build MetalBone, because GCC will
+// produce messy RTTI infomation of a class. It is possible to
+// use GCC though, but we won't be able to define CSS for a 
+// specific class
+
 /* ++++++++++ Switches ++++++++++ */
 
 // -Define METALBONE_LIBRARY and MB_DECL_EXPORT to build metalbone
@@ -12,11 +17,6 @@
 #define STRIP_METALBONE_NAMESPACE
 #define MB_DEBUGBREAK_INSTEADOF_ABORT
 #define VLD // Virtual Leak Detect
-
-// Use MSVC to compile, currently only MSVC is supported
-#ifndef MSVC
-#  define MSVC
-#endif
 
 // === Something about Direct2D ===
 // -1. When using Direct2D to draw a bitmap repeatly, you should put
@@ -59,9 +59,18 @@
 #  define _UNICODE
 #endif
 
+#if (_WIN32_WINNT < 6000) // Vista == 6000
+#  ifdef MB_USE_D2D
+#    undef MB_USE_D2D
+#  endif
+#endif
+
 #ifdef MB_USE_SKIA
 #  define SK_BUILD_FOR_WIN
 #  define SK_IGNORE_STDINT_DOT_H // See 3rd/skia/core/SkTypes.h
+#  define SK_CAN_USE_FLOAT
+#  define SK_SCALAR_IS_FLOAT
+#  define SK_BUILD_FOR_WIN32
 #endif
 
 #include <windows.h>

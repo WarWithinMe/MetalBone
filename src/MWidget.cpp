@@ -37,7 +37,7 @@ namespace MetalBone
         m_attributes(WA_AutoBG | WA_NonChildOverlap),
         m_windowFlags(WF_Widget),
         m_windowState(WindowNoState),
-        m_widgetState(MWS_Hidden),lastPseudo(0),
+        m_widgetState(MWS_Hidden),lastPseudo(CSS::PC_Default),
         e_widgetRole(WR_Normal),
         fp(NoFocus),m_toolTip(0),m_cursor(0)
     {

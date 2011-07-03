@@ -236,7 +236,7 @@ namespace MetalBone
 
             // These function SHOULD only be used by StyleSheetStyle.
             // The StyleSheetStyle calls this to determine which RenderRule is needed.
-            virtual unsigned int getLastWidgetPseudo() const;
+            virtual unsigned int getLastWidgetPseudo();
             virtual unsigned int getWidgetPseudo(bool markAsLast = false, unsigned int initPseudo = 0);
             void ssSetOpaque(bool opaque);
 
@@ -260,6 +260,9 @@ namespace MetalBone
             virtual void mouseMoveEvent(MMouseEvent*)   {}
             // mousePressEvent / mouseReleaseEvent / mouseDClickEvent is ignored by default.
             virtual void mousePressEvent(MMouseEvent*)  {}
+            // Even the user release mouse button outside of the 
+            // widget, The widget which pressed by the user will still get
+            // this mouseReleaseEvent();
             virtual void mouseReleaseEvent(MMouseEvent*){}
             virtual void mouseDClickEvent(MMouseEvent*) {}
             virtual void keyPressEvent(MKeyEvent*)      {}
@@ -356,7 +359,7 @@ namespace MetalBone
     inline void         MWidget::repaint()                            { repaint(0,0,l_width,l_height); }
     inline void         MWidget::setWidgetRole(WidgetRole wr)         { e_widgetRole = wr; }
     inline WidgetRole   MWidget::widgetRole() const                   { return (WidgetRole)e_widgetRole; }
-    inline unsigned int MWidget::getLastWidgetPseudo() const          { return lastPseudo;         }
+    inline unsigned int MWidget::getLastWidgetPseudo()                { return lastPseudo;         }
     inline void         MWidget::updateSSAppearance()                 { mApp->getStyleSheet()->updateWidgetAppearance(this); }
     inline void         MWidget::setObjectName(const std::wstring& n) { m_objectName = n;          }
     inline bool         MWidget::testAttributes(WidgetAttributes a) const { return (m_attributes & a) != 0; }

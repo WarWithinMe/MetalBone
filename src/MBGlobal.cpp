@@ -1,7 +1,8 @@
 #include "MBGlobal.h"
 
+#pragma comment(lib, "windowscodecs.lib") // WIC
+
 #ifdef MB_USE_D2D
-#  pragma comment(lib, "windowscodecs.lib") // WIC
 #  pragma comment(lib, "d2d1.lib")          // Direct2D
 #  pragma comment(lib, "dwrite.lib")        // DirectWrite
 #  pragma comment(lib, "Delayimp.lib")

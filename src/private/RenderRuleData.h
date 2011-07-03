@@ -52,8 +52,9 @@ namespace MetalBone
 
                 inline bool         hasMargin()          const;
                 inline bool         hasPadding()         const;
+
+                inline unsigned int getFrameCount()      const;
                 inline bool         isBGSingleLoop()     const;
-                inline unsigned int getTotalFrameCount() const;
 
             public:
                 vector<BackgroundRenderObject*> backgroundROs;
@@ -66,7 +67,7 @@ namespace MetalBone
                 MRectU*                         padding;
 
                 int    refCount;
-                int    totalFrameCount;
+                int    resetFrame;
                 bool   opaqueBackground;
 
             private:
@@ -99,14 +100,20 @@ namespace MetalBone
             // we can recheck the background property again. But if a brush is recreated
             // at the same position, we won't know.
             MBrushHandle   brush;
-            // The x, y, width and height is not checked when creating the 
-            // BackgroundRenderObject. It is mainly because we cannot create the
-            // D2D resources at that time. So one should check these values when
-            // drawing.
-            // These values are all 0. Or they're the RECT of the background image.
+
+            // If the user specified a RECT of (a part of) a image as this background image,
+            // then the x, y, width, height is that RECT. Otherwise they're all 0.
+            // If the background has multiple frames, the width and height are the size
+            // of each frame.
+            // Note that if the background is a gif image, these values will be all 0 too.
+            // Because even if the user specified the RECT, we ignore it. So someone should
+            // call MBrushHandle::bitmapSize() to determine the image's size.
             unsigned int   x, y, width, height;
             unsigned int   values;
-            unsigned short frameCount; // Do we need more frames?
+
+            // frameCount defaults to 1, if the user sets the frameCount,
+            // it should be other than one.
+            unsigned short frameCount;
             bool           infiniteLoop;
             bool           brushChecked;
         };
@@ -208,10 +215,10 @@ namespace MetalBone
         inline RenderRuleData::RenderRuleData():
             borderImageRO(0), borderRO(0), geoRO(0),
             textRO(0), cursor(0), margin(0), padding(0),
-            refCount(1), totalFrameCount(1), opaqueBackground(false){}
-        inline unsigned int RenderRuleData::getTotalFrameCount() const { return totalFrameCount; }
-        inline bool RenderRuleData::hasMargin()                  const { return margin != 0; }
-        inline bool RenderRuleData::hasPadding()                 const { return padding != 0; }
+            refCount(1), resetFrame(1), opaqueBackground(false){}
+        inline unsigned int RenderRuleData::getFrameCount()   const { return resetFrame;   }
+        inline bool RenderRuleData::hasMargin()               const { return margin  != 0; }
+        inline bool RenderRuleData::hasPadding()              const { return padding != 0; }
         inline bool RenderRuleData::isBGSingleLoop() const
         {
             for(unsigned int i = 0; i < backgroundROs.size(); ++i)

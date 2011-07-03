@@ -15,6 +15,7 @@
 #  include "utils/MSkiaUtils.h"
 #endif
 #include <algorithm>
+#include <wincodec.h>
 
 namespace MetalBone
 {
@@ -630,32 +631,82 @@ namespace MetalBone
         *forceOpaque = false;
         const CssValue& brushValue = values.at(0);
         BackgroundRenderObject* newObject = new BackgroundRenderObject();
-        if(brushValue.type == CssValue::Uri) {
+
+        bool clearRectData = true;
+        size_t index = 1;
+
+        if(brushValue.type == CssValue::Uri)
+        {
             newObject->brush = MGraphicsResFactory::createBrush(brushValue.getString());
+
+            // If the image is gif format. We check its frame count.
+            const wstring* uri = brushValue.data.vstring;
+            wstring ex = uri->substr(uri->size() - 3);
+            transform(ex.begin(),ex.end(),ex.begin(),::tolower);
+            if(ex.find(L"gif") == 0)
+            {
+                IWICImagingFactory*  factory  = mApp->getWICImagingFactory();
+                IWICBitmapDecoder*   decoder  = 0;
+                IWICStream*          stream   = 0;
+                HRESULT hr;
+
+                if(uri->at(0) == L':')  // Image file is inside MResources.
+                {
+                    MResource res;
+                    if(res.open(*uri)) {
+                        hr = factory->CreateStream(&stream);
+                        if(SUCCEEDED(hr)) {
+                            hr = stream->InitializeFromMemory((BYTE*)res.byteBuffer(), res.length());
+                        }
+                        if(SUCCEEDED(hr)) {
+                            hr = factory->CreateDecoderFromStream(stream,
+                                NULL, WICDecodeMetadataCacheOnLoad, &decoder);
+                        }
+                    }
+                } else {
+                    hr = factory->CreateDecoderFromFilename(uri->c_str(), NULL,
+                            GENERIC_READ, WICDecodeMetadataCacheOnLoad, &decoder);
+                }
+
+                unsigned int frameCount = 0;
+                if(SUCCEEDED(hr)) decoder->GetFrameCount(&frameCount);
+                newObject->frameCount = frameCount;
+                SafeRelease(stream);
+                SafeRelease(decoder);
+            } else {
+                // If the background is bitmap and is not gif format.
+                // then we keep the rectangle specified by the user.
+                clearRectData = false;
+            }
+
+            // Frame Count
+            if(values.size() > 1 && values.at(1).type == CssValue::Number)
+            {
+                int frameCount = values.at(1).getInt();
+                if(frameCount > 1) newObject->frameCount = frameCount;
+                ++index;
+            }
+
         } else if(brushValue.type == CssValue::LiearGradient) {
             newObject->brush = MGraphicsResFactory::createBrush(brushValue.getLinearGradientData());
         } else{
             newObject->brush = MGraphicsResFactory::createBrush(brushValue.getColor());
         }
 
-        size_t index = 1;
-        if(values.size() > 1 && values.at(1).type == CssValue::Number)
-        {
-            int frameCount = values.at(1).getInt();
-            if(frameCount > 1) newObject->frameCount = frameCount;
-            ++index;
-        }
         size_t valueCount = values.size();
         bool isPropAlignX = false;
         while(index < valueCount)
         {
             const CssValue& v = values.at(index);
-            if(v.type == CssValue::Identifier) {
+            if(v.type == CssValue::Identifier)
+            {
                 if(v.getIdentifier() == Value_Opaque)
                     *forceOpaque = true;
                 else
                     isPropAlignX = setBGROProperty(newObject, v.getIdentifier(), isPropAlignX);
-            } else if(v.type == CssValue::Rectangle) {
+
+            } else if(v.type == CssValue::Rectangle && !clearRectData)
+            {
                 const MRect& rect = v.getRect();
                 newObject->x      = rect.left;
                 newObject->y      = rect.top;
@@ -663,6 +714,11 @@ namespace MetalBone
                 newObject->height = rect.height();
             }
             ++index;
+        }
+
+        if(newObject->frameCount > 1) {
+            newObject->values &= (~Value_Repeat);
+            newObject->height /= newObject->frameCount;
         }
         return newObject;
     }
@@ -992,6 +1048,11 @@ namespace MetalBone
                 BackgroundOpaqueType bgOpaqueType = NonOpaque;
                 bool forceOpaque = false;
                 BackgroundRenderObject* o = createBackgroundRO(values, &forceOpaque);
+
+                // We now know how much frames the background has.
+                if(o->frameCount != 1 && resetFrame % o->frameCount != 0) 
+                    resetFrame *= o->frameCount;
+
                 if(forceOpaque || isBrushValueOpaque(values.at(0)))
                 {
                     if(testValue(o, Value_Margin))
@@ -1359,6 +1420,8 @@ namespace MetalBone
         { if(data) ++data->refCount; }
     bool RenderRule::opaqueBackground() const
         { return data == 0 ? false : data->opaqueBackground; }
+    unsigned int RenderRule::getFrameCount() const
+        { return data == 0 ? 1 : data->getFrameCount(); }
     void RenderRule::init()
         { M_ASSERT(data==0); data = new RenderRuleData(); }
     MCursor* RenderRule::getCursor()

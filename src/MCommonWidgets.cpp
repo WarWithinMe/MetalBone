@@ -1,13 +1,64 @@
 #include "MCommonWidgets.h"
 #include "MStyleSheet.h"
 #include "MGraphics.h"
+#include "MResource.h"
+#include "private/MApp_p.h"
 
 namespace MetalBone
 {
     using namespace std;
+    void MCheckBox::setText(const std::wstring& text)
+    {
+        if(text == s_text) return;
+
+        s_text = text;
+        repaint();
+    }
+
+    unsigned int MCheckBox::getLastWidgetPseudo()
+    {
+        // If MStyleSheetStyle draws our checkbox the first time.
+        // We return a value the same as getWidgetPseudo() to make
+        // it not animate our widget.
+        unsigned int last = MWidget::getLastWidgetPseudo();
+        if(last == CSS::PC_Default) return getWidgetPseudo(true);
+        last &= (~CSS::PC_Hover);
+        last &= (~CSS::PC_Focus);
+        return last;
+    }
+
+    unsigned int MCheckBox::getWidgetPseudo(bool markAsLast, unsigned int initP)
+    { 
+        initP |= b_isChecked ? CSS::PC_Checked : CSS::PC_Unchecked;
+        return MWidget::getWidgetPseudo(markAsLast, initP);
+    }
+    void MCheckBox::mousePressEvent(MMouseEvent* e) { e->accept(); }
+    void MCheckBox::mouseReleaseEvent(MMouseEvent* e)
+    {
+        if(e->getX() >= 0  && e->getX() <= width() &&
+            e->getY() >= 0 && e->getY() <= height())
+        {
+            e->accept();
+            setChecked(!b_isChecked);
+        }
+    }
+
+    void MCheckBox::setChecked(bool checked)
+    {
+        if(b_isChecked == checked) return;
+
+        b_isChecked = checked;
+        toggled.Emit();
+
+        updateSSAppearance();
+    }
+
+    void MCheckBox::doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT)
+        { mApp->getStyleSheet()->draw(this, widgetRectInRT, clipRectInRT, s_text); }
+
     void MButton::setChecked(bool checked)
     {
-        if(!b_checkable) return;
+        if(!b_checkable || checked == b_isChecked) return;
 
         b_isChecked = checked;
         toggled.Emit();
@@ -39,7 +90,10 @@ namespace MetalBone
     }
 
     unsigned int MButton::getWidgetPseudo(bool markAsLast, unsigned int initP)
-        { return MWidget::getWidgetPseudo(markAsLast, b_isChecked ? CSS::PC_Checked : initP); }
+    { 
+        initP |= b_isChecked ? CSS::PC_Checked : CSS::PC_Unchecked;
+        return MWidget::getWidgetPseudo(markAsLast, initP);
+    }
     void MButton::doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT)
         { mApp->getStyleSheet()->draw(this,widgetRectInRT,clipRectInRT,s_text); }
 

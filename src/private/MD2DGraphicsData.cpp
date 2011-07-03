@@ -39,9 +39,9 @@ namespace MetalBone
             renderTarget->QueryInterface(&gdiRT);
             gdiRT->GetDC(D2D1_DC_INITIALIZE_MODE_COPY,&dc);
 
-            BLENDFUNCTION blend = {AC_SRC_OVER,0,255,AC_SRC_ALPHA};
-            POINT sourcePos = {0, 0};
-            SIZE windowSize = {width, height};
+            BLENDFUNCTION blend      = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+            POINT         sourcePos  = { 0, 0 };
+            SIZE          windowSize = { width, height };
 
             UPDATELAYEREDWINDOWINFO info = {};
             info.cbSize   = sizeof(UPDATELAYEREDWINDOWINFO);
@@ -364,29 +364,23 @@ namespace MetalBone
                     }
                 }
             }
-
+            
             if(!bgro->brushChecked)
             {
                 bgro->brushChecked = true;
                 if(bgBrush.type() == MBrushHandle::Bitmap)
                 {
-                    MSize size = bgBrush.bitmapSize();
-                    bgro->frameCount = bgBrush.frameCount();
+                    MSize         size = bgBrush.bitmapSize();
+                    unsigned int& w    = bgro->width;
+                    unsigned int& h    = bgro->height;
 
-                    unsigned int& w = bgro->width;
-                    unsigned int& h = bgro->height;
                     // Make sure the size is valid.
-                    if(w == 0 || w + bgro->x > size.width())
+                    if(w == 0 || w + bgro->x > (unsigned int)size.width())
                         w = size.width() - bgro->x;
-                    if(h == 0 || h + bgro->y > size.height())
-                        h = size.height() - bgro->y;
-                    h /= bgro->frameCount;
 
-                    if(bgro->frameCount != 1)
-                    {
-                        if(rrdata->totalFrameCount % bgro->frameCount != 0)
-                            rrdata->totalFrameCount *= bgro->frameCount;
-                        bgro->values &= (~Value_Repeat);
+                    if(h == 0 || h + bgro->y > (unsigned int)size.height()) {
+                        h = size.height() - bgro->y;
+                        h /= bgro->frameCount;
                     }
                 }
             }

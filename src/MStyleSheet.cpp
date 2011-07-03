@@ -143,13 +143,6 @@ namespace MetalBone
             {
                 w->repaint();
                 w->ssSetOpaque(currRule.opaqueBackground());
-                // Mark if the widget has a animated background.
-                if(currRule->getTotalFrameCount() > 1)
-                {
-                    if(lastRule->getTotalFrameCount() == 1)
-                        mImpl->addAniWidget(w);
-                } else if(lastRule->getTotalFrameCount() > 1)
-                    mImpl->removeAniWidget(w);
 
                 // Remark: we can update the widget's property here.
             }
@@ -182,48 +175,54 @@ namespace MetalBone
     void MSSSPrivate::draw(MWidget* w, const MRect& wr, 
         const MRect& cr, const wstring& t, FixGDIAlpha fixAlpha, int frameIndex)
     {
-        RenderRule rule = getRenderRule(w,w->getWidgetPseudo(true));
-        if(!rule) return;
+        RenderRule lastRule = getRenderRule(w, w->getLastWidgetPseudo());
+        RenderRule currRule = getRenderRule(w, w->getWidgetPseudo(true));
+        if(!currRule) return;
 
-        unsigned int ruleFrameCount = rule->getTotalFrameCount();
-        unsigned int index = frameIndex >= 0 ? frameIndex : 0;
-        if(ruleFrameCount > 1 && frameIndex == -1)
-        {
-            AniWidgetIndexMap::iterator it = widgetAniBGIndexMap.find(w);
-            AniWidgetIndexMap::iterator itEnd = widgetAniBGIndexMap.end();
+        // Check Frame Index.
+        unsigned int ruleFrameCount = currRule.getFrameCount();
+        bool         singleLoop     = ruleFrameCount <= 1 ? true : currRule->isBGSingleLoop();
+        AniWidgetIndexMap::iterator it    = widgetAniBGIndexMap.find(w);
+        AniWidgetIndexMap::iterator itEnd = widgetAniBGIndexMap.end();
 
-            if(it != itEnd)
+        if(ruleFrameCount > 1) {
+            // Ani widget.
+            if(frameIndex == -1)
             {
-                index = it->second;
-                if(index >= ruleFrameCount)
+                // Get next frame index.
+                if(it != itEnd)
                 {
-                    if(rule->isBGSingleLoop())
+                    frameIndex = it->second; // We have cache the index.
+                } else
+                {
+                    if(!singleLoop || lastRule != currRule)
                     {
-                        index = ruleFrameCount - 1;
-                        removeAniWidget(w);
+                        // We only animate the widget:
+                        // If the widget is not single looped.
+                        // Or, we are changing to a new RenderRule
+                        addAniWidget(w);
+                        frameIndex = 0;
                     } else {
-                        index = 0;
-                        widgetAniBGIndexMap[w] = 1;
+                        // Otherwise, we draw the last frame, because the
+                        // widget has stopped at the last frame.
+                        frameIndex = ruleFrameCount - 1;
                     }
-                } else { widgetAniBGIndexMap[w] = index + 1; }
-            } else {
-                index = ruleFrameCount - 1;
+                }
+            } else if(frameIndex >= currRule->getFrameCount()) {
+                frameIndex %= currRule->getFrameCount();
             }
+        } else {
+            // Not animate widget. Make sure we don't have it in the cache.
+            if(lastRule != currRule && lastRule->getFrameCount() > 1)
+                removeAniWidget(w);
+            frameIndex = 0;
         }
 
         if((w->windowWidget()->windowFlags() & WF_AllowTransparency) == 0)
             fixAlpha = NoFix;
 
         MGraphics graphics(w);
-        rule.draw(graphics,wr,cr,t,fixAlpha,index);
-        if(ruleFrameCount != rule->getTotalFrameCount())
-        {
-            // The total frame count might change after calling draw();
-            if(rule->getTotalFrameCount() > 1)
-                addAniWidget(w);
-            else
-                removeAniWidget(w);
-        }
+        currRule.draw(graphics,wr,cr,t,fixAlpha,frameIndex);
     }
     void MSSSPrivate::updateAniWidgets()
     {
@@ -232,7 +231,24 @@ namespace MetalBone
 
         while(it != itEnd)
         {
-            it->first->repaint();
+            // Next Frame.
+            ++it->second;
+
+            MWidget* w = it->first;
+            RenderRule rule = getRenderRule(w, w->getWidgetPseudo());
+
+            if(it->second >= rule->getFrameCount())
+            {
+                if(rule->isBGSingleLoop()) {
+                    // If the widget is single loop and is at the end.
+                    // We don't have to update it any more.
+                    it = widgetAniBGIndexMap.erase(it);
+                    continue;
+                } else {
+                    it->second = 0;
+                }
+            }
+            w->repaint();
             ++it;
         }
     }
@@ -240,7 +256,7 @@ namespace MetalBone
     {
         widgetAniBGIndexMap[w] = 0;
         if(!aniBGTimer.isActive())
-            aniBGTimer.start(200);
+            aniBGTimer.start(33);
     }
     void MSSSPrivate::removeAniWidget(MWidget* w)
     {

@@ -4,6 +4,7 @@
 #include "MGraphicsResource.h"
 #include "MResource.h"
 
+// MCheckBox
 // MButton
 // MLabel
 // MTabBar
@@ -11,6 +12,35 @@
 
 namespace MetalBone
 {
+    class METALBONE_EXPORT MCheckBox : public MWidget
+    {
+        public:
+            inline MCheckBox(MWidget* parent = 0);
+
+            void        setChecked(bool checked);
+            inline bool isChecked() const;
+
+            void setText(const std::wstring& text);
+            inline const std::wstring& text() const;
+
+            // toggled is emitted whenever the check state of
+            // the checkbox changes.
+            Signal0<> toggled;
+
+            virtual unsigned int getLastWidgetPseudo();
+            virtual unsigned int getWidgetPseudo(bool markAsLast = false, unsigned int initP = 0);
+
+        protected:
+            virtual void mousePressEvent(MMouseEvent*);
+            virtual void mouseReleaseEvent(MMouseEvent*);
+            virtual void doStyleSheetDraw(const MRect& widgetRectInRT, const MRect& clipRectInRT);
+
+        private:
+            std::wstring s_text;
+            bool         b_isChecked;
+            bool         b_firstTime;
+    };
+
     class METALBONE_EXPORT MButton : public MWidget
     {
         public:
@@ -197,6 +227,10 @@ namespace MetalBone
             void onSubButton();
             int  calcThumbSize(int sliderSize);
     };
+
+    inline MCheckBox::MCheckBox(MWidget* parent):MWidget(parent),b_isChecked(false),b_firstTime(true){}
+    inline bool MCheckBox::isChecked()           const { return b_isChecked; }
+    inline const std::wstring& MCheckBox::text() const { return s_text; }
 
     inline bool MScrollBar::hasTracking() const { return b_tracking; }
     inline int  MScrollBar::maximum()     const { return n_max; }

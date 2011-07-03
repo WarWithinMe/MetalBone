@@ -24,8 +24,8 @@ namespace MetalBone
 #ifdef MB_USE_D2D
         ID2D1Factory*       d2d1Factory;
         IDWriteFactory*     dwriteFactory;
-        IWICImagingFactory* wicFactory;
 #endif
+        IWICImagingFactory* wicFactory;
 
         static MApplication::WinProc customWndProc;
         static MApplicationData*     instance;
